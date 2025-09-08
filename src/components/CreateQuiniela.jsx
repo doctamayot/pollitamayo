@@ -5,7 +5,7 @@ import { QUINIELAS_COLLECTION } from '../config';
 
 const CreateQuiniela = () => {
     const [quinielaName, setQuinielaName] = useState('');
-    const [matches, setMatches] = useState([{ home: '', away: '', homeCode: '', awayCode: '' }]);
+    const [matches, setMatches] = useState([{ home: '', away: '', homeCode: '', awayCode: '', championship: '' }]);
     const [feedback, setFeedback] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -16,7 +16,7 @@ const CreateQuiniela = () => {
     };
 
     const addMatch = () => {
-        setMatches([...matches, { home: '', away: '', homeCode: '', awayCode: '' }]);
+        setMatches([...matches, { home: '', away: '', homeCode: '', awayCode: '', championship: '' }]);
     };
 
     const removeMatch = (index) => {
@@ -26,8 +26,8 @@ const CreateQuiniela = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!quinielaName || matches.some(m => !m.home || !m.away)) {
-            setFeedback('Por favor, completa el nombre y todos los partidos.');
+        if (!quinielaName || matches.some(m => !m.home || !m.away || !m.championship)) {
+            setFeedback('Por favor, completa el nombre y todos los campos de todos los partidos.');
             return;
         }
         setIsLoading(true);
@@ -46,11 +46,12 @@ const CreateQuiniela = () => {
                 locked: false,
                 resultsVisible: false,
                 realResults: {},
-                isActive: false // <<<--- NUEVO CAMPO AÑADIDO AQUÍ
+                isActive: false,
+                isClosed: false
             });
             setFeedback('¡Quiniela creada con éxito! Ahora puedes activarla desde la pestaña de "Gestionar".');
             setQuinielaName('');
-            setMatches([{ home: '', away: '', homeCode: '', awayCode: '' }]);
+            setMatches([{ home: '', away: '', homeCode: '', awayCode: '', championship: '' }]);
         } catch (error) {
             console.error("Error al crear la quiniela:", error);
             setFeedback('Error al crear la quiniela.');
@@ -80,13 +81,27 @@ const CreateQuiniela = () => {
                 <h3 className="text-lg font-semibold text-blue-300 mb-4">Partidos</h3>
                 <div className="space-y-4">
                     {matches.map((match, index) => (
-                        <div key={index} className="grid grid-cols-1 md:grid-cols-10 gap-2 items-center">
-                            <input type="text" placeholder="Equipo Local" value={match.home} onChange={e => handleMatchChange(index, 'home', e.target.value)} className="md:col-span-3 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" required />
-                            <input type="text" placeholder="Código (ej: ar)" value={match.homeCode} onChange={e => handleMatchChange(index, 'homeCode', e.target.value)} className="md:col-span-1 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" />
-                            <span className="text-center text-gray-400">vs</span>
-                            <input type="text" placeholder="Equipo Visitante" value={match.away} onChange={e => handleMatchChange(index, 'away', e.target.value)} className="md:col-span-3 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" required />
-                            <input type="text" placeholder="Código (ej: br)" value={match.awayCode} onChange={e => handleMatchChange(index, 'awayCode', e.target.value)} className="md:col-span-1 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" />
-                            <button type="button" onClick={() => removeMatch(index)} className="md:col-span-1 text-red-400 hover:text-red-600 text-sm">Quitar</button>
+                        <div key={index} className="p-3 bg-gray-900/50 rounded-md">
+                            <div className="mb-3">
+                                <label className="text-xs text-gray-400">Campeonato</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ej: Premier League" 
+                                    value={match.championship} 
+                                    onChange={e => handleMatchChange(index, 'championship', e.target.value)} 
+                                    className="w-full mt-1 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" 
+                                    required 
+                                />
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-10 gap-2 items-center">
+                                <input type="text" placeholder="Equipo Local" value={match.home} onChange={e => handleMatchChange(index, 'home', e.target.value)} className="md:col-span-3 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" required />
+                                <input type="text" placeholder="Código (ej: ar)" value={match.homeCode} onChange={e => handleMatchChange(index, 'homeCode', e.target.value)} className="md:col-span-1 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" />
+                                <span className="text-center text-gray-400">vs</span>
+                                <input type="text" placeholder="Equipo Visitante" value={match.away} onChange={e => handleMatchChange(index, 'away', e.target.value)} className="md:col-span-3 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" required />
+                                <input type="text" placeholder="Código (ej: br)" value={match.awayCode} onChange={e => handleMatchChange(index, 'awayCode', e.target.value)} className="md:col-span-1 border bg-gray-700 border-gray-600 text-gray-200 rounded-md text-sm p-2" />
+                                <button type="button" onClick={() => removeMatch(index)} className="md:col-span-1 text-red-400 hover:text-red-600 text-sm">Quitar</button>
+                            </div>
                         </div>
                     ))}
                 </div>

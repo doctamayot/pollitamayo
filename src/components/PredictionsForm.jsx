@@ -65,14 +65,13 @@ const PredictionsForm = ({ user, quiniela, allPredictions }) => {
         setPredictions(initialPredictions);
     }, [quiniela, allPredictions, user.uid]);
 
-    // ***** LÓGICA DE HANDLECHANGE CORREGIDA *****
     const handleChange = (e) => {
         const { name, value } = e.target;
         const sanitizedValue = value.replace(/[^0-9]/g, '');
 
-        const nameParts = name.split('-');         // -> ['par', 'ecu', 'home']
-        const team = nameParts.pop();             // -> 'home'
-        const partidoId = nameParts.join('-');    // -> 'par-ecu'
+        const nameParts = name.split('-');
+        const team = nameParts.pop();
+        const partidoId = nameParts.join('-');
         
         setPredictions(prev => ({
             ...prev,
@@ -110,17 +109,33 @@ const PredictionsForm = ({ user, quiniela, allPredictions }) => {
         ? 'mt-8 w-full md:w-auto bg-gray-500 text-white font-bold py-3 px-6 rounded-md cursor-not-allowed opacity-50'
         : 'mt-8 w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-md transition duration-300';
 
+    const groupedMatches = quiniela.matches.reduce((acc, match) => {
+        const champ = match.championship || 'Otros';
+        if (!acc[champ]) {
+            acc[champ] = [];
+        }
+        acc[champ].push(match);
+        return acc;
+    }, {});
+
     return (
         <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                {quiniela.matches.map((partido) => (
-                    <MatchInput 
-                        key={partido.id}
-                        partido={partido}
-                        value={predictions[partido.id] || {home: '', away: ''}}
-                        onChange={handleChange}
-                        disabled={isLocked}
-                    />
+                {Object.keys(groupedMatches).map(championship => (
+                    <React.Fragment key={championship}>
+                        <h3 className="col-span-1 md:col-span-2 text-lg font-semibold text-blue-300 border-b border-gray-600 pb-2 mb-2 mt-4">
+                            {championship}
+                        </h3>
+                        {groupedMatches[championship].map((partido) => (
+                            <MatchInput 
+                                key={partido.id}
+                                partido={partido}
+                                value={predictions[partido.id] || {home: '', away: ''}}
+                                onChange={handleChange}
+                                disabled={isLocked}
+                            />
+                        ))}
+                    </React.Fragment>
                 ))}
             </div>
             <button type="submit" className={buttonClasses} disabled={isLocked || isLoading}>
