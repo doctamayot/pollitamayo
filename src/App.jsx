@@ -77,7 +77,7 @@ function App() {
             <div className="w-full max-w-6xl mx-auto bg-gray-800 rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 mt-4">
                 <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 pb-4 border-b border-gray-700">
                     <div>
-                        <h1 className="text-xl sm:text-2xl font-bold text-blue-400">Plataforma de Quinielas</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-blue-400">PolliTamayo</h1>
                         <p className="text-gray-400 mt-1">Usuario: <span className="font-semibold text-white">{user.displayName}</span></p>
                     </div>
                      <nav className="flex items-center space-x-2 sm:space-x-4 mt-4 sm:mt-0">
