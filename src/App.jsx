@@ -9,7 +9,7 @@ import AuthScreen from './components/AuthScreen';
 import QuinielaView from './components/QuinielaView';
 import AdminDashboard from './components/AdminDashboard';
 import Leaderboard from './components/Leaderboard';
-import HistoryView from './components/HistoryView'; // Importar nuevo componente
+import HistoryView from './components/HistoryView';
 
 // Config
 import { ADMIN_EMAIL } from './config';
@@ -19,15 +19,12 @@ function App() {
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
     
-    // Estados para los datos
     const [activeQuiniela, setActiveQuiniela] = useState(null);
     const [closedQuinielas, setClosedQuinielas] = useState([]);
     const [allQuinielasForAdmin, setAllQuinielasForAdmin] = useState([]);
 
-    // Estado para la navegación
-    const [mainView, setMainView] = useState('active'); // 'active', 'history', 'leaderboard'
+    const [mainView, setMainView] = useState('active');
 
-    // 1. Manejar autenticación
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
@@ -37,7 +34,6 @@ function App() {
         return () => unsubscribe();
     }, []);
 
-    // 2. Cargar y filtrar todas las quinielas
     useEffect(() => {
         if (!user) return;
 
@@ -45,14 +41,12 @@ function App() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const quinielasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // Lógica de filtrado
             const active = quinielasData.find(q => q.isActive && !q.isClosed) || null;
             const closed = quinielasData.filter(q => q.isClosed);
 
             setActiveQuiniela(active);
             setClosedQuinielas(closed);
             
-            // El admin necesita ver todas para su selector
             if (isAdmin) {
                 setAllQuinielasForAdmin(quinielasData);
             }
@@ -77,7 +71,7 @@ function App() {
             <div className="w-full max-w-6xl mx-auto bg-gray-800 rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 mt-4">
                 <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 pb-4 border-b border-gray-700">
                     <div>
-                        <h1 className="text-xl sm:text-2xl font-bold text-blue-400">PolliTamayo</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-blue-400">Plataforma de Quinielas</h1>
                         <p className="text-gray-400 mt-1">Usuario: <span className="font-semibold text-white">{user.displayName}</span></p>
                     </div>
                      <nav className="flex items-center space-x-2 sm:space-x-4 mt-4 sm:mt-0">
@@ -89,8 +83,7 @@ function App() {
                 </header>
 
                 <main>
-                    {/* --- RENDERIZADO CONDICIONAL DE LA VISTA PRINCIPAL --- */}
-                    {mainView === 'leaderboard' && <Leaderboard />}
+                    {mainView === 'leaderboard' && <Leaderboard isAdmin={isAdmin} />}
                     {mainView === 'history' && <HistoryView closedQuinielas={closedQuinielas} user={user} />}
                     
                     {mainView === 'active' && (

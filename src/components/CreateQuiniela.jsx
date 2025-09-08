@@ -47,7 +47,8 @@ const CreateQuiniela = () => {
                 resultsVisible: false,
                 realResults: {},
                 isActive: false,
-                isClosed: false
+                isClosed: false,
+                winnersData: []
             });
             setFeedback('¡Quiniela creada con éxito! Ahora puedes activarla desde la pestaña de "Gestionar".');
             setQuinielaName('');
