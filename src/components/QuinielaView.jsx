@@ -33,13 +33,11 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
     }, [quiniela]);
 
     if (!quiniela) {
-        return <div className="text-center p-8 text-gray-400">Selecciona una quiniela para ver los detalles.</div>;
+        return <div className="text-center p-8 text-slate-400">Selecciona una quiniela para ver los detalles.</div>;
     }
     
-    // La visibilidad de la puntuación la controla el admin
     const canViewScoring = isAdmin || quiniela.resultsVisible;
 
-    // Si el jugador está en la pestaña de puntuación y el admin la desactiva, volver a la de predicciones.
     if (!isAdmin && !canViewScoring && activeTab === 'scoring') {
         setActiveTab('predictions');
     }
@@ -52,11 +50,11 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
                 activeTab={activeTab} 
                 setActiveTab={setActiveTab} 
                 isAdmin={isAdmin}
-                resultsVisible={canViewScoring} // 'resultsVisible' ahora controla la pestaña de puntuación
+                resultsVisible={canViewScoring}
             />
-            <div id="tab-content-wrapper" className="mt-6">
+            <div className="mt-6">
                 {loadingPredictions ? (
-                     <div className="text-center py-10 text-gray-400">Cargando predicciones...</div>
+                     <div className="text-center py-10 text-slate-400">Cargando predicciones...</div>
                 ) : (
                     <>
                         {activeTab === 'predictions' && (
@@ -65,8 +63,6 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
                             : <PredictionsForm key={quiniela.id} user={user} quiniela={quiniela} allPredictions={predictions} />
                         )}
                         
-                        {/* --- LÓGICA DE RESULTADOS DE TODOS ELIMINADA --- */}
-
                         {activeTab === 'scoring' && canViewScoring && (
                             <ScoringTable 
                                 quiniela={quiniela}

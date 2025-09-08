@@ -59,7 +59,11 @@ function App() {
     };
 
     if (loading) {
-        return <div className="min-h-screen flex items-center justify-center"><p>Cargando...</p></div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-900">
+                <p className="text-slate-400">Cargando...</p>
+            </div>
+        );
     }
 
     if (!user) {
@@ -67,19 +71,19 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen flex items-start justify-center p-2 sm:p-4">
-            <div className="w-full max-w-6xl mx-auto bg-gray-800 rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 mt-4">
-                <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 pb-4 border-b border-gray-700">
+        <div className="min-h-screen p-2 sm:p-4 lg:p-8">
+            <div className="w-full max-w-7xl mx-auto bg-gray-800 rounded-xl shadow-2xl p-4 sm:p-6">
+                <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 pb-6 border-b border-slate-700">
                     <div>
-                        <h1 className="text-xl sm:text-2xl font-bold text-blue-400">PolliTamayo</h1>
-                        <p className="text-gray-400 mt-1">Usuario: <span className="font-semibold text-white">{user.displayName}</span></p>
+                        <h1 className="text-2xl font-bold text-white">PolliTamayo</h1>
+                        <p className="text-sm text-slate-400 mt-1">Usuario: <span className="font-semibold text-slate-200">{user.displayName}</span></p>
                     </div>
                      <nav className="flex items-center space-x-2 sm:space-x-4 mt-4 sm:mt-0">
-                        <button onClick={() => setMainView('active')} className={`px-3 py-2 text-sm font-semibold rounded-md ${mainView === 'active' ? 'bg-blue-600 text-white' : 'bg-gray-600/50 text-gray-300'}`}>Quiniela Activa</button>
-                        <button onClick={() => setMainView('history')} className={`px-3 py-2 text-sm font-semibold rounded-md ${mainView === 'history' ? 'bg-blue-600 text-white' : 'bg-gray-600/50 text-gray-300'}`}>Historial</button>
-                        <button onClick={() => setMainView('leaderboard')} className={`px-3 py-2 text-sm font-semibold rounded-md ${mainView === 'leaderboard' ? 'bg-blue-600 text-white' : 'bg-gray-600/50 text-gray-300'}`}>Leaderboard</button>
+                        <button onClick={() => setMainView('active')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'active' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Quiniela Activa</button>
+                        <button onClick={() => setMainView('history')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'history' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Historial</button>
+                        <button onClick={() => setMainView('leaderboard')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'leaderboard' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Leaderboard</button>
                     </nav>
-                    <button onClick={handleLogout} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md text-sm transition mt-4 sm:mt-0">Cerrar Sesión</button>
+                    <button onClick={handleLogout} className="bg-slate-600 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md text-sm transition-colors duration-200 mt-4 sm:mt-0">Cerrar Sesión</button>
                 </header>
 
                 <main>
@@ -93,9 +97,9 @@ function App() {
                             activeQuiniela ? (
                                 <QuinielaView user={user} quiniela={activeQuiniela} />
                             ) : (
-                                <div className="text-center py-10">
-                                    <h2 className="text-2xl font-bold text-blue-300">No hay quinielas activas</h2>
-                                    <p className="text-gray-400 mt-2">Espera a que el administrador publique una nueva quiniela.</p>
+                                <div className="text-center py-16">
+                                    <h2 className="text-2xl font-bold text-slate-300">No hay quinielas activas</h2>
+                                    <p className="text-slate-400 mt-2">Espera a que el administrador publique una nueva quiniela.</p>
                                 </div>
                             )
                         )
