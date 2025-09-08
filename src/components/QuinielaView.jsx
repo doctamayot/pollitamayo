@@ -5,7 +5,6 @@ import { db } from '../firebase';
 import Tabs from './Tabs';
 import PredictionsForm from './PredictionsForm';
 import RealResultsForm from './RealResultsForm';
-import ResultsTable from './ResultsTable';
 import ScoringTable from './ScoringTable';
 import AdminPanel from './AdminPanel';
 
@@ -37,7 +36,13 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
         return <div className="text-center p-8 text-gray-400">Selecciona una quiniela para ver los detalles.</div>;
     }
     
-    const canViewResults = isAdmin || quiniela.resultsVisible;
+    // La visibilidad de la puntuación la controla el admin
+    const canViewScoring = isAdmin || quiniela.resultsVisible;
+
+    // Si el jugador está en la pestaña de puntuación y el admin la desactiva, volver a la de predicciones.
+    if (!isAdmin && !canViewScoring && activeTab === 'scoring') {
+        setActiveTab('predictions');
+    }
 
     return (
         <div>
@@ -47,7 +52,7 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
                 activeTab={activeTab} 
                 setActiveTab={setActiveTab} 
                 isAdmin={isAdmin}
-                resultsVisible={canViewResults}
+                resultsVisible={canViewScoring} // 'resultsVisible' ahora controla la pestaña de puntuación
             />
             <div id="tab-content-wrapper" className="mt-6">
                 {loadingPredictions ? (
@@ -60,15 +65,9 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
                             : <PredictionsForm key={quiniela.id} user={user} quiniela={quiniela} allPredictions={predictions} />
                         )}
                         
-                        {activeTab === 'results' && canViewResults && (
-                            <ResultsTable 
-                                quiniela={quiniela}
-                                allPredictions={predictions} 
-                                isAdmin={isAdmin} 
-                            />
-                        )}
+                        {/* --- LÓGICA DE RESULTADOS DE TODOS ELIMINADA --- */}
 
-                        {activeTab === 'scoring' && (
+                        {activeTab === 'scoring' && canViewScoring && (
                             <ScoringTable 
                                 quiniela={quiniela}
                                 allPredictions={predictions} 

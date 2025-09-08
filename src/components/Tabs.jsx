@@ -2,8 +2,8 @@ import React from 'react';
 
 const Tabs = ({ activeTab, setActiveTab, isAdmin, resultsVisible }) => {
     
-    // La pestaña de resultados se muestra si el usuario es admin O si la visibilidad está activada
-    const showResultsTab = isAdmin || resultsVisible;
+    // La pestaña de puntuación se muestra si el usuario es admin O si la visibilidad está activada
+    const showScoringTab = isAdmin || resultsVisible;
 
     return (
         <div className="border-b border-gray-700">
@@ -19,29 +19,20 @@ const Tabs = ({ activeTab, setActiveTab, isAdmin, resultsVisible }) => {
                     {isAdmin ? 'Ingresar Resultados' : 'Mis Predicciones'}
                 </button>
                 
-                {showResultsTab && (
-                     <button
-                        onClick={() => setActiveTab('results')}
+                {/* --- BOTÓN DE RESULTADOS DE TODOS ELIMINADO --- */}
+               
+                {showScoringTab && (
+                    <button
+                        onClick={() => setActiveTab('scoring')}
                         className={`px-2 sm:px-3 py-2 font-medium text-xs sm:text-sm rounded-t-md border-b-2 transition-colors duration-200 ${
-                            activeTab === 'results' 
+                            activeTab === 'scoring' 
                             ? 'tab-active' 
                             : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
                         }`}
                     >
-                        Resultados de Todos
+                        Puntuación
                     </button>
                 )}
-               
-                <button
-                    onClick={() => setActiveTab('scoring')}
-                    className={`px-2 sm:px-3 py-2 font-medium text-xs sm:text-sm rounded-t-md border-b-2 transition-colors duration-200 ${
-                        activeTab === 'scoring' 
-                        ? 'tab-active' 
-                        : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                    }`}
-                >
-                    Puntuación
-                </button>
             </nav>
         </div>
     );

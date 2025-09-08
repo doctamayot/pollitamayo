@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { doc, updateDoc, collection, query, where, getDocs, writeBatch, increment, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -31,7 +29,6 @@ const AdminPanel = ({ quiniela }) => {
                 const newActiveQuinielaRef = doc(db, QUINIELAS_COLLECTION, quiniela.id);
                 batch.update(newActiveQuinielaRef, { isActive: true });
                 await batch.commit();
-                alert(`"${quiniela.name}" ahora es la quiniela activa.`);
             } catch (error) {
                 console.error("Error al activar la quiniela:", error);
             }
@@ -47,9 +44,7 @@ const AdminPanel = ({ quiniela }) => {
     
     const handleToggleCloseQuiniela = async () => {
         setIsUpdating(true);
-
         if (!quiniela.isClosed) {
-            // --- LÓGICA PARA CERRAR ---
             if (!window.confirm(`¿Estás seguro de que quieres CERRAR y PUNTUAR la quiniela "${quiniela.name}"? Esta acción es final.`)) {
                 setIsUpdating(false);
                 return;
@@ -60,7 +55,6 @@ const AdminPanel = ({ quiniela }) => {
                 const allPredictions = predictionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                 if (allPredictions.length === 0) {
-                    alert("No hay predicciones para puntuar. Cerrando sin ganadores.");
                     await updateDoc(doc(db, 'quinielas', quiniela.id), { isClosed: true, winnersData: [] });
                     setIsUpdating(false);
                     return;
@@ -93,15 +87,10 @@ const AdminPanel = ({ quiniela }) => {
                 batch.update(quinielaRef, { isClosed: true, winnersData: winnersData });
                 await batch.commit();
 
-                const winnerNames = winners.map(w => w.apostador).join(', ');
-                alert(`¡Quiniela cerrada! Ganador(es): ${winnerNames} con ${highscore} puntos. El leaderboard ha sido actualizado.`);
-
             } catch (error) {
                 console.error("Error al cerrar la quiniela:", error);
-                alert("Hubo un error al cerrar la quiniela.");
             }
         } else {
-            // --- LÓGICA PARA RE-ABRIR ---
             if (!window.confirm("¿Re-abrir esta quiniela? Los puntos de victoria otorgados a los ganadores en el Leaderboard serán revertidos.")) {
                 setIsUpdating(false);
                 return;
@@ -118,10 +107,8 @@ const AdminPanel = ({ quiniela }) => {
                 const quinielaRef = doc(db, 'quinielas', quiniela.id);
                 batch.update(quinielaRef, { isClosed: false, winnersData: deleteField() });
                 await batch.commit();
-                alert("La quiniela ha sido re-abierta y los puntos del leaderboard revertidos.");
             } catch (error) {
                 console.error("Error al re-abrir la quiniela:", error);
-                alert("Hubo un error al re-abrir la quiniela.");
             }
         }
         setIsUpdating(false);
@@ -157,7 +144,8 @@ const AdminPanel = ({ quiniela }) => {
                 </div>
 
                 <div className="flex items-center">
-                    <span className="mr-3 text-sm text-gray-300">Permitir ver predicciones</span>
+                    {/* ***** TEXTO DEL INTERRUPTOR CAMBIADO AQUÍ ***** */}
+                    <span className="mr-3 text-sm text-gray-300">Mostrar Puntuación</span>
                     <label className="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" checked={quiniela.resultsVisible || false} onChange={(e) => handleConfigChange('resultsVisible', e.target.checked)} className="sr-only peer" />
                         <div className="w-11 h-6 bg-gray-500 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
