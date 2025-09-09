@@ -36,23 +36,48 @@ const AuthScreen = () => {
                         Iniciar Sesión con Google
                     </button>
                 </div>
-                 <div className="max-w-md mx-auto mt-10 p-6 border border-slate-700 rounded-lg bg-slate-800/50">
-                    <h3 className="text-lg font-semibold text-center text-blue-400 mb-4">Sistema de Puntuación</h3>
-                    <ul className="space-y-3 text-sm text-slate-300">
-                        <li className="flex items-start">
-                            <span className="text-green-400 font-bold mr-2">✔</span>
-                            <div><strong className="text-white">6 Puntos:</strong> Por acertar el marcador exacto del partido.</div>
-                        </li>
-                        <li className="flex items-start">
-                            <span className="text-amber-400 font-bold mr-2">✔</span>
-                            <div><strong className="text-white">Acierto Parcial:</strong> Ganas puntos por acertar el ganador o goles individuales.</div>
-                        </li>
-                        <li className="flex items-start">
-                            <span className="text-slate-400 font-bold mr-2">ⓘ</span>
-                            <div className="text-slate-400">Los puntos no son acumulativos si aciertas el marcador exacto.</div>
-                        </li>
-                    </ul>
+                 <div className="max-w-lg mx-auto mt-12 p-6 border border-slate-700 rounded-lg bg-slate-800/50">
+                    <h3 className="text-xl font-semibold text-center text-blue-400 mb-4">Nuestro Sistema de Puntuación</h3>
+                    <div className="space-y-4 text-sm text-slate-300">
+                        <div>
+                            <p className="font-bold text-white">🏆 Acierto Perfecto: 6 Puntos</p>
+                            <p className="mt-1 text-slate-400">
+                                Si aciertas el marcador exacto de un partido, obtienes la máxima puntuación.
+                            </p>
+                            <p className="mt-2 text-xs p-2 bg-slate-900/50 rounded-md font-mono">
+                                <span className="font-bold">Ejemplo:</span> Resultado Real <span className="text-amber-300">2-1</span>, Tu Predicción <span className="text-amber-300">2-1</span> ➜ Ganas <strong>6 Puntos</strong>.
+                            </p>
+                        </div>
+
+                        <div>
+                            <p className="font-bold text-white">👍 Acierto de Ganador o Empate: 2 Puntos</p>
+                            <p className="mt-1 text-slate-400">
+                                Si aciertas quién gana (o si hay empate) pero no el marcador exacto.
+                            </p>
+                            <p className="mt-2 text-xs p-2 bg-slate-900/50 rounded-md font-mono">
+                                <span className="font-bold">Ejemplo:</span> Resultado Real <span className="text-amber-300">2-1</span>, Tu Predicción <span className="text-amber-300">1-0</span> ➜ Ganas <strong>2 Puntos</strong>.
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <p className="font-bold text-white">🎯 Acierto de Goles: 1 Punto por Gol</p>
+                            <p className="mt-1 text-slate-400">
+                                Ganas 1 punto por cada marcador individual que aciertes, incluso si no aciertas al ganador.
+                            </p>
+                             <p className="mt-2 text-xs p-2 bg-slate-900/50 rounded-md font-mono">
+                                <span className="font-bold">Ejemplo:</span> Resultado Real <span className="text-amber-300">2-1</span>, Tu Predicción <span className="text-amber-300">2-0</span> ➜ Ganas <strong>1 Punto</strong> (por el '2' del local).
+                            </p>
+                        </div>
+
+                        <div>
+                            <p className="font-bold text-white">⚠️ Importante: Los Puntos No Son Acumulativos</p>
+                            <p className="mt-1 text-slate-400">
+                                Si obtienes los 6 puntos por un Acierto Perfecto, no se suman los otros puntos por ese mismo partido. El máximo por partido siempre es 6.
+                            </p>
+                        </div>
+                    </div>
                 </div>
+
             </div>
         </div>
     );
