@@ -3,16 +3,19 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const MatchInput = ({ partido, value, onChange, disabled }) => (
-    <div className="flex items-center justify-between col-span-1">
-        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-sm font-medium w-2/5 pr-2  text-slate-300">
+    <div className="flex items-center justify-between col-span-1 gap-x-2">
+        {/* ***** CAMBIO AQUÍ: Eliminado w-2/5 y añadido flex-1 para que crezca ***** */}
+        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-sm font-medium text-slate-300 flex-1 min-w-0">
             <span className="text-right">{partido.home}</span>
             <img 
                 src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
                 alt={partido.home} 
-                className="ml-2 h-4 rounded-sm bg-slate-600" 
+                className="ml-2 h-4 rounded-sm bg-slate-600 flex-shrink-0" 
             />
         </label>
-        <div className="flex items-center space-x-2">
+        
+        {/* Contenedor de inputs con tamaño fijo */}
+        <div className="flex items-center space-x-2 flex-shrink-0">
             <input 
                 type="number" 
                 id={`${partido.id}-home`} 
@@ -37,11 +40,13 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
                 disabled={disabled} 
             />
         </div>
-        <label htmlFor={`${partido.id}-away`} className="flex items-center text-sm font-medium w-2/5 pl-2 truncate text-slate-300">
+
+        {/* ***** CAMBIO AQUÍ: Eliminado w-2/5 y añadido flex-1 para que crezca ***** */}
+        <label htmlFor={`${partido.id}-away`} className="flex items-center text-sm font-medium text-slate-300 flex-1 min-w-0">
             <img 
                 src={`https://flagcdn.com/w20/${partido.awayCode}.png`} 
                 alt={partido.away} 
-                className="mr-2 h-4 rounded-sm bg-slate-600" 
+                className="mr-2 h-4 rounded-sm bg-slate-600 flex-shrink-0" 
             />
             <span>{partido.away}</span>
         </label>
