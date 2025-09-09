@@ -76,7 +76,6 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
         <div className="overflow-x-auto">
              <h2 className="text-xl font-bold text-blue-400 mb-4">Puntuación: "{quiniela.name}"</h2>
              <div className="align-middle inline-block min-w-full">
-                {/* ***** CAMBIO AQUÍ: Eliminada la clase 'overflow-hidden' ***** */}
                 <div className="shadow border-b border-slate-700 sm:rounded-lg">
                     <table className="min-w-full divide-y divide-slate-700">
                         <thead className="bg-slate-700/50">
@@ -87,7 +86,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                         {championship}
                                     </th>
                                 ))}
-                                <th scope="col" className="sticky right-0 bg-slate-700/50 z-20 px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">TOTAL</th>
+                                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">TOTAL</th>
                             </tr>
                             <tr>
                                 <th scope="col" className="sticky left-0 bg-slate-700/50 z-10 py-3"></th>
@@ -102,7 +101,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                         </div>
                                     </th>
                                 ))}
-                                <th scope="col" className="sticky right-0 bg-slate-700/50 z-10"></th>
+                                <th scope="col" className="z-10"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-700/50">
@@ -132,7 +131,11 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                                     {score.rank}.
                                                 </span>
                                             )}
-                                            <span>{score.apostador}</span>
+                                            {/* ***** CAMBIO PARA NOMBRE RESPONSIVE AQUÍ ***** */}
+                                            <span>
+                                                <span className="sm:hidden">{score.apostador?.split(' ')[0]}</span>
+                                                <span className="hidden sm:inline">{score.apostador}</span>
+                                            </span>
                                         </td>
                                         {quiniela.matches.map(p => {
                                             const points = score.pointsPerMatch[p.id] ?? 0;
@@ -149,7 +152,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                                 </td>
                                             );
                                         })}
-                                        <td className={`sticky right-0 px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-300 ${stickyBgClass}`}>
+                                        <td className={`px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-300`}>
                                             {score.points}
                                         </td>
                                     </tr>
@@ -164,7 +167,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                     const scoreText = result ? `${result.home} - ${result.away}` : '-';
                                     return <td key={p.id} className="px-2 py-3 text-center text-sm font-bold text-amber-300">{scoreText}</td>;
                                 })}
-                                <td className="sticky right-0 bg-slate-700/50"></td>
+                                <td></td>
                             </tr>
                         </tfoot>
                     </table>
