@@ -4,7 +4,7 @@ import { db } from '../firebase';
 
 const MatchInput = ({ partido, value, onChange, disabled }) => (
     <div className="flex items-center justify-between col-span-1">
-        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-sm font-medium w-2/5 pr-2 truncate text-slate-300">
+        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-sm font-medium w-2/5 pr-2  text-slate-300">
             <span className="text-right">{partido.home}</span>
             <img 
                 src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
