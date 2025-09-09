@@ -3,18 +3,22 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const MatchInputAdmin = ({ partido, value, onChange }) => (
-     <div className="flex items-center justify-between col-span-1">
-        <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-sm font-medium w-2/5 pr-2 truncate text-slate-300">
+     <div className="flex items-center justify-between col-span-1 gap-x-2">
+        {/* ***** CAMBIO AQUÍ: Letra más pequeña para móvil ***** */}
+        <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
             <span className="text-right">{partido.home}</span>
-            <img src={`https://flagcdn.com/w20/${partido.homeCode}.png`} alt={partido.home} className="ml-2 h-4 rounded-sm bg-slate-600"/>
+            <img src={`https://flagcdn.com/w20/${partido.homeCode}.png`} alt={partido.home} className="ml-2 h-4 rounded-sm bg-slate-600 flex-shrink-0"/>
         </label>
-        <div className="flex items-center space-x-2">
+        
+        <div className="flex items-center space-x-2 flex-shrink-0">
             <input type="number" id={`admin-${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2"/>
             <span className="text-slate-400">-</span>
             <input type="number" id={`admin-${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2"/>
         </div>
-        <label htmlFor={`admin-${partido.id}-away`} className="flex items-center text-sm font-medium w-2/5 pl-2 truncate text-slate-300">
-            <img src={`https://flagcdn.com/w20/${partido.awayCode}.png`} alt={partido.away} className="mr-2 h-4 rounded-sm bg-slate-600"/>
+
+        {/* ***** CAMBIO AQUÍ: Letra más pequeña para móvil ***** */}
+        <label htmlFor={`admin-${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
+            <img src={`https://flagcdn.com/w20/${partido.awayCode}.png`} alt={partido.away} className="mr-2 h-4 rounded-sm bg-slate-600 flex-shrink-0"/>
             <span>{partido.away}</span>
         </label>
     </div>

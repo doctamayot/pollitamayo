@@ -4,8 +4,8 @@ import { db } from '../firebase';
 
 const MatchInput = ({ partido, value, onChange, disabled }) => (
     <div className="flex items-center justify-between col-span-1 gap-x-2">
-        {/* ***** CAMBIO AQUÍ: Eliminado w-2/5 y añadido flex-1 para que crezca ***** */}
-        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-sm font-medium text-slate-300 flex-1 min-w-0">
+        {/* ***** CAMBIO AQUÍ: Letra más pequeña para móvil ***** */}
+        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
             <span className="text-right">{partido.home}</span>
             <img 
                 src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
@@ -14,7 +14,6 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
             />
         </label>
         
-        {/* Contenedor de inputs con tamaño fijo */}
         <div className="flex items-center space-x-2 flex-shrink-0">
             <input 
                 type="number" 
@@ -41,8 +40,8 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
             />
         </div>
 
-        {/* ***** CAMBIO AQUÍ: Eliminado w-2/5 y añadido flex-1 para que crezca ***** */}
-        <label htmlFor={`${partido.id}-away`} className="flex items-center text-sm font-medium text-slate-300 flex-1 min-w-0">
+        {/* ***** CAMBIO AQUÍ: Letra más pequeña para móvil ***** */}
+        <label htmlFor={`${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
             <img 
                 src={`https://flagcdn.com/w20/${partido.awayCode}.png`} 
                 alt={partido.away} 
