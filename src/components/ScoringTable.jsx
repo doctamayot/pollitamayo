@@ -94,9 +94,15 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                     <th scope="col" key={p.id} className="px-1 py-3 text-center text-xs font-semibold text-white min-w-[75px]">
                                         <div className="flex flex-col items-center justify-center space-y-0.5">
                                             <span className="text-[9px] font-bold text-slate-300 uppercase leading-none">{p.home.substring(0, 3)}</span>
-                                            <img src={`https://flagcdn.com/w20/${p.homeCode}.png`} title={p.home} className="h-3 rounded-sm bg-slate-600" />
+                                            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
+                                            <div className="h-4 w-4 rounded-full overflow-hidden">
+                                                <img src={`https://flagcdn.com/w20/${p.homeCode}.png`} title={p.home} className="h-full w-full object-cover" />
+                                            </div>
                                             <span className="text-[10px]">vs</span>
-                                            <img src={`https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-3 rounded-sm bg-slate-600" />
+                                            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
+                                            <div className="h-4 w-4 rounded-full overflow-hidden">
+                                                <img src={`https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-full w-full object-cover" />
+                                            </div>
                                             <span className="text-[9px] font-bold text-slate-300 uppercase leading-none">{p.away.substring(0, 3)}</span>
                                         </div>
                                     </th>
@@ -131,7 +137,6 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                                     {score.rank}.
                                                 </span>
                                             )}
-                                            {/* ***** CAMBIO PARA NOMBRE RESPONSIVE AQUÍ ***** */}
                                             <span>
                                                 <span className="sm:hidden">{score.apostador?.split(' ')[0]}</span>
                                                 <span className="hidden sm:inline">{score.apostador}</span>

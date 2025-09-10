@@ -4,14 +4,16 @@ import { db } from '../firebase';
 
 const MatchInput = ({ partido, value, onChange, disabled }) => (
     <div className="flex items-center justify-between col-span-1 gap-x-2">
-        {/* ***** CAMBIO AQUÍ: Letra más pequeña para móvil ***** */}
         <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
             <span className="text-right">{partido.home}</span>
-            <img 
-                src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
-                alt={partido.home} 
-                className="ml-2 h-4 rounded-sm bg-slate-600 flex-shrink-0" 
-            />
+            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
+            <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0">
+                <img 
+                    src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
+                    alt={partido.home} 
+                    className="h-full w-full object-cover" 
+                />
+            </div>
         </label>
         
         <div className="flex items-center space-x-2 flex-shrink-0">
@@ -40,13 +42,15 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
             />
         </div>
 
-        {/* ***** CAMBIO AQUÍ: Letra más pequeña para móvil ***** */}
         <label htmlFor={`${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
-            <img 
-                src={`https://flagcdn.com/w20/${partido.awayCode}.png`} 
-                alt={partido.away} 
-                className="mr-2 h-4 rounded-sm bg-slate-600 flex-shrink-0" 
-            />
+            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
+            <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0">
+                <img 
+                    src={`https://flagcdn.com/w20/${partido.awayCode}.png`} 
+                    alt={partido.away} 
+                    className="h-full w-full object-cover" 
+                />
+            </div>
             <span>{partido.away}</span>
         </label>
     </div>
