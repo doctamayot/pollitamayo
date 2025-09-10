@@ -10,7 +10,7 @@ import QuinielaView from './components/QuinielaView';
 import AdminDashboard from './components/AdminDashboard';
 import Leaderboard from './components/Leaderboard';
 import HistoryView from './components/HistoryView';
-import QuinielaSelector from './components/QuinielaSelector'; // Importar el selector
+import QuinielaSelector from './components/QuinielaSelector';
 
 // Config
 import { ADMIN_EMAIL } from './config';
@@ -20,14 +20,12 @@ function App() {
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
     
-    // Estados para los datos
-    const [activeQuinielas, setActiveQuinielas] = useState([]); // <-- Nuevo estado para múltiples quinielas activas
+    const [activeQuinielas, setActiveQuinielas] = useState([]);
     const [closedQuinielas, setClosedQuinielas] = useState([]);
     const [allQuinielasForAdmin, setAllQuinielasForAdmin] = useState([]);
 
-    // Estado para la navegación y selección
     const [mainView, setMainView] = useState('active');
-    const [selectedQuinielaId, setSelectedQuinielaId] = useState(null); // <-- Ahora lo usarán también los jugadores
+    const [selectedQuinielaId, setSelectedQuinielaId] = useState(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -45,7 +43,6 @@ function App() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const quinielasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // Lógica de filtrado
             const active = quinielasData.filter(q => q.isActive && !q.isClosed);
             const closed = quinielasData.filter(q => q.isClosed);
 
@@ -54,21 +51,17 @@ function App() {
             
             if (isAdmin) {
                 setAllQuinielasForAdmin(quinielasData);
-            }
-
-            // Lógica para seleccionar la quiniela por defecto para el jugador
-            if (!isAdmin && active.length > 0) {
-                // Si la quiniela seleccionada actualmente ya no está activa, o si no hay ninguna seleccionada,
-                // se selecciona la más reciente de las activas.
-                const currentSelectionIsActive = active.some(q => q.id === selectedQuinielaId);
-                if (!currentSelectionIsActive) {
+            } else {
+                const currentSelectionIsValid = active.some(q => q.id === selectedQuinielaId);
+                if (!currentSelectionIsValid && active.length > 0) {
                     setSelectedQuinielaId(active[0].id);
+                } else if (active.length === 0) {
+                    setSelectedQuinielaId(null);
                 }
             }
-
         });
         return () => unsubscribe();
-    }, [user, isAdmin, selectedQuinielaId]);
+    }, [user, isAdmin]);
     
     const handleLogout = () => {
         signOut(auth);
@@ -108,9 +101,9 @@ function App() {
                          isAdmin 
                          ? <AdminDashboard user={user} allQuinielas={allQuinielasForAdmin} />
                          : (
-                            quinielaToShow ? (
+                            // ***** LÓGICA DE VISTA DE JUGADOR CORREGIDA *****
+                            activeQuinielas.length > 0 ? (
                                 <>
-                                    {/* El selector para jugadores solo aparece si hay más de una quiniela activa */}
                                     {activeQuinielas.length > 1 && (
                                         <div className="flex justify-center mb-6">
                                             <QuinielaSelector
@@ -120,7 +113,7 @@ function App() {
                                             />
                                         </div>
                                     )}
-                                    <QuinielaView user={user} quiniela={quinielaToShow} />
+                                    {quinielaToShow && <QuinielaView user={user} quiniela={quinielaToShow} />}
                                 </>
                             ) : (
                                 <div className="text-center py-16">

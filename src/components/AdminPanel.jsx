@@ -16,30 +16,10 @@ const AdminPanel = ({ quiniela }) => {
         }
     };
 
+    // ***** LÓGICA DE ACTIVACIÓN SIMPLIFICADA *****
+    // Ahora solo cambia el estado de la quiniela actual, sin afectar a las demás.
     const handleActivationToggle = async (shouldActivate) => {
-        setIsUpdating(true);
-        if (shouldActivate) {
-            try {
-                const batch = writeBatch(db);
-                const q = query(collection(db, QUINIELAS_COLLECTION), where("isActive", "==", true));
-                const activeQuinielasSnapshot = await getDocs(q);
-                activeQuinielasSnapshot.forEach((doc) => {
-                    batch.update(doc.ref, { isActive: false });
-                });
-                const newActiveQuinielaRef = doc(db, QUINIELAS_COLLECTION, quiniela.id);
-                batch.update(newActiveQuinielaRef, { isActive: true });
-                await batch.commit();
-            } catch (error) {
-                console.error("Error al activar la quiniela:", error);
-            }
-        } else {
-            try {
-                await handleConfigChange('isActive', false);
-            } catch (error) {
-                console.error("Error al desactivar la quiniela:", error);
-            }
-        }
-        setIsUpdating(false);
+        await handleConfigChange('isActive', shouldActivate);
     };
     
     const handleToggleCloseQuiniela = async () => {
@@ -114,7 +94,6 @@ const AdminPanel = ({ quiniela }) => {
         setIsUpdating(false);
     };
     
-    // ***** LÓGICA DE VERIFICACIÓN CORREGIDA AQUÍ *****
     const allResultsFilled = useMemo(() => {
         if (!quiniela || !quiniela.matches || !quiniela.realResults) {
             return false;
@@ -139,7 +118,13 @@ const AdminPanel = ({ quiniela }) => {
                         Activa
                     </span>
                     <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" checked={quiniela.isActive || false} onChange={(e) => handleActivationToggle(e.target.checked)} className="sr-only peer" disabled={isUpdating}/>
+                        <input 
+                            type="checkbox" 
+                            checked={quiniela.isActive || false} 
+                            onChange={(e) => handleActivationToggle(e.target.checked)} 
+                            className="sr-only peer"
+                            disabled={isUpdating}
+                        />
                         <div className="w-11 h-6 bg-slate-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-green-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                     </label>
                 </div>
