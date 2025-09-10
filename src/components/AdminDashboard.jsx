@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// Componentes
+// Componentesss
 import QuinielaEditor from './QuinielaEditor'; // <-- Cambiado de CreateQuiniela
 import QuinielaView from './QuinielaView';
 import QuinielaSelector from './QuinielaSelector';
