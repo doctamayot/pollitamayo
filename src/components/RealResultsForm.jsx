@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-const MatchInputAdmin = ({ partido, value, onChange }) => (
+const MatchInputAdmin = ({ partido, value, onChange, disabled }) => ( // <-- Añadido prop 'disabled'
      <div className="flex items-center justify-between col-span-1 gap-x-2">
         <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
             <span className="text-right">{partido.home}</span>
-            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
             <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0">
                 <img 
                     src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
@@ -17,13 +16,30 @@ const MatchInputAdmin = ({ partido, value, onChange }) => (
         </label>
         
         <div className="flex items-center space-x-2 flex-shrink-0">
-            <input type="number" id={`admin-${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2"/>
+            <input 
+                type="number" 
+                id={`admin-${partido.id}-home`} 
+                name={`${partido.id}-home`} 
+                value={value.home} 
+                onChange={onChange} 
+                min="0" 
+                className="w-14 text-center form-input py-2"
+                disabled={disabled} // <-- Aplicado el disabled
+            />
             <span className="text-slate-400">-</span>
-            <input type="number" id={`admin-${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2"/>
+            <input 
+                type="number" 
+                id={`admin-${partido.id}-away`} 
+                name={`${partido.id}-away`} 
+                value={value.away} 
+                onChange={onChange} 
+                min="0" 
+                className="w-14 text-center form-input py-2"
+                disabled={disabled} // <-- Aplicado el disabled
+            />
         </div>
 
         <label htmlFor={`admin-${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
-            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
             <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0">
                 <img 
                     src={`https://flagcdn.com/w20/${partido.awayCode}.png`} 
@@ -98,7 +114,13 @@ const RealResultsForm = ({ quiniela }) => {
                         </h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
                             {groupedMatches[championship].map((partido) => (
-                                <MatchInputAdmin key={partido.id} partido={partido} value={results[partido.id] || {home: '', away: ''}} onChange={handleChange}/>
+                                <MatchInputAdmin 
+                                    key={partido.id} 
+                                    partido={partido} 
+                                    value={results[partido.id] || {home: '', away: ''}} 
+                                    onChange={handleChange}
+                                    disabled={quiniela.isClosed} // <-- Deshabilitar inputs si está cerrada
+                                />
                             ))}
                         </div>
                     </div>
@@ -106,9 +128,21 @@ const RealResultsForm = ({ quiniela }) => {
             </div>
             
             <div className="mt-8 pt-6 border-t border-slate-700 text-center">
-                <button type="submit" disabled={isLoading} className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md disabled:bg-amber-700 disabled:cursor-wait">
+                <button 
+                    type="submit" 
+                    disabled={isLoading || quiniela.isClosed} // <-- Deshabilitar botón si está cerrada
+                    className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md disabled:bg-slate-500 disabled:cursor-not-allowed"
+                >
                     {isLoading ? 'Guardando...' : 'Guardar Resultados Reales'}
                 </button>
+
+                {/* ***** NUEVO MENSAJE SI LA QUINIELA ESTÁ CERRADA ***** */}
+                {quiniela.isClosed && (
+                    <p className="text-sm text-yellow-400 mt-4">
+                        Esta quiniela está cerrada. Para editar los resultados, primero debe re-abrirla en el panel de control.
+                    </p>
+                )}
+
                 {feedback && <div className="mt-4 text-center text-green-400 font-medium">{feedback}</div>}
             </div>
         </form>

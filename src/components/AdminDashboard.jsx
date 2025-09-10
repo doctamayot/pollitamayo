@@ -28,8 +28,37 @@ const AdminDashboard = ({ user, allQuinielas }) => {
         if (!selectedQuiniela) {
             return;
         }
-        // ... (lógica de borrado sin cambios)
+
+        // ***** DIÁLOGO DE CONFIRMACIÓN AÑADIDO *****
+        if (!window.confirm(`¿ESTÁS SEGURO de borrar la quiniela "${selectedQuiniela.name}"? Esta acción es PERMANENTE y eliminará todas las predicciones asociadas.`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+        try {
+            const batch = writeBatch(db);
+
+            const predictionsCollectionRef = collection(db, 'quinielas', selectedQuiniela.id, 'predictions');
+            const predictionsSnapshot = await getDocs(predictionsCollectionRef);
+            predictionsSnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            
+            const quinielaRef = doc(db, 'quinielas', selectedQuiniela.id);
+            batch.delete(quinielaRef);
+            
+            await batch.commit();
+            
+            alert(`La quiniela "${selectedQuiniela.name}" y todas sus predicciones han sido eliminadas.`);
+
+        } catch (error) {
+            console.error("Error al borrar la quiniela:", error);
+            alert("Hubo un error al borrar la quiniela. Revisa la consola para más detalles.");
+        } finally {
+            setIsDeleting(false);
+        }
     };
+
 
     return (
         <div>
