@@ -3,16 +3,15 @@ import { collection, doc, getDocs, writeBatch, deleteDoc } from 'firebase/firest
 import { db } from '../firebase';
 
 // Componentes
-import CreateQuiniela from './CreateQuiniela';
+import QuinielaEditor from './QuinielaEditor'; // <-- Cambiado de CreateQuiniela
 import QuinielaView from './QuinielaView';
 import QuinielaSelector from './QuinielaSelector';
 
 const AdminDashboard = ({ user, allQuinielas }) => {
-    const [activeView, setActiveView] = useState('manage');
+    const [activeView, setActiveView] = useState('manage'); // manage, create, edit
     const [selectedId, setSelectedId] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Esta función se asegura de que la quiniela más reciente esté seleccionada por defecto
     useEffect(() => {
         const currentSelectionExists = allQuinielas.some(q => q.id === selectedId);
         if (selectedId && !currentSelectionExists) {
@@ -25,64 +24,37 @@ const AdminDashboard = ({ user, allQuinielas }) => {
     const selectedQuiniela = allQuinielas.find(q => q.id === selectedId);
 
     const handleDeleteQuiniela = async () => {
-        if (!selectedQuiniela) {
-            return;
-        }
-
-        if (!window.confirm(`¿ESTÁS SEGURO de borrar la quiniela "${selectedQuiniela.name}"? Esta acción es PERMANENTE y eliminará todas las predicciones asociadas.`)) {
-            return;
-        }
-
+        if (!selectedQuiniela) return;
+        if (!window.confirm(`¿ESTÁS SEGURO de borrar la quiniela "${selectedQuiniela.name}"? Esta acción es PERMANENTE.`)) return;
+        
         setIsDeleting(true);
         try {
             const batch = writeBatch(db);
-
-            const predictionsCollectionRef = collection(db, 'quinielas', selectedQuiniela.id, 'predictions');
-            const predictionsSnapshot = await getDocs(predictionsCollectionRef);
-            predictionsSnapshot.forEach((doc) => {
-                batch.delete(doc.ref);
-            });
-            
+            const predictionsRef = collection(db, 'quinielas', selectedQuiniela.id, 'predictions');
+            const predictionsSnapshot = await getDocs(predictionsRef);
+            predictionsSnapshot.forEach((doc) => batch.delete(doc.ref));
             const quinielaRef = doc(db, 'quinielas', selectedQuiniela.id);
             batch.delete(quinielaRef);
-            
             await batch.commit();
-            
-            alert(`La quiniela "${selectedQuiniela.name}" y todas sus predicciones han sido eliminadas.`);
-
+            alert(`La quiniela "${selectedQuiniela.name}" ha sido eliminada.`);
         } catch (error) {
             console.error("Error al borrar la quiniela:", error);
-            alert("Hubo un error al borrar la quiniela. Revisa la consola para más detalles.");
+            alert("Hubo un error al borrar la quiniela.");
         } finally {
             setIsDeleting(false);
         }
     };
 
-
-    return (
-        <div>
-            <div className="flex justify-between items-center border-b border-slate-700 mb-6">
-                <div className="flex space-x-2">
-                    <button onClick={() => setActiveView('manage')} className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${activeView === 'manage' ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
-                        Gestionar Quinielas
-                    </button>
-                    <button onClick={() => setActiveView('create')} className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${activeView === 'create' ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
-                        Crear Nueva Quiniela
-                    </button>
-                </div>
-                 {activeView === 'manage' && allQuinielas.length > 0 && (
-                     <QuinielaSelector 
-                        quinielas={allQuinielas}
-                        selectedId={selectedId}
-                        setSelectedId={setSelectedId}
-                     />
-                 )}
-            </div>
-
-            {activeView === 'create' && <CreateQuiniela />}
-            
-            {activeView === 'manage' && (
-                selectedQuiniela ? (
+    // Renderiza el contenido principal basado en activeView
+    const renderContent = () => {
+        switch (activeView) {
+            case 'create':
+                return <QuinielaEditor onFinishEditing={() => setActiveView('manage')} />;
+            case 'edit':
+                return <QuinielaEditor quinielaToEdit={selectedQuiniela} onFinishEditing={() => setActiveView('manage')} />;
+            case 'manage':
+            default:
+                return selectedQuiniela ? (
                     <>
                         <QuinielaView user={user} quiniela={selectedQuiniela} isAdmin={true} />
                         <div className="mt-8 pt-6 border-t border-red-500/20 text-center">
@@ -97,8 +69,38 @@ const AdminDashboard = ({ user, allQuinielas }) => {
                         <p>No has creado ninguna quiniela todavía.</p>
                         <p className="mt-2 text-sm">Usa la pestaña "Crear Nueva Quiniela" para empezar.</p>
                     </div>
-                )
-            )}
+                );
+        }
+    };
+
+    return (
+        <div>
+            <div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700 mb-6 gap-4">
+                <div className="flex space-x-2">
+                    <button onClick={() => setActiveView('manage')} className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${activeView === 'manage' ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                        Gestionar
+                    </button>
+                    <button onClick={() => setActiveView('create')} className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${activeView === 'create' ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                        Crear Nueva
+                    </button>
+                </div>
+                
+                {activeView === 'manage' && selectedQuiniela && (
+                    <div className="flex items-center gap-x-4">
+                        <QuinielaSelector quinielas={allQuinielas} selectedId={selectedId} setSelectedId={setSelectedId}/>
+                        <button 
+                            onClick={() => setActiveView('edit')} 
+                            disabled={selectedQuiniela.isClosed}
+                            className="bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
+                            title={selectedQuiniela.isClosed ? "No se puede editar una quiniela cerrada" : "Editar quiniela seleccionada"}
+                        >
+                            Editar
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {renderContent()}
         </div>
     );
 };
