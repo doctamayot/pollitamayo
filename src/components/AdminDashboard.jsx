@@ -12,7 +12,7 @@ const AdminDashboard = ({ user, allQuinielas }) => {
     const [selectedId, setSelectedId] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Sincronizar la selección con la lista de quinielas
+    // Esta función se asegura de que la quiniela más reciente esté seleccionada por defecto
     useEffect(() => {
         const currentSelectionExists = allQuinielas.some(q => q.id === selectedId);
         if (selectedId && !currentSelectionExists) {
@@ -29,7 +29,6 @@ const AdminDashboard = ({ user, allQuinielas }) => {
             return;
         }
 
-        // ***** DIÁLOGO DE CONFIRMACIÓN AÑADIDO *****
         if (!window.confirm(`¿ESTÁS SEGURO de borrar la quiniela "${selectedQuiniela.name}"? Esta acción es PERMANENTE y eliminará todas las predicciones asociadas.`)) {
             return;
         }

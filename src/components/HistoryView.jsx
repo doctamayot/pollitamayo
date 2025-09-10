@@ -10,12 +10,14 @@ const HistoryView = ({ closedQuinielas, user }) => {
     const [predictions, setPredictions] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    // Esta función se asegura de que la quiniela más reciente del historial esté seleccionada por defecto
     useEffect(() => {
         if (closedQuinielas.length > 0 && !selectedId) {
             setSelectedId(closedQuinielas[0].id);
         }
     }, [closedQuinielas, selectedId]);
 
+    // Cargar las predicciones para la quiniela seleccionada en el historial
     useEffect(() => {
         if (!selectedId) return;
 
