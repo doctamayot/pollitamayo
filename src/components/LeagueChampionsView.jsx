@@ -75,6 +75,7 @@ const LeagueChampionsView = () => {
             }
             const leaguesToFetch = predictionsData.leagues.filter(league => league.id !== null);
             const promises = leaguesToFetch.map(league => getStandings(league.id));
+        
             try {
                 const results = await Promise.allSettled(promises);
                 const standingsMap = {};

@@ -43,7 +43,10 @@ export const getCompetitions = async () => {
 };
 
 export const getMatchesByCompetition = async (competitionId) => {
-    if (!competitionId) return [];
+    if (!competitionId) {
+        // Mejor lanzar un error aquí si el input es incorrecto
+        throw new Error("El ID de competición no puede ser nulo.");
+    }
     const data = await fetchFromApi(`competitions/${competitionId}/matches?status=SCHEDULED`);
     return data.matches.map(match => ({
         id: match.id, date: match.utcDate, venue: match.venue,
@@ -67,10 +70,23 @@ export const getLiveResultsByIds = async (matchIds) => {
     return resultsMap;
 };
 
+
 export const getStandings = async (competitionId) => {
-    if (!competitionId) return [];
+    if (!competitionId) {
+        // Mejor lanzar un error aquí si el input es incorrecto
+        throw new Error("El ID de competición no puede ser nulo.");
+    }
+
     const data = await fetchFromApi(`competitions/${competitionId}/standings`);
-    const table = data.standings[0]?.table;
-    if (!table) return [];
+
+    // Validar la estructura de la respuesta
+    const table = data?.standings?.[0]?.table;
+
+    if (!table) {
+        // En lugar de devolver [], lanza un error
+        console.error(`Datos de standings no encontrados para la competición: ${competitionId}`, data);
+        throw new Error("La respuesta de la API no contiene datos de standings válidos.");
+    }
+
     return table.slice(0, 4).map(row => row.team.name);
 };
