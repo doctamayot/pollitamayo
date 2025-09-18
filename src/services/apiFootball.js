@@ -1,27 +1,28 @@
-// Ya no necesitamos la clave de API aquí, porque la usará el servidor.
-const API_SERVERLESS_URL = `${import.meta.env.BASE_URL}api/football`;
+const API_KEY = import.meta.env.VITE_FOOTBALL_DATA_API_KEY;
+const API_PROXY_URL = '/api'; 
 
-// Ya no necesitamos los headers aquí.
-// const headers = { 'X-Auth-Token': API_KEY };
+const headers = {
+    'X-Auth-Token': API_KEY,
+};
 
 const RELEVANT_COMPETITIONS = ['CL', 'PL', 'BL1', 'SA', 'PD', 'FL1', 'WC'];
 
 export const getCompetitions = async () => {
-    // Ahora llamamos a nuestra propia función serverless
-    const response = await fetch(`${API_SERVERLESS_URL}?path=competitions`);
+    const response = await fetch(`${API_PROXY_URL}/competitions`, { headers });
     if (!response.ok) throw new Error('Error al obtener las competiciones.');
     const data = await response.json();
-    
-    return data.competitions
-                .map(comp => ({ id: comp.id, name: comp.name, emblem: comp.emblem }));
+    return data.competitions.map(comp => ({ 
+        id: comp.id, 
+        name: comp.name, 
+        emblem: comp.emblem 
+    }));
 };
 
 export const getMatchesByCompetition = async (competitionId) => {
     if (!competitionId) return [];
-    const response = await fetch(`${API_SERVERLESS_URL}?path=competitions/${competitionId}/matches?status=SCHEDULED`);
+    const response = await fetch(`${API_PROXY_URL}/competitions/${competitionId}/matches?status=SCHEDULED`, { headers });
     if (!response.ok) throw new Error('Error al obtener los partidos.');
     const data = await response.json();
-    
     return data.matches.map(match => ({
         id: match.id,
         date: match.utcDate,
@@ -33,10 +34,9 @@ export const getMatchesByCompetition = async (competitionId) => {
 
 export const getLiveResultsByIds = async (matchIds) => {
     if (!matchIds || matchIds.length === 0) return {};
-    const response = await fetch(`${API_SERVERLESS_URL}?path=matches?ids=${matchIds.join(',')}`);
+    const response = await fetch(`${API_PROXY_URL}/matches?ids=${matchIds.join(',')}`, { headers });
     if (!response.ok) throw new Error('Error al obtener los resultados en vivo.');
     const data = await response.json();
-
     const resultsMap = {};
     data.matches.forEach(match => {
         if (match.status === 'IN_PLAY' || match.status === 'PAUSED' || match.status === 'FINISHED') {
@@ -49,19 +49,41 @@ export const getLiveResultsByIds = async (matchIds) => {
     return resultsMap;
 };
 
+// --- ▼▼▼ FUNCIÓN MODIFICADA CON CONSOLE.LOGS PARA DEPURACIÓN ▼▼▼ ---
 export const getStandings = async (competitionId) => {
+    
     if (!competitionId) return [];
-    const response = await fetch(`${API_SERVERLESS_URL}?path=competitions/${competitionId}/standings`);
-    if (!response.ok) {
-        throw new Error(`Error al obtener la tabla de posiciones para la competición ${competitionId}.`);
-    }
-    const data = await response.json();
-    const table = data.standings[0]?.table;
-    if (!table) return [];
+    
+    try {
+        const response = await fetch(`${API_PROXY_URL}/competitions/${competitionId}/standings`, { headers });
+        
+        
 
-    // Ahora devolvemos un objeto con el nombre y el escudo (crest)
-    return table.slice(0, 4).map(row => ({
-        name: row.team.name,
-        crest: row.team.crest 
-    }));
+        if (!response.ok) {
+            console.error(`La respuesta de la API para la liga ${competitionId} no fue exitosa.`);
+            // Lanzamos el error para que Promise.allSettled lo capture
+            throw new Error(`Respuesta no exitosa: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+
+        const table = data.standings[0]?.table;
+        
+
+        if (!table) {
+            console.warn(`No se encontró una tabla en los datos para la liga ${competitionId}.`);
+            return [];
+        }
+        
+        const finalResult = table.slice(0, 4).map(row => row.team.name);
+        
+        
+        return finalResult;
+
+    } catch (error) {
+        console.error(`Error CATASTRÓFICO en getStandings para la liga ${competitionId}:`, error);
+        // Devolvemos un array vacío en caso de cualquier error para no romper la aplicación
+        return [];
+    }
 };
