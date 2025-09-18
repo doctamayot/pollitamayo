@@ -1,10 +1,12 @@
 
 
+
+
 {
   "rewrites": [
     {
-      "source": "/pollitamayo/api/(.*)",
-      "destination": "/api/$1"
+      "source": "/pollitamayo/api/football",
+      "destination": "/api/football"
     },
     {
       "source": "/pollitamayo/(.*)",
