@@ -1,12 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/pollitamayo/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/pollitamayo/(.*)",
-      "destination": "/$1"
+      "source": "/api/(.*)",
+      "destination": "/api/football.cjs"
     }
   ],
   "headers": [
@@ -20,10 +16,9 @@
       ]
     }
   ],
-  "routes": [
-    {
-      "src": "/api/football",
-      "dest": "/api/football.ts"
+  "functions": {
+    "api/football.cjs": {
+      "runtime": "@vercel/node@2.0.0"
     }
-  ]
+  }
 }
