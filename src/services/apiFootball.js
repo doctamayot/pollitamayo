@@ -58,5 +58,10 @@ export const getStandings = async (competitionId) => {
     const data = await response.json();
     const table = data.standings[0]?.table;
     if (!table) return [];
-    return table.slice(0, 4).map(row => row.team.name);
+
+    // Ahora devolvemos un objeto con el nombre y el escudo (crest)
+    return table.slice(0, 4).map(row => ({
+        name: row.team.name,
+        crest: row.team.crest 
+    }));
 };

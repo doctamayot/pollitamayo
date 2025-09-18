@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getStandings } from '../services/apiFootball';
 
-// --- ▼▼▼ 1. DATOS ACTUALIZADOS CON LOGOS Y CÓDIGOS DE PAÍS ▼▼▼ ---
 const predictionsData = {
     leagues: [
         { name: "La Liga", id: 2014, positions: ["1º", "2º", "3º", "4º"], emblem: "https://crests.football-data.org/PD.png" },
         { name: "Premier League", id: 2021, positions: ["1º", "2º", "3º", "4º"], emblem: "https://crests.football-data.org/PL.png" },
         { name: "Bundesliga", id: 2002, positions: ["1º", "2º", "3º", "4º"], emblem: "https://crests.football-data.org/BL1.png" },
         { name: "Serie A", id: 2019, positions: ["1º", "2º", "3º", "4º"], emblem: "https://crests.football-data.org/SA.svg" },
-        { name: "Liga Colombiana", id: null, positions: ["1º", "1º", "2º", "2º"], countryCode: 'co' }, // Usamos countryCode como respaldo
+        { name: "Liga Colombiana", id: null, positions: ["1º", "1º", "2º", "2º"], countryCode: 'co' },
     ],
     players: [
         { name: "DANIEL", predictions: [["Real Madrid CF", "FC Barcelona", "Club Atlético de Madrid", "Athletic Club"], ["Liverpool FC", "Arsenal FC", "Chelsea FC", "Manchester City FC"], ["FC Bayern München", "Borussia Dortmund", "Eintracht Frankfurt", "Bayer 04 Leverkusen"], ["FC Internazionale Milano", "SSC Napoli", "AS Roma", "Atalanta BC"], ["Junior", "Santafe", "Nacional", "Medellin"]] },
@@ -19,11 +18,10 @@ const predictionsData = {
 };
 
 const getPredictionStyleAndPoints = (predictedTeam, positionIndex, realStandingsForLeague) => {
-    if (!realStandingsForLeague || realStandingsForLeague.length < 4) {
-        return { className: '', points: 0 };
-    }
-    const isExactMatch = predictedTeam === realStandingsForLeague[positionIndex];
-    const isInTop4 = realStandingsForLeague.includes(predictedTeam);
+    if (!realStandingsForLeague || realStandingsForLeague.length < 4) return { className: '', points: 0 };
+    const realTeams = realStandingsForLeague.map(t => t.name);
+    const isExactMatch = predictedTeam === realTeams[positionIndex];
+    const isInTop4 = realTeams.includes(predictedTeam);
     if (positionIndex === 0 && isExactMatch) return { className: 'bg-green-500/30 font-bold', points: 5 };
     if (isExactMatch) return { className: 'bg-yellow-500/20', points: 3 };
     if (isInTop4) return { className: 'bg-blue-500/20', points: 1 };
@@ -36,18 +34,19 @@ const calculatePlayerScores = (players, realStandings, leagues) => {
         leagues.forEach((league, leagueIndex) => {
             if (league.id === null) return;
             const playerPrediction = player.predictions[leagueIndex];
-            const realPosition = realStandings[league.name];
-            if (!playerPrediction || !realPosition || realPosition.length < 4) return;
+            const realPositionData = realStandings[league.name];
+            if (!playerPrediction || !realPositionData || realPositionData.length < 4) return;
+            const realPositionNames = realPositionData.map(t => t.name);
             const scoredPredictions = new Set();
             for (let i = 0; i < 4; i++) {
-                if (playerPrediction[i] === realPosition[i]) {
+                if (playerPrediction[i] === realPositionNames[i]) {
                     totalPoints += (i === 0) ? 5 : 3;
                     scoredPredictions.add(playerPrediction[i]);
                 }
             }
             for (let i = 0; i < 4; i++) {
                 const predictedTeam = playerPrediction[i];
-                if (!scoredPredictions.has(predictedTeam) && realPosition.includes(predictedTeam)) {
+                if (!scoredPredictions.has(predictedTeam) && realPositionNames.includes(predictedTeam)) {
                     totalPoints += 1;
                 }
             }
@@ -110,10 +109,8 @@ const LeagueChampionsView = () => {
                 <table className="min-w-full w-full border-collapse border border-slate-700">
                     <thead className="bg-slate-700/50">
                         <tr>
-                            {/* --- 2. POSICIONAMIENTO DE COLUMNAS FIJAS AJUSTADO --- */}
                             <th className="sticky left-0 z-20 bg-slate-700/50 border border-slate-600 p-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider w-20">Liga</th>
-                            <th className="sticky left-[80px] z-20 bg-slate-700/50 border border-slate-600 p-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider">Posiciones Reales</th>
-                            
+                            <th className="sticky left-[80px] z-20 bg-slate-700/50 border border-slate-600 p-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider min-w-[120px]">Posiciones Reales</th>
                             {sortedPlayers.map(player => (
                                 <th key={player.name} className="border border-slate-600 p-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider min-w-[150px]">
                                     {player.name}
@@ -131,21 +128,30 @@ const LeagueChampionsView = () => {
                                         <tr key={`${league.name}-${positionIndex}`} className="hover:bg-gray-800">
                                             {positionIndex === 0 && (
                                                 <td rowSpan={league.positions.length} className="sticky left-0 z-10 bg-gray-800 border border-slate-600 p-3 text-sm font-medium text-white align-middle text-center">
-                                                    {/* --- 3. SE MUESTRA EL LOGO O LA BANDERA --- */}
                                                     <div className="flex justify-center items-center h-full">
-                                                        <img 
-                                                            src={league.emblem || `https://flagcdn.com/w40/${league.countryCode}.png`} 
-                                                            alt={league.name} 
-                                                            className="h-8 w-8 object-contain"
-                                                            title={league.name}
-                                                        />
+                                                        <div className="h-10 w-10 bg-white rounded-full flex justify-center items-center p-1 shadow-md">
+                                                            <img 
+                                                                src={league.emblem || `https://flagcdn.com/w40/${league.countryCode}.png`} 
+                                                                alt={league.name} 
+                                                                className="h-8 w-8 object-contain"
+                                                                title={league.name}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </td>
                                             )}
-                                            <td className="sticky left-[80px] z-10 bg-gray-800 border border-slate-600 p-3 text-sm text-white text-center font-semibold min-w-[180px]">
+                                            {/* --- ▼▼▼ CAMBIO: SE MUESTRA LA POSICIÓN Y EL ESCUDO ▼▼▼ --- */}
+                                            <td className="sticky left-[80px] z-10 bg-gray-800 border border-slate-600 p-3 text-sm text-white text-center font-semibold">
                                                 {loading 
-                                                    ? <span className="text-xs text-slate-500">...</span>
-                                                    : `${position} - ${realStandingsForLeague?.[positionIndex] || 'N/A'}`
+                                                    ? <span className="text-xs text-slate-500">{position} - ...</span>
+                                                    : <div className="flex items-center justify-center gap-x-2" title={realStandingsForLeague?.[positionIndex]?.name || 'No disponible'}>
+                                                        <span className="font-bold w-4">{position}</span>
+                                                        {realStandingsForLeague?.[positionIndex]?.crest ? (
+                                                            <img src={realStandingsForLeague[positionIndex].crest} className="h-6 w-6 object-contain" alt={realStandingsForLeague[positionIndex].name} />
+                                                        ) : (
+                                                            <span>N/A</span>
+                                                        )}
+                                                      </div>
                                                 }
                                             </td>
                                             {sortedPlayers.map(player => {
