@@ -1,8 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/football.cjs"
+      "source": "/pollitamayo/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/pollitamayo/(.*)",
+      "destination": "/$1"
     }
   ],
   "headers": [
