@@ -116,11 +116,11 @@ const LeagueChampionsView = () => {
             <thead className="bg-slate-700/50">
                 <tr className='p-1'>
                     <th className="sticky left-0 z-20 bg-slate-700/50 border border-slate-600 p-2 text-left text-xs font-medium text-slate-300 uppercase tracking-wider w-[60px] sm:w-20">Liga</th>
-                    <th className="sticky left-[60px] sm:left-[80px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-2 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-[90px] sm:w-28">Resultados Reales</th>
+                    <th className="sticky left-[60px] sm:left-[80px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-2 text-center text-[8px] font-medium text-green-400 uppercase tracking-wider w-[90px] sm:w-28">Resultados Reales</th>
                     {sortedPlayers.map(player => (
-                        <th key={player.name} className="border border-slate-600 p-2 text-center text-[9px] font-medium text-slate-300 uppercase tracking-wider min-w-[90px] sm:min-w-[100px]">
+                        <th key={player.name} className="border border-slate-600 p-2 text-center text-[7px] font-medium text-slate-300 uppercase tracking-wider min-w-[90px] sm:min-w-[100px]">
                             {player.name}
-                            <span className="block text-amber-400 text-[7px] font-bold mt-1">{player.score} Pts</span>
+                            <span className="block text-amber-400 text-[8px] font-bold mt-1">{player.score} Pts</span>
                         </th>
                     ))}
                 </tr>
@@ -150,7 +150,7 @@ const LeagueChampionsView = () => {
                                         const predictedTeam = player.predictions[leagueIndex][positionIndex];
                                         const styleInfo = getPredictionStyleAndPoints(predictedTeam, positionIndex, realStandingsForLeague);
                                         return (
-                                            <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-1 sm:p-2 text-[5px] sm:text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
+                                            <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-1 sm:p-2 text-[4px] sm:text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
                                                 {predictedTeam}
                                                 {league.id && (
                                                     <span className="text-[7px] sm:text-xs ml-1 sm:ml-2 opacity-80">({styleInfo.points > 0 ? `+${styleInfo.points}` : '0'})</span>
