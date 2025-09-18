@@ -1,22 +1,29 @@
 {
-  "builds": [
-    {
-      "src": "api/football.cjs",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build"
-    }
-  ],
   "rewrites": [
     {
-      "source": "/pollitamayo/api/football",
-      "destination": "/api/football"
+      "source": "/pollitamayo/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/pollitamayo/(.*)",
       "destination": "/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/football",
+      "dest": "/api/football.ts"
     }
   ]
 }
