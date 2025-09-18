@@ -1,5 +1,5 @@
 // Ya no necesitamos la clave de API aquí, porque la usará el servidor.
-const API_SERVERLESS_URL = '/api/football'; 
+const API_SERVERLESS_URL = `${import.meta.env.BASE_URL}api/football`;
 
 // Ya no necesitamos los headers aquí.
 // const headers = { 'X-Auth-Token': API_KEY };
