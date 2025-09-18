@@ -2,19 +2,58 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { QUINIELAS_COLLECTION } from '../config';
+import { getCompetitions, getMatchesByCompetition } from '../services/apiFootball';
 
-// Este componente ahora acepta dos props opcionales:
-// quinielaToEdit: El objeto de la quiniela a editar. Si no se pasa, está en modo "Crear".
-// onFinishEditing: Una función para volver a la vista anterior después de guardar o cancelar.
 const QuinielaEditor = ({ quinielaToEdit, onFinishEditing }) => {
     const [quinielaName, setQuinielaName] = useState('');
-    const [matches, setMatches] = useState([{ home: '', away: '', homeCode: '', awayCode: '', championship: '' }]);
-    const [feedback, setFeedback] = useState('');
+    // El estado 'matches' ahora guardará los partidos seleccionados
+    const [matches, setMatches] = useState([]);
+    
+    // --- NUEVOS ESTADOS PARA MANEJAR LA API ---
+    const [competitions, setCompetitions] = useState([]);
+    const [availableMatches, setAvailableMatches] = useState([]); // <-- Lista de partidos de la API
+    const [selectedCompetition, setSelectedCompetition] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [feedback, setFeedback] = useState('');
 
     const isEditMode = Boolean(quinielaToEdit);
 
-    // Si estamos en modo edición, llenar el formulario con los datos existentes
+    // Cargar competiciones al montar el componente
+    useEffect(() => {
+        const fetchCompetitions = async () => {
+            try {
+                const comps = await getCompetitions();
+                setCompetitions(comps);
+            } catch (error) {
+                console.error(error);
+                setFeedback('Error al cargar las ligas.');
+            }
+        };
+        fetchCompetitions();
+    }, []);
+
+    // Cargar partidos cuando se selecciona una competición
+    useEffect(() => {
+        const fetchMatches = async () => {
+            if (!selectedCompetition) {
+                setAvailableMatches([]);
+                return;
+            }
+            try {
+                setIsLoading(true);
+                const matchesData = await getMatchesByCompetition(selectedCompetition);
+                setAvailableMatches(matchesData);
+            } catch (error) {
+                console.error(error);
+                setFeedback('Error al cargar los partidos.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchMatches();
+    }, [selectedCompetition]);
+
+    // Llenar el formulario si estamos en modo edición
     useEffect(() => {
         if (isEditMode) {
             setQuinielaName(quinielaToEdit.name);
@@ -22,57 +61,55 @@ const QuinielaEditor = ({ quinielaToEdit, onFinishEditing }) => {
         }
     }, [isEditMode, quinielaToEdit]);
 
-    const handleMatchChange = (index, field, value) => {
-        const newMatches = [...matches];
-        newMatches[index][field] = value;
-        setMatches(newMatches);
-    };
+    // --- NUEVA LÓGICA PARA SELECCIONAR/DESELECCIONAR PARTIDOS ---
+    const handleMatchSelect = (apiMatch, isChecked) => {
+        const competitionData = competitions.find(c => c.id === parseInt(selectedCompetition));
+        const formattedMatch = {
+            id: apiMatch.id,
+            championship: competitionData?.name || '',
+            date: apiMatch.date,            
+            home: apiMatch.homeTeam.name,
+            away: apiMatch.awayTeam.name,
+            homeCrest: apiMatch.homeTeam.crest,
+            awayCrest: apiMatch.awayTeam.crest,
+            homeCode: apiMatch.homeTeam.tla,
+            awayCode: apiMatch.awayTeam.tla,
+        };
 
-    const addMatch = () => {
-        setMatches([...matches, { home: '', away: '', homeCode: '', awayCode: '', championship: '' }]);
+        if (isChecked) {
+            // Añadir el partido a nuestra lista de quiniela
+            setMatches(prev => [...prev, formattedMatch]);
+        } else {
+            // Quitar el partido de nuestra lista
+            setMatches(prev => prev.filter(m => m.id !== apiMatch.id));
+        }
     };
-
-    const removeMatch = (index) => {
-        const newMatches = matches.filter((_, i) => i !== index);
-        setMatches(newMatches);
-    };
-
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!quinielaName || matches.some(m => !m.home || !m.away || !m.championship)) {
-            setFeedback('Por favor, completa el nombre y todos los campos de todos los partidos.');
+        if (!quinielaName || matches.length === 0) {
+            setFeedback('Por favor, completa el nombre y selecciona al menos un partido.');
             return;
         }
         setIsLoading(true);
+        // ... (El resto de la lógica de guardado es la misma y funcionará)
         setFeedback(isEditMode ? 'Actualizando quiniela...' : 'Creando quiniela...');
-
-        const formattedMatches = matches.map((match, index) => ({
-            ...match,
-            // Si el partido ya tiene un id, lo mantenemos, si no, lo creamos
-            id: match.id || `${quinielaName.replace(/\s+/g, '-').toLowerCase()}-${index}`
-        }));
-
         try {
             if (isEditMode) {
-                // --- LÓGICA DE ACTUALIZACIÓN ---
                 const quinielaRef = doc(db, QUINIELAS_COLLECTION, quinielaToEdit.id);
-                await updateDoc(quinielaRef, {
-                    name: quinielaName,
-                    matches: formattedMatches,
-                });
+                await updateDoc(quinielaRef, { name: quinielaName, matches });
                 setFeedback('¡Quiniela actualizada con éxito!');
             } else {
-                // --- LÓGICA DE CREACIÓN (SIN CAMBIOS) ---
                 await addDoc(collection(db, QUINIELAS_COLLECTION), {
                     name: quinielaName,
-                    matches: formattedMatches,
+                    matches,
                     createdAt: serverTimestamp(),
                     locked: false, resultsVisible: false, realResults: {},
                     isActive: false, isClosed: false, winnersData: []
                 });
                 setFeedback('¡Quiniela creada con éxito!');
                 setQuinielaName('');
-                setMatches([{ home: '', away: '', homeCode: '', awayCode: '', championship: '' }]);
+                setMatches([]);
             }
         } catch (error) {
             console.error("Error al guardar la quiniela:", error);
@@ -81,7 +118,7 @@ const QuinielaEditor = ({ quinielaToEdit, onFinishEditing }) => {
             setIsLoading(false);
             setTimeout(() => {
                 setFeedback('');
-                if (isEditMode) onFinishEditing(); // Volver a la vista de gestión
+                if (isEditMode) onFinishEditing();
             }, 2000);
         }
     };
@@ -96,34 +133,51 @@ const QuinielaEditor = ({ quinielaToEdit, onFinishEditing }) => {
                     <label htmlFor="quinielaName" className="block text-sm font-medium text-slate-300 mb-2">Nombre de la Quiniela</label>
                     <input type="text" id="quinielaName" value={quinielaName} onChange={(e) => setQuinielaName(e.target.value)} className="form-input w-full" required />
                 </div>
-                <h3 className="text-lg font-semibold text-blue-400">Partidos</h3>
-                <div className="space-y-4">
-                    {matches.map((match, index) => (
-                        <div key={index} className="p-4 bg-slate-900/50 rounded-md border border-slate-700">
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-slate-300 mb-2">Campeonato</label>
-                                <input type="text" placeholder="Ej: Premier League" value={match.championship} onChange={e => handleMatchChange(index, 'championship', e.target.value)} className="form-input w-full" required />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-10 gap-2 items-center">
-                                <input type="text" placeholder="Equipo Local" value={match.home} onChange={e => handleMatchChange(index, 'home', e.target.value)} className="sm:col-span-3 form-input" required />
-                                <input type="text" placeholder="Código" value={match.homeCode} onChange={e => handleMatchChange(index, 'homeCode', e.target.value)} className="sm:col-span-1 form-input" />
-                                <span className="text-center text-slate-400 hidden sm:block">vs</span>
-                                <input type="text" placeholder="Equipo Visitante" value={match.away} onChange={e => handleMatchChange(index, 'away', e.target.value)} className="sm:col-span-3 form-input" required />
-                                <input type="text" placeholder="Código" value={match.awayCode} onChange={e => handleMatchChange(index, 'awayCode', e.target.value)} className="sm:col-span-1 form-input" />
-                                <button type="button" onClick={() => removeMatch(index)} className="sm:col-span-1 text-red-500 hover:text-red-400 font-semibold text-sm">Quitar</button>
-                            </div>
-                        </div>
-                    ))}
+                
+                <div>
+                    <label htmlFor="competition" className="block text-sm font-medium text-slate-300 mb-2">1. Selecciona una Competición</label>
+                    <select id="competition" value={selectedCompetition} onChange={e => setSelectedCompetition(e.target.value)} className="form-input w-full" required>
+                        <option value="">Cargando competiciones...</option>
+                        {competitions.map(comp => <option key={comp.id} value={comp.id}>{comp.name}</option>)}
+                    </select>
                 </div>
-                <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <button type="button" onClick={addMatch} className="text-blue-400 hover:text-blue-300 text-sm font-semibold">+ Añadir Partido</button>
+
+                {/* --- NUEVA SECCIÓN PARA MOSTRAR LA LISTA DE PARTIDOS --- */}
+                {selectedCompetition && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-blue-400 mb-2">2. Selecciona los Partidos</h3>
+                        {isLoading ? <p className="text-slate-400">Cargando partidos...</p> : (
+                            <div className="space-y-2 max-h-96 overflow-y-auto p-2 border border-slate-700 rounded-md">
+                                {availableMatches.length > 0 ? availableMatches.map(match => (
+                                    <div key={match.id} className="flex items-center bg-slate-900/50 p-3 rounded-md">
+                                        <input
+                                            type="checkbox"
+                                            id={`match-${match.id}`}
+                                            className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500"
+                                            onChange={(e) => handleMatchSelect(match, e.target.checked)}
+                                            checked={matches.some(m => m.id === match.id)}
+                                        />
+                                        <label htmlFor={`match-${match.id}`} className="ml-3 text-sm text-slate-300 flex-grow">
+                                            {match.homeTeam.name} <span className="text-slate-500">vs</span> {match.awayTeam.name}
+                                        </label>
+                                        <span className="text-xs text-slate-400">
+                                            {new Date(match.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                )) : <p className="text-slate-500">No hay partidos programados para esta competición.</p>}
+                            </div>
+                        )}
+                    </div>
+                )}
+                
+                <div className="pt-4 flex flex-col sm:flex-row justify-end items-center gap-4">
                     <div className="flex items-center gap-x-4">
                         {isEditMode && (
-                             <button type="button" onClick={onFinishEditing} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-md transition duration-300">
-                                Cancelar
-                            </button>
+                             <button type="button" onClick={onFinishEditing} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-md">
+                                 Cancelar
+                             </button>
                         )}
-                        <button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-wait text-white font-bold py-3 px-6 rounded-md transition duration-300">
+                        <button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-bold py-3 px-6 rounded-md">
                             {isLoading ? 'Guardando...' : (isEditMode ? 'Guardar Cambios' : 'Guardar Quiniela')}
                         </button>
                     </div>

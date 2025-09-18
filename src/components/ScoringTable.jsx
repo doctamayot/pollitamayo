@@ -74,8 +74,8 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
 
     return (
         <div className="overflow-x-auto">
-             <h2 className="text-xl font-bold text-blue-400 mb-4">Puntuación: "{quiniela.name}"</h2>
-             <div className="align-middle inline-block min-w-full">
+            <h2 className="text-xl font-bold text-blue-400 mb-4">Puntuación: "{quiniela.name}"</h2>
+            <div className="align-middle inline-block min-w-full">
                 <div className="shadow border-b border-slate-700 sm:rounded-lg">
                     <table className="min-w-full divide-y divide-slate-700">
                         <thead className="bg-slate-700/50">
@@ -93,17 +93,16 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                 {Object.values(groupedMatches).flat().map(p => (
                                     <th scope="col" key={p.id} className="px-1 py-3 text-center text-xs font-semibold text-white min-w-[75px]">
                                         <div className="flex flex-col items-center justify-center space-y-0.5">
-                                            <span className="text-[9px] font-bold text-slate-300 uppercase leading-none">{p.home.substring(0, 3)}</span>
-                                            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
-                                            <div className="h-4 w-4 rounded-full overflow-hidden">
-                                                <img src={`https://flagcdn.com/w20/${p.homeCode}.png`} title={p.home} className="h-full w-full object-cover" />
+                                            <span className="text-[9px] font-bold text-slate-300 uppercase leading-none">{p.homeCode || p.home.substring(0, 3)}</span>
+                                            {/* CAMBIO CON LÓGICA DE RESPALDO */}
+                                            <div className="h-4 w-4 rounded-full overflow-hidden bg-slate-600">
+                                                <img src={p.homeCrest || `https://flagcdn.com/w20/${p.homeCode}.png`} title={p.home} className="h-full w-full object-contain" />
                                             </div>
                                             <span className="text-[10px]">vs</span>
-                                            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
-                                            <div className="h-4 w-4 rounded-full overflow-hidden">
-                                                <img src={`https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-full w-full object-cover" />
+                                            <div className="h-4 w-4 rounded-full overflow-hidden bg-slate-600">
+                                                <img src={p.awayCrest || `https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-full w-full object-contain" />
                                             </div>
-                                            <span className="text-[9px] font-bold text-slate-300 uppercase leading-none">{p.away.substring(0, 3)}</span>
+                                            <span className="text-[9px] font-bold text-slate-300 uppercase leading-none">{p.awayCode || p.away.substring(0, 3)}</span>
                                         </div>
                                     </th>
                                 ))}
@@ -126,7 +125,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                 let stickyBgClass = rowClass.split(' ')[0];
 
                                 return (
-                                     <tr key={score.userId} className={rowClass}>
+                                    <tr key={score.userId} className={rowClass}>
                                         <td className={`sticky left-0 px-4 py-4 whitespace-nowrap text-sm font-medium text-white flex items-center gap-x-3 ${stickyBgClass}`}>
                                             {score.rank === 1 && score.points > 0 ? (
                                                 <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white font-bold text-xs flex-shrink-0">
@@ -165,12 +164,12 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                             })}
                         </tbody>
                         <tfoot className="bg-slate-700/50 border-t-2 border-slate-600">
-                           <tr>
+                            <tr>
                                 <td className="sticky left-0 bg-slate-700/50 px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Resultado Real</td>
                                 {quiniela.matches.map(p => {
                                     const result = quiniela.realResults?.[p.id];
                                     const scoreText = result ? `${result.home} - ${result.away}` : '-';
-                                    return <td key={p.id} className="px-2 py-3 text-center text-sm font-bold text-amber-300">{scoreText}</td>;
+                                    return <td key={p.id} className="px-2 py-3 text-center text-sm font-extrabold text-green-400 animate-pulse">{scoreText}</td>;
                                 })}
                                 <td></td>
                             </tr>

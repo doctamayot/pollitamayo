@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, orderBy, doc, setDoc } from 'firebase/fi
 import { db } from '../firebase';
 import { ADMIN_EMAIL } from '../config';
 
-const Leaderboard = ({ isAdmin }) => {
+const Leaderboard = ({ isAdmin, onViewProfile }) => {
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [loading, setLoading] = useState(true);
     
@@ -24,11 +24,11 @@ const Leaderboard = ({ isAdmin }) => {
                 let fullLeaderboard = allPlayers.map(user => ({
                     id: user.id,
                     displayName: user.displayName,
+                    email: user.email,
+                    uid: user.id,
                     totalWins: winnersMap.get(user.id) || 0
                 }));
-
                 fullLeaderboard.sort((a, b) => b.totalWins - a.totalWins);
-
                 let rank = 0;
                 let lastScore = -1;
                 fullLeaderboard = fullLeaderboard.map((user, index) => {
@@ -38,18 +38,42 @@ const Leaderboard = ({ isAdmin }) => {
                     }
                     return { ...user, rank };
                 });
-
                 setLeaderboardData(fullLeaderboard);
                 setLoading(false);
             });
-            return unsubLeaderboard;
+            return () => unsubLeaderboard();
         });
         return () => unsubUsers();
     }, []);
 
-    const handleEdit = (user) => { /* ... (sin cambios) */ };
-    const handleCancel = () => { /* ... (sin cambios) */ };
-    const handleSave = async (user) => { /* ... (sin cambios) */ };
+    const handleEdit = (user) => {
+        setEditingUserId(user.id);
+        setNewScore(user.totalWins);
+    };
+
+    const handleCancel = () => {
+        setEditingUserId(null);
+        setNewScore('');
+    };
+
+    const handleSave = async (user) => {
+        const scoreToSave = parseInt(newScore, 10);
+        if (isNaN(scoreToSave) || scoreToSave < 0) {
+            alert("Por favor, introduce un número válido.");
+            return;
+        }
+        try {
+            const leaderboardRef = doc(db, 'leaderboard', user.id);
+            await setDoc(leaderboardRef, {
+                displayName: user.displayName,
+                totalWins: scoreToSave
+            }, { merge: true });
+        } catch (error) {
+            console.error("Error al actualizar el puntaje:", error);
+        } finally {
+            handleCancel();
+        }
+    };
     
     if (loading) {
         return <div className="text-center text-slate-400 py-10">Cargando el Leaderboard...</div>;
@@ -67,7 +91,8 @@ const Leaderboard = ({ isAdmin }) => {
                             <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Rank</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Jugador</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Victorias</th>
-                            {isAdmin && <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Acciones</th>}
+                            {/* CAMBIO 1: El encabezado "Acciones" ahora siempre es visible */}
+                            <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800">
@@ -75,35 +100,33 @@ const Leaderboard = ({ isAdmin }) => {
                             let rowClass = 'hover:bg-slate-700/30';
                             if (user.rank === 1 && user.totalWins > 0) {
                                 rowClass = 'bg-green-500/10 hover:bg-green-500/20';
-                            } else if (user.rank === maxRank && user.rank > 1) {
+                            } else if (user.rank === maxRank && user.rank > 1 && leaderboardData.length > 2) {
                                 rowClass = 'bg-red-500/10 hover:bg-red-500/20';
                             }
 
                             return (
                                 <tr key={user.id} className={`border-b border-slate-700/50 ${rowClass}`}>
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                                        {/* ***** CÍRCULO VERDE PARA EL RANK #1 ***** */}
-                                        {user.rank === 1 && user.totalWins > 0 ? (
-                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white font-bold text-xs">
-                                                {user.rank}
-                                            </span>
-                                        ) : (
-                                            <span className="text-slate-300 w-6 text-center block">
-                                                {user.rank}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{user.displayName}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-slate-300">{user.rank}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+    <button 
+        onClick={() => onViewProfile(user.id)} 
+        className="font-medium text-white hover:text-amber-400 transition-colors duration-200"
+    >
+        {user.displayName}
+    </button>
+</td>
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-white font-bold">
-                                        {editingUserId === user.id ? (
-                                            <input type="number" value={newScore} onChange={(e) => setNewScore(e.target.value)} className="w-16 text-center form-input py-1" />
+                                        {isAdmin && editingUserId === user.id ? (
+                                            <input type="number" value={newScore} onChange={(e) => setNewScore(e.target.value)} className="w-16 text-center form-input py-1"/>
                                         ) : (
                                             user.totalWins
                                         )}
                                     </td>
-                                    {isAdmin && (
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                            {editingUserId === user.id ? (
+                                    {/* CAMBIO 2: La celda de "Acciones" ahora siempre es visible, con lógica condicional adentro */}
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm">
+                                        {isAdmin ? (
+                                            // Lógica para el Administrador
+                                            editingUserId === user.id ? (
                                                 <div className="flex space-x-4">
                                                     <button onClick={() => handleSave(user)} className="text-green-400 hover:text-green-300 font-semibold">Guardar</button>
                                                     <button onClick={handleCancel} className="text-slate-400 hover:text-slate-300">Cancelar</button>
@@ -111,10 +134,14 @@ const Leaderboard = ({ isAdmin }) => {
                                             ) : (
                                                 <div className="flex space-x-4 items-center">
                                                     <button onClick={() => handleEdit(user)} className="text-blue-400 hover:text-blue-300 font-semibold">Editar</button>
+                                                    <button onClick={() => onViewProfile(user.id)} className="text-amber-400 hover:text-amber-300 font-semibold">Ver Estadísticas</button>
                                                 </div>
-                                            )}
-                                        </td>
-                                    )}
+                                            )
+                                        ) : (
+                                            // Lógica para el Jugador normal
+                                            <button onClick={() => onViewProfile(user.id)} className="text-amber-400 hover:text-amber-300 font-semibold">Ver Estadísticas</button>
+                                        )}
+                                    </td>
                                 </tr>
                             );
                         })}

@@ -3,59 +3,38 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const MatchInput = ({ partido, value, onChange, disabled }) => (
-    <div className="flex items-center justify-between col-span-1 gap-x-2">
-        <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
-            <span className="text-right">{partido.home}</span>
-            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
-            <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0">
-                <img 
-                    src={`https://flagcdn.com/w20/${partido.homeCode}.png`} 
-                    alt={partido.home} 
-                    className="h-full w-full object-cover" 
-                />
-            </div>
-        </label>
-        
-        <div className="flex items-center space-x-2 flex-shrink-0">
-            <input 
-                type="number" 
-                id={`${partido.id}-home`} 
-                name={`${partido.id}-home`} 
-                value={value.home} 
-                onChange={onChange} 
-                min="0" 
-                className="w-14 text-center form-input py-2" 
-                required 
-                disabled={disabled} 
-            />
-            <span className="text-slate-400">-</span>
-            <input 
-                type="number" 
-                id={`${partido.id}-away`} 
-                name={`${partido.id}-away`} 
-                value={value.away} 
-                onChange={onChange} 
-                min="0" 
-                className="w-14 text-center form-input py-2" 
-                required 
-                disabled={disabled} 
-            />
+    <div className="col-span-1 bg-slate-900/50 p-3 rounded-md border border-slate-700">
+        {/* CAMBIO: Mostramos la fecha y el estadio en la misma línea */}
+        <div className="text-xs text-center text-amber-400 mb-3 font-semibold space-x-2">
+            <span>
+                {new Date(partido.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </span>
+            
         </div>
-
-        <label htmlFor={`${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
-            {/* ***** CAMBIO AQUÍ: Contenedor circular para la bandera ***** */}
-            <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0">
-                <img 
-                    src={`https://flagcdn.com/w20/${partido.awayCode}.png`} 
-                    alt={partido.away} 
-                    className="h-full w-full object-cover" 
-                />
+        <div className="flex items-center justify-between gap-x-2">
+            <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
+                <span className="text-right">{partido.home}</span>
+                <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
+                    <img src={partido.homeCrest || `https://flagcdn.com/w20/${partido.homeCode}.png`} alt={partido.home} className="h-full w-full object-contain" />
+                </div>
+            </label>
+            <div className="flex items-center space-x-2 flex-shrink-0">
+                <input type="number" id={`${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2" required disabled={disabled} />
+                <span className="text-slate-400">-</span>
+                <input type="number" id={`${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2" required disabled={disabled} />
             </div>
-            <span>{partido.away}</span>
-        </label>
+            <label htmlFor={`${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
+                <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
+                    <img src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`} alt={partido.away} className="h-full w-full object-contain" />
+                </div>
+                <span>{partido.away}</span>
+            </label>
+        </div>
     </div>
 );
 
+
+// --- El resto del archivo es el mismo, pero lo incluyo para que sea completo ---
 const PredictionsForm = ({ user, quiniela, allPredictions }) => {
     const [predictions, setPredictions] = useState({});
     const [feedback, setFeedback] = useState('');
@@ -120,7 +99,7 @@ const PredictionsForm = ({ user, quiniela, allPredictions }) => {
                         <h3 className="text-lg font-semibold text-blue-400 border-b border-slate-700 pb-3 mb-4">
                             {championship}
                         </h3>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {groupedMatches[championship].map((partido) => (
                                 <MatchInput key={partido.id} partido={partido} value={predictions[partido.id] || {home: '', away: ''}} onChange={handleChange} disabled={isLocked}/>
                             ))}
