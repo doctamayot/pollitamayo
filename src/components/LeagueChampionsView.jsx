@@ -116,9 +116,9 @@ const LeagueChampionsView = () => {
                     <thead className="bg-slate-700/50">
                         <tr className='p-1'>
                             <th className="sticky left-0 z-20 bg-slate-700/50 border border-slate-600 p-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider w-20">Liga</th>
-                            <th className="sticky left-[80px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-28">Resultados Reales</th>
+                            <th className="sticky left-[10px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-2">Resultados Reales</th>
                             {sortedPlayers.map(player => (
-                                <th key={player.name} className="border border-slate-600 p-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider min-w-[150px]">
+                                <th key={player.name} className="border border-slate-600 p-1 text-center text-xs font-medium text-slate-300 uppercase tracking-wider min-w-[100px]">
                                     {player.name}
                                     <span className="block text-amber-400 text-sm font-bold mt-1">{player.score} Pts</span>
                                 </th>
