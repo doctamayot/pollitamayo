@@ -25,7 +25,9 @@ const fetchFromApi = async (pathWithParams) => {
         options.headers = { 'X-Auth-Token': API_KEY };
     } else {
         // En PRODUCCIÓN: llamamos a nuestra función serverless. La KEY la pone el servidor.
-        url = `${API_URL}/football?path=${encodeURIComponent(pathWithParams)}`;
+        //url = `${API_URL}/football?path=${encodeURIComponent(pathWithParams)}`;
+        url = `/api/football?path=${encodeURIComponent(pathWithParams)}`;
+        
     }
 
     const response = await fetch(url, options);
