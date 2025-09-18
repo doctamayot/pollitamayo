@@ -150,7 +150,7 @@ const LeagueChampionsView = () => {
                                         const predictedTeam = player.predictions[leagueIndex][positionIndex];
                                         const styleInfo = getPredictionStyleAndPoints(predictedTeam, positionIndex, realStandingsForLeague);
                                         return (
-                                            <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-1 sm:p-2 text-[7px] sm:text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
+                                            <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-1 sm:p-2 text-[5px] sm:text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
                                                 {predictedTeam}
                                                 {league.id && (
                                                     <span className="text-[7px] sm:text-xs ml-1 sm:ml-2 opacity-80">({styleInfo.points > 0 ? `+${styleInfo.points}` : '0'})</span>
