@@ -1,6 +1,6 @@
 // Este código se ejecuta en el servidor de tu hosting (Vercel, etc.)
 // y usa la función fetch que ya está disponible en ese entorno.
-module.exports = async (request:any, response:any) => {
+module.exports = async (request, response) => {
   const apiKey = process.env.VITE_FOOTBALL_DATA_API_KEY;
 
   if (!apiKey) {
