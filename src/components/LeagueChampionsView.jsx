@@ -114,9 +114,9 @@ const LeagueChampionsView = () => {
             <div className="overflow-x-auto">
                 <table className="min-w-full w-full border-collapse border border-slate-700">
                     <thead className="bg-slate-700/50">
-                        <tr>
+                        <tr className='p-1'>
                             <th className="sticky left-0 z-20 bg-slate-700/50 border border-slate-600 p-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider w-20">Liga</th>
-                            <th className="sticky left-[80px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-28">Resultados</th>
+                            <th className="sticky left-[80px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-28">Resultados Reales</th>
                             {sortedPlayers.map(player => (
                                 <th key={player.name} className="border border-slate-600 p-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider min-w-[150px]">
                                     {player.name}
@@ -133,7 +133,7 @@ const LeagueChampionsView = () => {
                                     return (
                                         <tr key={`${league.name}-${positionIndex}`} className="hover:bg-gray-800">
                                             {positionIndex === 0 && (
-                                                <td rowSpan={league.positions.length} className="sticky left-0 z-10 bg-gray-800 border border-slate-600 p-3 text-sm font-medium text-white align-middle text-center">
+                                                <td rowSpan={league.positions.length} className="sticky left-0 z-10 bg-gray-800 border border-slate-600 p-1 text-sm font-medium text-white align-middle text-center">
                                                     <div className="flex justify-center items-center h-full">
                                                         <div className="h-10 w-10 bg-white rounded-full flex justify-center items-center p-1 shadow-md">
                                                             <img src={league.emblem || `https://flagcdn.com/w40/${league.countryCode}.png`} alt={league.name} className="h-8 w-8 object-contain" title={league.name} />
@@ -141,7 +141,7 @@ const LeagueChampionsView = () => {
                                                     </div>
                                                 </td>
                                             )}
-                                            <td className="sticky left-[80px] z-10 bg-gray-800 border border-slate-600 p-1 text-xs text-white text-center font-semibold w-28">
+                                            <td className="sticky left-[80px] z-10 bg-gray-800 border border-slate-600 p-1 text-[10px] text-white text-center font-semibold w-28">
                                                 <span title={realStandingsForLeague?.[positionIndex] || 'No disponible'}>
                                                     {`${position} - ${realStandingsForLeague?.[positionIndex] || 'N/A'}`}
                                                 </span>
@@ -150,7 +150,7 @@ const LeagueChampionsView = () => {
                                                 const predictedTeam = player.predictions[leagueIndex][positionIndex];
                                                 const styleInfo = getPredictionStyleAndPoints(predictedTeam, positionIndex, realStandingsForLeague);
                                                 return (
-                                                    <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-3 text-sm text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
+                                                    <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-3 text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
                                                         {predictedTeam}
                                                         {league.id && (
                                                             <span className="text-xs ml-2 opacity-80">({styleInfo.points > 0 ? `+${styleInfo.points}` : '0'})</span>
