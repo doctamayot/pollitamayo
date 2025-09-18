@@ -1,8 +1,14 @@
-
-
-
-
 {
+  "builds": [
+    {
+      "src": "api/football.cjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build"
+    }
+  ],
   "rewrites": [
     {
       "source": "/pollitamayo/api/football",
