@@ -1,12 +1,8 @@
-// Ruta: api/football.js
-// Usamos la sintaxis require, que es más tradicional y compatible en entornos de servidor.
-const fetch = require('node-fetch');
-
+// Este código se ejecuta en el servidor de tu hosting (Vercel, etc.)
+// y usa la función fetch que ya está disponible en ese entorno.
 module.exports = async (request, response) => {
-  // 1. Lee la clave de API desde las variables de entorno de tu hosting.
   const apiKey = process.env.VITE_FOOTBALL_DATA_API_KEY;
 
-  // 2. VERIFICACIÓN DE SEGURIDAD: Si la clave no existe, detenemos todo y avisamos.
   if (!apiKey) {
     console.error("La variable de entorno VITE_FOOTBALL_DATA_API_KEY no está definida en el servidor.");
     return response.status(500).json({ 
@@ -36,7 +32,7 @@ module.exports = async (request, response) => {
     return response.status(200).json(data);
 
   } catch (error) {
-    console.error("Error catastrófico en la función serverless:", error);
+    console.error("Error en la función serverless:", error);
     return response.status(500).json({ message: 'Error interno del servidor al procesar la petición.' });
   }
 };
