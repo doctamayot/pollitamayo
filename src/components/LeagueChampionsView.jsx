@@ -109,64 +109,64 @@ const LeagueChampionsView = () => {
     }, [loading, realStandings]);
 
     return (
-        <div className="bg-slate-800/50 p-4 sm:p-6 rounded-lg">
-            <h2 className="text-2xl font-bold text-amber-400 mb-6 text-center">Polla Campeones de Ligas</h2>
-            <div className="overflow-x-auto">
-                <table className="min-w-full w-full border-collapse border border-slate-700">
-                    <thead className="bg-slate-700/50">
-                        <tr className='p-1'>
-                            <th className="sticky left-0 z-20 bg-slate-700/50 border border-slate-600 p-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider w-20">Liga</th>
-                            <th className="sticky left-[10px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-3 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-2">Resultados Reales</th>
-                            {sortedPlayers.map(player => (
-                                <th key={player.name} className="border border-slate-600 p-1 text-center text-xs font-medium text-slate-300 uppercase tracking-wider min-w-[100px]">
-                                    {player.name}
-                                    <span className="block text-amber-400 text-sm font-bold mt-1">{player.score} Pts</span>
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700">
-                        {predictionsData.leagues.map((league, leagueIndex) => (
-                            <React.Fragment key={league.name}>
-                                {league.positions.map((position, positionIndex) => {
-                                    const realStandingsForLeague = realStandings[league.name];
-                                    return (
-                                        <tr key={`${league.name}-${positionIndex}`} className="hover:bg-gray-800">
-                                            {positionIndex === 0 && (
-                                                <td rowSpan={league.positions.length} className="sticky left-0 z-10 bg-gray-800 border border-slate-600 p-1 text-sm font-medium text-white align-middle text-center">
-                                                    <div className="flex justify-center items-center h-full">
-                                                        <div className="h-10 w-10 bg-white rounded-full flex justify-center items-center p-1 shadow-md">
-                                                            <img src={league.emblem || `https://flagcdn.com/w40/${league.countryCode}.png`} alt={league.name} className="h-8 w-8 object-contain" title={league.name} />
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            )}
-                                            <td className="sticky left-[80px] z-10 bg-gray-800 border border-slate-600 p-1 text-[10px] text-white text-center font-semibold w-28">
-                                                <span title={realStandingsForLeague?.[positionIndex] || 'No disponible'}>
-                                                    {`${position} - ${realStandingsForLeague?.[positionIndex] || 'N/A'}`}
-                                                </span>
+        <div className="bg-slate-800/50 p-2 sm:p-4 rounded-lg">
+    <h2 className="text-xl sm:text-2xl font-bold text-amber-400 mb-4 text-center">Polla Campeones de Ligas</h2>
+    <div className="overflow-x-auto">
+        <table className="min-w-full w-full border-collapse border border-slate-700 table-fixed">
+            <thead className="bg-slate-700/50">
+                <tr className='p-1'>
+                    <th className="sticky left-0 z-20 bg-slate-700/50 border border-slate-600 p-2 text-left text-xs font-medium text-slate-300 uppercase tracking-wider w-[60px] sm:w-20">Liga</th>
+                    <th className="sticky left-[60px] sm:left-[80px] z-20 bg-slate-700/50 border border-slate-600 px-1 py-2 text-center text-xs font-medium text-green-400 uppercase tracking-wider w-[90px] sm:w-28">Resultados Reales</th>
+                    {sortedPlayers.map(player => (
+                        <th key={player.name} className="border border-slate-600 p-2 text-center text-[9px] font-medium text-slate-300 uppercase tracking-wider min-w-[90px] sm:min-w-[100px]">
+                            {player.name}
+                            <span className="block text-amber-400 text-[7px] font-bold mt-1">{player.score} Pts</span>
+                        </th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700">
+                {predictionsData.leagues.map((league, leagueIndex) => (
+                    <React.Fragment key={league.name}>
+                        {league.positions.map((position, positionIndex) => {
+                            const realStandingsForLeague = realStandings[league.name];
+                            return (
+                                <tr key={`${league.name}-${positionIndex}`} className="hover:bg-gray-800">
+                                    {positionIndex === 0 && (
+                                        <td rowSpan={league.positions.length} className="sticky left-0 z-10 bg-gray-800 border border-slate-600 p-1 text-sm font-medium text-white align-middle text-center w-[60px] sm:w-20">
+                                            <div className="flex justify-center items-center h-full">
+                                                <div className="h-8 w-8 sm:h-10 sm:w-10 bg-white rounded-full flex justify-center items-center p-1 shadow-md">
+                                                    <img src={league.emblem || `https://flagcdn.com/w40/${league.countryCode}.png`} alt={league.name} className="h-6 w-6 sm:h-8 sm:w-8 object-contain" title={league.name} />
+                                                </div>
+                                            </div>
+                                        </td>
+                                    )}
+                                    <td className="sticky left-[60px] sm:left-[80px] z-10 bg-gray-800 border border-slate-600 p-1 text-[7px] sm:text-[7px] text-white text-center font-semibold w-[90px] sm:w-28">
+                                        <span title={realStandingsForLeague?.[positionIndex] || 'No disponible'}>
+                                            {`${position} - ${realStandingsForLeague?.[positionIndex] || 'N/A'}`}
+                                        </span>
+                                    </td>
+                                    {sortedPlayers.map(player => {
+                                        const predictedTeam = player.predictions[leagueIndex][positionIndex];
+                                        const styleInfo = getPredictionStyleAndPoints(predictedTeam, positionIndex, realStandingsForLeague);
+                                        return (
+                                            <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-1 sm:p-2 text-[7px] sm:text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
+                                                {predictedTeam}
+                                                {league.id && (
+                                                    <span className="text-[7px] sm:text-xs ml-1 sm:ml-2 opacity-80">({styleInfo.points > 0 ? `+${styleInfo.points}` : '0'})</span>
+                                                )}
                                             </td>
-                                            {sortedPlayers.map(player => {
-                                                const predictedTeam = player.predictions[leagueIndex][positionIndex];
-                                                const styleInfo = getPredictionStyleAndPoints(predictedTeam, positionIndex, realStandingsForLeague);
-                                                return (
-                                                    <td key={`${player.name}-${league.name}-${positionIndex}`} className={`border border-slate-600 p-3 text-[10px] text-white text-center transition-colors duration-300 ${styleInfo.className}`}>
-                                                        {predictedTeam}
-                                                        {league.id && (
-                                                            <span className="text-xs ml-2 opacity-80">({styleInfo.points > 0 ? `+${styleInfo.points}` : '0'})</span>
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    );
-                                })}
-                            </React.Fragment>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                                        );
+                                    })}
+                                </tr>
+                            );
+                        })}
+                    </React.Fragment>
+                ))}
+            </tbody>
+        </table>
+    </div>
+</div>
     );
 };
 
