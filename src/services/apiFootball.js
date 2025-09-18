@@ -1,32 +1,63 @@
+
+
+// Leemos las variables de entorno
 const API_KEY = import.meta.env.VITE_FOOTBALL_DATA_API_KEY;
-
-// --- ▼▼▼ CAMBIO CLAVE: USAMOS NUESTRA PROPIA VARIABLE DE ENTORNO ▼▼▼ ---
-// El '|| ""' es un seguro por si la variable no estuviera definida.
 const API_BASE_PATH = import.meta.env.VITE_PUBLIC_BASE_PATH || "";
-const API_SERVERLESS_URL = `${API_BASE_PATH}/api/football`;
 
-const RELEVANT_COMPETITIONS = ['CL', 'PL', 'BL1', 'SA', 'PD', 'FL1', 'WC'];
+// Si estamos en producción (la ruta base es /pollitamayo), llamamos a nuestra función.
+// Si estamos en local (la ruta base es /), llamamos al proxy de Vite.
+const API_URL_PREFIX = API_BASE_PATH === '/' 
+    ? '/api' 
+    : `${API_BASE_PATH}/api`;
 
-export const getCompetitions = async () => {
-    const path = 'competitions';
-    const response = await fetch(`${API_SERVERLESS_URL}?path=${encodeURIComponent(path)}`);
-    if (!response.ok) throw new Error('Error al obtener las competiciones.');
-    const data = await response.json();
-    return data.competitions.map(comp => ({ 
-        id: comp.id, 
-        name: comp.name, 
-        emblem: comp.emblem 
-    }));
+/**
+ * Función centralizada para hacer las llamadas a la API.
+ * Detecta el entorno y construye la petición correcta.
+ * @param {string} pathWithParams - La ruta y parámetros de la API (ej: 'competitions/2014/standings')
+ * @returns {Promise<any>} - Los datos JSON de la respuesta.
+ */
+const fetchFromApi = async (pathWithParams) => {
+    let url;
+    const options = {};
+
+    if (API_BASE_PATH === '/') {
+        // En LOCAL: usamos el proxy de Vite y necesitamos enviar la clave en el header.
+        url = `${API_URL_PREFIX}/${pathWithParams}`;
+        options.headers = { 'X-Auth-Token': API_KEY };
+    } else {
+        // En PRODUCCIÓN: llamamos a nuestra función serverless. La clave la pone el servidor.
+        url = `${API_URL_PREFIX}/football?path=${encodeURIComponent(pathWithParams)}`;
+    }
+
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error(`Error en la llamada para: ${pathWithParams}. Status: ${response.status}`);
+    }
+    return response.json();
 };
 
-// ... (El resto de las funciones no cambian, ya que usan API_SERVERLESS_URL)
+/**
+ * Busca todas las competiciones disponibles (filtradas).
+ */
+export const getCompetitions = async () => {
+    const data = await fetchFromApi('competitions');
+    // Filtramos para mostrar solo las más relevantes y evitar una lista gigante
+    const RELEVANT_COMPETITIONS = ['CL', 'PL', 'BL1', 'SA', 'PD', 'FL1', 'WC'];
+    return data.competitions
+        .filter(comp => RELEVANT_COMPETITIONS.includes(comp.code))
+        .map(comp => ({ 
+            id: comp.id, 
+            name: comp.name, 
+            emblem: comp.emblem 
+        }));
+};
 
+/**
+ * Busca los partidos programados de una competición.
+ */
 export const getMatchesByCompetition = async (competitionId) => {
     if (!competitionId) return [];
-    const path = `competitions/${competitionId}/matches?status=SCHEDULED`;
-    const response = await fetch(`${API_SERVERLESS_URL}?path=${encodeURIComponent(path)}`);
-    if (!response.ok) throw new Error('Error al obtener los partidos.');
-    const data = await response.json();
+    const data = await fetchFromApi(`competitions/${competitionId}/matches?status=SCHEDULED`);
     return data.matches.map(match => ({
         id: match.id,
         date: match.utcDate,
@@ -36,12 +67,12 @@ export const getMatchesByCompetition = async (competitionId) => {
     }));
 };
 
+/**
+ * Busca los resultados actuales de una lista de partidos por sus IDs.
+ */
 export const getLiveResultsByIds = async (matchIds) => {
     if (!matchIds || matchIds.length === 0) return {};
-    const path = `matches?ids=${matchIds.join(',')}`;
-    const response = await fetch(`${API_SERVERLESS_URL}?path=${encodeURIComponent(path)}`);
-    if (!response.ok) throw new Error('Error al obtener los resultados en vivo.');
-    const data = await response.json();
+    const data = await fetchFromApi(`matches?ids=${matchIds.join(',')}`);
     const resultsMap = {};
     data.matches.forEach(match => {
         if (match.status === 'IN_PLAY' || match.status === 'PAUSED' || match.status === 'FINISHED') {
@@ -54,15 +85,15 @@ export const getLiveResultsByIds = async (matchIds) => {
     return resultsMap;
 };
 
+/**
+ * Busca la tabla de posiciones de una competición.
+ * NOTA: Esta función puede fallar si el plan gratuito de la API restringe el acceso.
+ */
 export const getStandings = async (competitionId) => {
     if (!competitionId) return [];
-    const path = `competitions/${competitionId}/standings`;
-    const response = await fetch(`${API_SERVERLESS_URL}?path=${encodeURIComponent(path)}`);
-    if (!response.ok) {
-        throw new Error(`Error al obtener la tabla de posiciones.`);
-    }
-    const data = await response.json();
+    const data = await fetchFromApi(`competitions/${competitionId}/standings`);
     const table = data.standings[0]?.table;
     if (!table) return [];
+    // Devuelve un array simple con los nombres de los equipos
     return table.slice(0, 4).map(row => row.team.name);
 };
