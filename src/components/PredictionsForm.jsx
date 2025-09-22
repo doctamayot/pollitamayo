@@ -31,7 +31,7 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
             )}
         </div>
         <div className="flex items-center justify-between gap-x-2">
-            <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
+            <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-[10px] font-medium text-slate-300 flex-1 min-w-0">
                 <span className="text-right">{partido.home}</span>
                 <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
                     <img 
@@ -46,7 +46,7 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
                 <span className="text-slate-400">-</span>
                 <input type="number" id={`${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2" required disabled={disabled} />
             </div>
-            <label htmlFor={`${partido.id}-away`} className="flex items-center text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
+            <label htmlFor={`${partido.id}-away`} className="flex items-center text-xs sm:text-[10px] font-medium text-slate-300 flex-1 min-w-0">
                 <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
                     <img 
                         src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`} 
