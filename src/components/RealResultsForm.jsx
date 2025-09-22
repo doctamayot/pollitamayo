@@ -33,18 +33,15 @@ const MatchInputAdmin = ({ partido, value, onChange, disabled }) => (
     </div>
 );
 
-
 const RealResultsForm = ({ quiniela }) => {
     const [results, setResults] = useState({});
     const [feedback, setFeedback] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-
-    // --- ▼▼▼ ESTADOS RESTAURADOS PARA EL CONTROL MANUAL ▼▼▼ ---
     const [isLiveUpdating, setIsLiveUpdating] = useState(false);
     const [lastUpdate, setLastUpdate] = useState('');
     const intervalRef = useRef(null);
 
-    // Listener para ver los resultados de Firestore en tiempo real
+    // Listener para que la UI reaccione a los cambios en Firestore
     useEffect(() => {
         if (!quiniela?.id) return;
         const unsub = onSnapshot(doc(db, 'quinielas', quiniela.id), (docSnap) => {
@@ -63,9 +60,9 @@ const RealResultsForm = ({ quiniela }) => {
         return () => unsub();
     }, [quiniela]);
 
-    // --- ▼▼▼ LÓGICA RESTAURADA DEL "VIGILANTE" EN EL NAVEGADOR ▼▼▼ ---
+    // --- ▼▼▼ LÓGICA DEL "VIGILANTE" CON AUTO-GUARDADO ▼▼▼ ---
     useEffect(() => {
-        const fetchLiveResults = async () => {
+        const fetchAndSaveLiveResults = async () => {
             const matchIds = quiniela.matches.map(m => m.id).filter(id => typeof id === 'number');
             if (matchIds.length === 0) {
                 setLastUpdate('No hay partidos de API en esta quiniela.');
@@ -75,9 +72,10 @@ const RealResultsForm = ({ quiniela }) => {
             try {
                 const liveResults = await getLiveResultsByIds(matchIds);
                 if (Object.keys(liveResults).length > 0) {
-                    // Actualiza el estado local, pero no guarda en DB
-                    setResults(prevResults => ({ ...prevResults, ...liveResults }));
-                    setLastUpdate(`Actualizado: ${new Date().toLocaleTimeString()}`);
+                    // Guarda los resultados directamente en Firestore
+                    const docRef = doc(db, 'quinielas', quiniela.id);
+                    await updateDoc(docRef, { realResults: liveResults }, { merge: true });
+                    setLastUpdate(`Resultados guardados: ${new Date().toLocaleTimeString()}`);
                 } else {
                     setLastUpdate(`Sin cambios: ${new Date().toLocaleTimeString()}`);
                 }
@@ -88,8 +86,8 @@ const RealResultsForm = ({ quiniela }) => {
         };
 
         if (isLiveUpdating) {
-            fetchLiveResults(); // Llamada inicial
-            intervalRef.current = setInterval(fetchLiveResults, 30000); // Cada 30 segundos
+            fetchAndSaveLiveResults(); // Llamada inicial
+            intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000); // Cada 30 segundos
         }
 
         // Función de limpieza para detener el intervalo
@@ -97,7 +95,6 @@ const RealResultsForm = ({ quiniela }) => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
     }, [isLiveUpdating, quiniela.id, quiniela.matches]);
-
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -134,7 +131,6 @@ const RealResultsForm = ({ quiniela }) => {
 
     return (
         <form onSubmit={handleSubmit}>
-            {/* --- ▼▼▼ PANEL DE CONTROL RESTAURADO ▼▼▼ --- */}
             {!quiniela.isClosed && (
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4 mb-6 bg-slate-700/50 rounded-lg">
                     <button
@@ -142,10 +138,10 @@ const RealResultsForm = ({ quiniela }) => {
                         onClick={() => setIsLiveUpdating(prev => !prev)}
                         className={`font-bold py-2 px-4 rounded-md text-sm transition w-full sm:w-auto ${isLiveUpdating ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
                     >
-                        {isLiveUpdating ? '⏹️ Detener Actualización en Vivo' : '▶️ Iniciar Actualización en Vivo (30s)'}
+                        {isLiveUpdating ? '⏹️ Detener Auto-Guardado' : '▶️ Iniciar Auto-Guardado (30s)'}
                     </button>
                     <p className="text-xs text-slate-300 text-center sm:text-left">
-                        {isLiveUpdating ? lastUpdate || 'Buscando resultados...' : 'La actualización en vivo está detenida.'}
+                        {isLiveUpdating ? lastUpdate || 'Buscando resultados...' : 'El auto-guardado está detenido.'}
                     </p>
                 </div>
             )}
@@ -161,7 +157,8 @@ const RealResultsForm = ({ quiniela }) => {
                                     partido={partido} 
                                     value={results[partido.id] || {home: '', away: ''}} 
                                     onChange={handleChange}
-                                    disabled={quiniela.isClosed}
+                                    // Los campos también se deshabilitan en modo auto-guardado
+                                    disabled={quiniela.isClosed || isLiveUpdating}
                                 />
                             ))}
                         </div>
@@ -170,13 +167,17 @@ const RealResultsForm = ({ quiniela }) => {
             </div>
             
             <div className="mt-8 pt-6 border-t border-slate-700 text-center">
-                <button 
-                    type="submit" 
-                    disabled={isLoading || quiniela.isClosed}
-                    className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-slate-500 disabled:cursor-not-allowed"
-                >
-                    {isLoading ? 'Guardando...' : 'Guardar Resultados'}
-                </button>
+                {/* --- ▼▼▼ EL BOTÓN DE GUARDADO DESAPARECE EN MODO AUTO ▼▼▼ --- */}
+                {!isLiveUpdating && (
+                    <button 
+                        type="submit" 
+                        disabled={isLoading || quiniela.isClosed}
+                        className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-slate-500 disabled:cursor-not-allowed"
+                    >
+                        {isLoading ? 'Guardando...' : 'Guardar Resultados Manuales'}
+                    </button>
+                )}
+
                 {quiniela.isClosed && (<p className="text-sm text-yellow-400 mt-4">Esta quiniela está cerrada.</p>)}
                 {feedback && <div className="mt-4 text-center text-green-400 font-medium">{feedback}</div>}
             </div>
