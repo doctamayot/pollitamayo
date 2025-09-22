@@ -15,20 +15,15 @@ const statusTranslations = {
     AWARDED: 'Adjudicado'
 };
 
-const MatchInput = ({ partido, value, onChange, disabled }) => (
+const MatchInput = ({ partido, value, onChange, disabled,liveStatuses }) => {
+    const currentStatus = liveStatuses[partido.id] || partido.status;
+    return(
     <div className="col-span-1 bg-slate-900/50 p-3 rounded-md border border-slate-700">
         <div className="flex justify-between items-center text-xs text-center text-amber-400 mb-3 font-semibold">
-            {/* --- ▼▼▼ LÓGICA PARA MOSTRAR FECHA Y ESTADO ▼▼▼ --- */}
-            <span>
-                {new Date(partido.date).toLocaleDateString('es-ES', {
-                    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-                })}
-            </span>
-            {partido.status && (
-                <span className="text-green-400 font-bold">
-                    {statusTranslations[partido.status] || partido.status}
-                </span>
-            )}
+                <span>{new Date(partido.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                {currentStatus && (
+                    <span className="text-green-400 font-bold">{statusTranslations[currentStatus] || currentStatus}</span>
+                )}
         </div>
         <div className="flex items-center justify-between gap-x-2">
             <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-[10px] sm:text-xs font-medium text-slate-300 flex-1 min-w-0">
@@ -58,9 +53,10 @@ const MatchInput = ({ partido, value, onChange, disabled }) => (
             </label>
         </div>
     </div>
-);
+    )
+};
 
-const PredictionsForm = ({ user, quiniela, allPredictions }) => {
+const PredictionsForm = ({ user, quiniela, allPredictions, liveStatuses }) => {
     const [predictions, setPredictions] = useState({});
     const [feedback, setFeedback] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -126,7 +122,7 @@ const PredictionsForm = ({ user, quiniela, allPredictions }) => {
                         </h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {groupedMatches[championship].map((partido) => (
-                                <MatchInput key={partido.id} partido={partido} value={predictions[partido.id] || {home: '', away: ''}} onChange={handleChange} disabled={isLocked}/>
+                                <MatchInput key={partido.id} partido={partido} value={predictions[partido.id] || {home: '', away: ''}} onChange={handleChange} disabled={isLocked} liveStatuses={liveStatuses}/>
                             ))}
                         </div>
                     </div>

@@ -16,21 +16,17 @@ const statusTranslations = {
     AWARDED: 'Adjudicado'
 };
 
-const MatchInputAdmin = ({ partido, value, onChange, disabled }) => (
+const MatchInputAdmin = ({ partido, value, onChange, disabled, liveStatuses }) => {
+    const currentStatus = liveStatuses[partido.id] || partido.status;
+    return(
     <div className="col-span-1 bg-slate-900/50 p-3 rounded-md border border-slate-700">
         {/* --- ▼▼▼ LÓGICA PARA MOSTRAR FECHA Y ESTADO AÑADIDA ▼▼▼ --- */}
         <div className="flex justify-between items-center text-xs text-center text-amber-400 mb-3 font-semibold">
-            <span>
-                {new Date(partido.date).toLocaleDateString('es-ES', {
-                    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-                })}
-            </span>
-            {partido.status && (
-                <span className="text-green-400 font-bold">
-                    {statusTranslations[partido.status] || partido.status}
-                </span>
-            )}
-        </div>
+                <span>{new Date(partido.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                {currentStatus && (
+                    <span className="text-green-400 font-bold">{statusTranslations[currentStatus] || currentStatus}</span>
+                )}
+            </div>
         <div className="flex items-center justify-between gap-x-2">
             <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-[10px] sm:text-xs font-medium text-slate-300 flex-1 min-w-0">
                 <span className="text-right">{partido.home}</span>
@@ -52,8 +48,9 @@ const MatchInputAdmin = ({ partido, value, onChange, disabled }) => (
         </div>
     </div>
 );
+}
 
-const RealResultsForm = ({ quiniela }) => {
+const RealResultsForm = ({ quiniela, liveStatuses }) => {
     const [results, setResults] = useState({});
     const [feedback, setFeedback] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -172,6 +169,7 @@ const RealResultsForm = ({ quiniela }) => {
                                     value={results[partido.id] || {home: '', away: ''}} 
                                     onChange={handleChange}
                                     disabled={quiniela.isClosed || isLiveUpdating}
+                                    liveStatuses={liveStatuses}
                                 />
                             ))}
                         </div>
