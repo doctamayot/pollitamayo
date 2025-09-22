@@ -50,11 +50,13 @@ export const getMatchesByCompetition = async (competitionId) => {
         throw new Error("El ID de competición no puede ser nulo.");
     }
     const data = await fetchFromApi(`competitions/${competitionId}/matches?status=SCHEDULED`);
+    console.log(data.matches)
     return data.matches.map(match => ({
-        id: match.id, date: match.utcDate, venue: match.venue,
+        id: match.id, date: match.utcDate, venue: match.venue,status: match.status,
         homeTeam: { id: match.homeTeam.id, name: match.homeTeam.name, crest: match.homeTeam.crest, tla: match.homeTeam.tla },
         awayTeam: { id: match.awayTeam.id, name: match.awayTeam.name, crest: match.awayTeam.crest, tla: match.awayTeam.tla }
     }));
+    
 };
 
 export const getLiveResultsByIds = async (matchIds) => {
@@ -69,6 +71,7 @@ export const getLiveResultsByIds = async (matchIds) => {
             };
         }
     });
+    
     return resultsMap;
 };
 

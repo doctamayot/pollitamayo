@@ -3,13 +3,33 @@ import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getLiveResultsByIds } from '../services/apiFootball';
 
-// (El componente MatchInputAdmin no cambia)
+// --- ▼▼▼ DICCIONARIO DE TRADUCCIÓN AÑADIDO ▼▼▼ ---
+const statusTranslations = {
+    SCHEDULED: 'Programado',
+    TIMED: 'Confirmado',
+    IN_PLAY: 'En Juego',
+    PAUSED: 'En Pausa',
+    FINISHED: 'Finalizado',
+    SUSPENDED: 'Suspendido',
+    POSTPONED: 'Pospuesto',
+    CANCELLED: 'Cancelado',
+    AWARDED: 'Adjudicado'
+};
+
 const MatchInputAdmin = ({ partido, value, onChange, disabled }) => (
     <div className="col-span-1 bg-slate-900/50 p-3 rounded-md border border-slate-700">
-        <div className="text-xs text-center text-amber-400 mb-3 font-semibold space-x-2">
-            <span>{new Date(partido.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-            {partido.venue && <span className="text-slate-400">|</span>}
-            {partido.venue && <span className="text-slate-400">🏟️ {partido.venue}</span>}
+        {/* --- ▼▼▼ LÓGICA PARA MOSTRAR FECHA Y ESTADO AÑADIDA ▼▼▼ --- */}
+        <div className="flex justify-between items-center text-xs text-center text-amber-400 mb-3 font-semibold">
+            <span>
+                {new Date(partido.date).toLocaleDateString('es-ES', {
+                    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                })}
+            </span>
+            {partido.status && (
+                <span className="text-green-400 font-bold">
+                    {statusTranslations[partido.status] || partido.status}
+                </span>
+            )}
         </div>
         <div className="flex items-center justify-between gap-x-2">
             <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-xs sm:text-sm font-medium text-slate-300 flex-1 min-w-0">
@@ -41,7 +61,6 @@ const RealResultsForm = ({ quiniela }) => {
     const [lastUpdate, setLastUpdate] = useState('');
     const intervalRef = useRef(null);
 
-    // Listener para que la UI reaccione a los cambios en Firestore
     useEffect(() => {
         if (!quiniela?.id) return;
         const unsub = onSnapshot(doc(db, 'quinielas', quiniela.id), (docSnap) => {
@@ -60,7 +79,6 @@ const RealResultsForm = ({ quiniela }) => {
         return () => unsub();
     }, [quiniela]);
 
-    // --- ▼▼▼ LÓGICA DEL "VIGILANTE" CON AUTO-GUARDADO ▼▼▼ ---
     useEffect(() => {
         const fetchAndSaveLiveResults = async () => {
             const matchIds = quiniela.matches.map(m => m.id).filter(id => typeof id === 'number');
@@ -68,11 +86,9 @@ const RealResultsForm = ({ quiniela }) => {
                 setLastUpdate('No hay partidos de API en esta quiniela.');
                 return;
             };
-
             try {
                 const liveResults = await getLiveResultsByIds(matchIds);
                 if (Object.keys(liveResults).length > 0) {
-                    // Guarda los resultados directamente en Firestore
                     const docRef = doc(db, 'quinielas', quiniela.id);
                     await updateDoc(docRef, { realResults: liveResults }, { merge: true });
                     setLastUpdate(`Resultados guardados: ${new Date().toLocaleTimeString()}`);
@@ -86,11 +102,9 @@ const RealResultsForm = ({ quiniela }) => {
         };
 
         if (isLiveUpdating) {
-            fetchAndSaveLiveResults(); // Llamada inicial
-            intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000); // Cada 30 segundos
+            fetchAndSaveLiveResults();
+            intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000);
         }
-
-        // Función de limpieza para detener el intervalo
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
@@ -157,7 +171,6 @@ const RealResultsForm = ({ quiniela }) => {
                                     partido={partido} 
                                     value={results[partido.id] || {home: '', away: ''}} 
                                     onChange={handleChange}
-                                    // Los campos también se deshabilitan en modo auto-guardado
                                     disabled={quiniela.isClosed || isLiveUpdating}
                                 />
                             ))}
@@ -167,7 +180,6 @@ const RealResultsForm = ({ quiniela }) => {
             </div>
             
             <div className="mt-8 pt-6 border-t border-slate-700 text-center">
-                {/* --- ▼▼▼ EL BOTÓN DE GUARDADO DESAPARECE EN MODO AUTO ▼▼▼ --- */}
                 {!isLiveUpdating && (
                     <button 
                         type="submit" 
