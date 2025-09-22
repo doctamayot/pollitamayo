@@ -46,7 +46,7 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
                     setLiveStatuses(statuses);
                 } catch (error) {
                     // El error ahora solo debería aparecer si la API realmente falla
-                    console.error("Error al obtener estados en vivo:", error);
+                    console.error("Error al obtener estados en vivoaaaa:", error);
                 }
             }
         };

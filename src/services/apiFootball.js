@@ -97,9 +97,8 @@ export const getStandings = async (competitionId) => {
 
 export const getLiveStatusesByIds = async (matchIds) => {
     if (!matchIds || matchIds.length === 0) throw new Error("El ID de competición no puede ser nulo.");
-    const response = await fetch(`matches?ids=${matchIds.join(',')}`);
-    if (!response.ok) throw new Error('Error al obtener los estados en vivo.');
-    const data = await response.json();
+    const data = await fetchFromApi(`matches?ids=${matchIds.join(',')}`);
+    console.log(data)
     const statusMap = {};
     data.matches.forEach(match => {
         statusMap[match.id] = match.status;
