@@ -27,7 +27,8 @@ module.exports = async (request, response) => {
     const data = await apiResponse.json();
     
     response.setHeader('Access-Control-Allow-Origin', '*');
-    response.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+    //response.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+    response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     
     return response.status(200).json(data);
 
