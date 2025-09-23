@@ -118,7 +118,7 @@ function App() {
                 </header>
 
                 <main>
-                    {mainView === 'leagueChampions' && <LeagueChampionsView />}
+                    {mainView === 'leagueChampions' && <LeagueChampionsView isAdmin={isAdmin} />}
                     {mainView === 'leaderboard' && <Leaderboard isAdmin={isAdmin} onViewProfile={handleViewProfile} />}
                     {mainView === 'history' && <HistoryView closedQuinielas={closedQuinielas} user={user} />}
                     {mainView === 'profile' && <ProfileView userId={user.uid} currentUser={user} />}
