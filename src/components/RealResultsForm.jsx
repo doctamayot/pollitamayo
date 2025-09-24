@@ -39,7 +39,7 @@ const MatchInputAdmin = ({ partido, value, onChange, disabled, liveStatuses }) =
                     <span className="text-slate-400">-</span>
                     <input type="number" id={`admin-${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2 text-lg font-bold" disabled={disabled} />
                 </div>
-                <label htmlFor={`admin-${partido.id}-away`} className="flex items-center text-sm font-bold text-white flex-1 min-w-0">
+                <label htmlFor={`admin-${partido.id}-away`} className="flex items-center sm:text-sm text-[10px] font-bold text-white flex-1 min-w-0">
                     <div className="mr-2 h-6 w-6 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
                         <img src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`} alt={partido.away} className="h-full w-full object-contain" />
                     </div>
