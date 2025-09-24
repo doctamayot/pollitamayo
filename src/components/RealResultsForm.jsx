@@ -28,7 +28,7 @@ const MatchInputAdmin = ({ partido, value, onChange, disabled, liveStatuses }) =
                 )}
             </div>
             <div className="flex items-center justify-between gap-x-2">
-                <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-sm font-bold text-white flex-1 min-w-0">
+                <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end sm:text-sm text-[10px] font-bold text-white flex-1 min-w-0">
                     <span className="text-right">{partido.home}</span>
                     <div className="ml-2 h-6 w-6 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
                         <img src={partido.homeCrest || `https://flagcdn.com/w20/${partido.homeCode}.png`} alt={partido.home} className="h-full w-full object-contain" />
