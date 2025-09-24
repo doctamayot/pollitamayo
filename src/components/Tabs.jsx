@@ -11,7 +11,7 @@ const Tabs = ({ activeTab, setActiveTab, isAdmin, resultsVisible }) => {
                     onClick={() => setActiveTab('predictions')}
                     className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${
                         activeTab === 'predictions' 
-                        ? 'border-blue-500 text-white' 
+                        ? 'border-uefa-magenta text-white' 
                         : 'border-transparent text-slate-400 hover:text-white'
                     }`}
                 >
@@ -23,7 +23,7 @@ const Tabs = ({ activeTab, setActiveTab, isAdmin, resultsVisible }) => {
                         onClick={() => setActiveTab('scoring')}
                         className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${
                             activeTab === 'scoring' 
-                            ? 'border-blue-500 text-white'
+                            ? 'border-uefa-magenta text-white'
                             : 'border-transparent text-slate-400 hover:text-white'
                         }`}
                     >

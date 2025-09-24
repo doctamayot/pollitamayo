@@ -176,7 +176,7 @@ const LeagueChampionsView = ({ isAdmin }) => {
 
     return (
         <div className="bg-slate-800/50 p-2 sm:p-4 rounded-lg">
-            <h2 className="text-xl sm:text-2xl font-bold text-amber-400 mb-4 text-center">Polla Campeones de Ligas</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-uefa-cyan mb-4 text-center">Polla Campeones de Ligas</h2>
             
             {isAdmin && (
                 <div className="bg-slate-700/50 p-4 rounded-lg mb-6">

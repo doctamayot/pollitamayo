@@ -3,7 +3,7 @@ import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getLiveResultsByIds } from '../services/apiFootball';
 
-// --- ▼▼▼ DICCIONARIO DE TRADUCCIÓN AÑADIDO ▼▼▼ ---
+// --- Diccionario de traducciones sin cambios ---
 const statusTranslations = {
     SCHEDULED: 'Programado',
     TIMED: 'Confirmado',
@@ -16,41 +16,42 @@ const statusTranslations = {
     AWARDED: 'Adjudicado'
 };
 
+// --- ▼▼▼ SUB-COMPONENTE CON NUEVO ESTILO DE TARJETA ▼▼▼ ---
 const MatchInputAdmin = ({ partido, value, onChange, disabled, liveStatuses }) => {
     const currentStatus = liveStatuses[partido.id] || partido.status;
-    return(
-    <div className="col-span-1 bg-slate-900/50 p-3 rounded-md border border-slate-700">
-        {/* --- ▼▼▼ LÓGICA PARA MOSTRAR FECHA Y ESTADO AÑADIDA ▼▼▼ --- */}
-        <div className="flex justify-between items-center text-xs text-center text-amber-400 mb-3 font-semibold">
+    return (
+        <div className="col-span-1 bg-uefa-dark-blue-secondary p-3 rounded-lg border border-uefa-border/50 shadow-lg">
+            <div className="flex justify-between items-center text-xs text-uefa-text-secondary mb-3 font-semibold">
                 <span>{new Date(partido.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                 {currentStatus && (
-                    <span className="text-green-400 font-bold">{statusTranslations[currentStatus] || currentStatus}</span>
+                    <span className="text-uefa-cyan font-bold">{statusTranslations[currentStatus] || currentStatus}</span>
                 )}
             </div>
-        <div className="flex items-center justify-between gap-x-2">
-            <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-[10px] sm:text-xs font-medium text-slate-300 flex-1 min-w-0">
-                <span className="text-right">{partido.home}</span>
-                <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
-                    <img src={partido.homeCrest || `https://flagcdn.com/w20/${partido.homeCode}.png`} alt={partido.home} className="h-full w-full object-contain" />
+            <div className="flex items-center justify-between gap-x-2">
+                <label htmlFor={`admin-${partido.id}-home`} className="flex items-center justify-end text-sm font-bold text-white flex-1 min-w-0">
+                    <span className="text-right">{partido.home}</span>
+                    <div className="ml-2 h-6 w-6 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
+                        <img src={partido.homeCrest || `https://flagcdn.com/w20/${partido.homeCode}.png`} alt={partido.home} className="h-full w-full object-contain" />
+                    </div>
+                </label>
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                    <input type="number" id={`admin-${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2 text-lg font-bold" disabled={disabled} />
+                    <span className="text-slate-400">-</span>
+                    <input type="number" id={`admin-${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2 text-lg font-bold" disabled={disabled} />
                 </div>
-            </label>
-            <div className="flex items-center space-x-2 flex-shrink-0">
-                <input type="number" id={`admin-${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2" disabled={disabled} />
-                <span className="text-slate-400">-</span>
-                <input type="number" id={`admin-${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2" disabled={disabled} />
+                <label htmlFor={`admin-${partido.id}-away`} className="flex items-center text-sm font-bold text-white flex-1 min-w-0">
+                    <div className="mr-2 h-6 w-6 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
+                        <img src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`} alt={partido.away} className="h-full w-full object-contain" />
+                    </div>
+                    <span>{partido.away}</span>
+                </label>
             </div>
-            <label htmlFor={`admin-${partido.id}-away`} className="flex items-center text-[10px] sm:text-xs font-medium text-slate-300 flex-1 min-w-0">
-                <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
-                    <img src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`} alt={partido.away} className="h-full w-full object-contain" />
-                </div>
-                <span>{partido.away}</span>
-            </label>
         </div>
-    </div>
-);
+    );
 }
 
 const RealResultsForm = ({ quiniela, liveStatuses }) => {
+    // --- Lógica interna sin cambios ---
     const [results, setResults] = useState({});
     const [feedback, setFeedback] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -113,7 +114,7 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
         const nameParts = name.split('-');
         const team = nameParts.pop();
         const partidoId = nameParts.join('-');
-        setResults(prev => ({ ...prev, [partidoId]: { ...prev[partidoId], [team]: sanitizedValue }}));
+        setResults(prev => ({ ...prev, [partidoId]: { ...prev[partidoId], [team]: sanitizedValue } }));
     };
 
     const handleSubmit = async (e) => {
@@ -132,18 +133,20 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
             setTimeout(() => setFeedback(''), 3000);
         }
     };
-    
+
     const groupedMatches = quiniela.matches.reduce((acc, match) => {
         const champ = match.championship || 'Otros';
         if (!acc[champ]) acc[champ] = [];
         acc[champ].push(match);
         return acc;
     }, {});
+    // --- Fin de la lógica interna ---
 
     return (
         <form onSubmit={handleSubmit}>
+            {/* --- ▼▼▼ PANEL DE AUTO-GUARDADO ACTUALIZADO ▼▼▼ --- */}
             {!quiniela.isClosed && (
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4 mb-6 bg-slate-700/50 rounded-lg">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4 mb-6 bg-uefa-dark-blue-secondary rounded-lg border border-uefa-border">
                     <button
                         type="button"
                         onClick={() => setIsLiveUpdating(prev => !prev)}
@@ -151,7 +154,7 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
                     >
                         {isLiveUpdating ? '⏹️ Detener Auto-Guardado' : '▶️ Iniciar Auto-Guardado (30s)'}
                     </button>
-                    <p className="text-xs text-slate-300 text-center sm:text-left">
+                    <p className="text-xs text-uefa-text-secondary text-center sm:text-left">
                         {isLiveUpdating ? lastUpdate || 'Buscando resultados...' : 'El auto-guardado está detenido.'}
                     </p>
                 </div>
@@ -160,7 +163,8 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
             <div className="space-y-8">
                 {Object.keys(groupedMatches).map(championship => (
                     <div key={championship}>
-                        <h3 className="text-lg font-semibold text-blue-400 border-b border-slate-700 pb-3 mb-4">{championship}</h3>
+                        {/* --- ▼▼▼ TÍTULO DE LIGA ACTUALIZADO ▼▼▼ --- */}
+                        <h3 className="text-xl font-bold text-uefa-cyan border-b border-uefa-border/50 pb-3 mb-4">{championship}</h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {groupedMatches[championship].map((partido) => (
                                 <MatchInputAdmin 
@@ -177,12 +181,13 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
                 ))}
             </div>
             
-            <div className="mt-8 pt-6 border-t border-slate-700 text-center">
+            <div className="mt-8 pt-6 border-t border-uefa-border/50 text-center">
+                {/* --- ▼▼▼ BOTÓN DE GUARDADO MANUAL ACTUALIZADO ▼▼▼ --- */}
                 {!isLiveUpdating && (
                     <button 
                         type="submit" 
                         disabled={isLoading || quiniela.isClosed}
-                        className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-slate-500 disabled:cursor-not-allowed"
+                        className="w-full sm:w-auto bg-uefa-primary-blue hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         {isLoading ? 'Guardando...' : 'Guardar Resultados Manuales'}
                     </button>

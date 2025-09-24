@@ -15,46 +15,48 @@ const statusTranslations = {
     AWARDED: 'Adjudicado'
 };
 
-const MatchInput = ({ partido, value, onChange, disabled,liveStatuses }) => {
+const MatchInput = ({ partido, value, onChange, disabled, liveStatuses }) => {
     const currentStatus = liveStatuses[partido.id] || partido.status;
-    return(
-    <div className="col-span-1 bg-slate-900/50 p-3 rounded-md border border-slate-700">
-        <div className="flex justify-between items-center text-xs text-center text-amber-400 mb-3 font-semibold">
+    return (
+        // Contenedor principal de la tarjeta con nuevo fondo y borde cian
+        <div className="col-span-1 bg-uefa-dark-blue-secondary p-3 rounded-lg border border-uefa-cyan/30 shadow-lg">
+            <div className="flex justify-between items-center text-xs text-uefa-text-secondary mb-3 font-semibold">
                 <span>{new Date(partido.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                 {currentStatus && (
-                    <span className="text-green-400 font-bold">{statusTranslations[currentStatus] || currentStatus}</span>
+                    <span className="text-uefa-cyan font-bold">{statusTranslations[currentStatus] || currentStatus}</span>
                 )}
-        </div>
-        <div className="flex items-center justify-between gap-x-2">
-            <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-[10px] sm:text-xs font-medium text-slate-300 flex-1 min-w-0">
-                <span className="text-right">{partido.home}</span>
-                <div className="ml-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
-                    <img 
-                        src={partido.homeCrest || `https://flagcdn.com/w20/${partido.homeCode}.png`} 
-                        alt={partido.home} 
-                        className="h-full w-full object-contain" 
-                    />
-                </div>
-            </label>
-            <div className="flex items-center space-x-2 flex-shrink-0">
-                <input type="number" id={`${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2" required disabled={disabled} />
-                <span className="text-slate-400">-</span>
-                <input type="number" id={`${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2" required disabled={disabled} />
             </div>
-            <label htmlFor={`${partido.id}-away`} className="flex items-center text-[10px] sm:text-xs font-medium text-slate-300 flex-1 min-w-0">
-                <div className="mr-2 h-5 w-5 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
-                    <img 
-                        src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`} 
-                        alt={partido.away} 
-                        className="h-full w-full object-contain" 
-                    />
+            <div className="flex items-center justify-between gap-x-2">
+                <label htmlFor={`${partido.id}-home`} className="flex items-center justify-end text-sm font-bold text-white flex-1 min-w-0">
+                    <span className="text-right">{partido.home}</span>
+                    <div className="ml-2 h-6 w-6 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
+                        <img
+                            src={partido.homeCrest || `https://flagcdn.com/w20/${partido.homeCode}.png`}
+                            alt={partido.home}
+                            className="h-full w-full object-contain"
+                        />
+                    </div>
+                </label>
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                    <input type="number" id={`${partido.id}-home`} name={`${partido.id}-home`} value={value.home} onChange={onChange} min="0" className="w-14 text-center form-input py-2 text-lg font-bold" required disabled={disabled} />
+                    <span className="text-slate-400">-</span>
+                    <input type="number" id={`${partido.id}-away`} name={`${partido.id}-away`} value={value.away} onChange={onChange} min="0" className="w-14 text-center form-input py-2 text-lg font-bold" required disabled={disabled} />
                 </div>
-                <span>{partido.away}</span>
-            </label>
+                <label htmlFor={`${partido.id}-away`} className="flex items-center text-sm font-bold text-white flex-1 min-w-0">
+                    <div className="mr-2 h-6 w-6 rounded-full overflow-hidden flex-shrink-0 bg-slate-700">
+                        <img
+                            src={partido.awayCrest || `https://flagcdn.com/w20/${partido.awayCode}.png`}
+                            alt={partido.away}
+                            className="h-full w-full object-contain"
+                        />
+                    </div>
+                    <span>{partido.away}</span>
+                </label>
+            </div>
         </div>
-    </div>
     )
 };
+
 
 const PredictionsForm = ({ user, quiniela, allPredictions, liveStatuses }) => {
     const [predictions, setPredictions] = useState({});
@@ -103,7 +105,7 @@ const PredictionsForm = ({ user, quiniela, allPredictions, liveStatuses }) => {
     const buttonText = isLocked ? 'Predicciones Cerradas' : 'Guardar mis Predicciones';
     const buttonClasses = isLocked
         ? 'w-full sm:w-auto bg-slate-500 text-white font-bold py-3 px-6 rounded-lg cursor-not-allowed opacity-70'
-        : 'w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md';
+        : 'w-full sm:w-auto bg-uefa-primary-blue hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md';
 
     const groupedMatches = quiniela.matches.reduce((acc, match) => {
         const champ = match.championship || 'Otros';
@@ -117,7 +119,7 @@ const PredictionsForm = ({ user, quiniela, allPredictions, liveStatuses }) => {
             <div className="space-y-8">
                 {Object.keys(groupedMatches).map(championship => (
                     <div key={championship}>
-                        <h3 className="text-lg font-semibold text-blue-400 border-b border-slate-700 pb-3 mb-4">
+                        <h3 className="text-xl font-bold text-uefa-cyan border-b border-uefa-border/50 pb-3 mb-4">
                             {championship}
                         </h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

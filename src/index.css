@@ -1,15 +1,30 @@
 @import "tailwindcss";
 
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #0f172a; /* bg-slate-900 */
-  color: #e2e8f0; /* text-slate-200 */
+/* PASO 1: Definimos toda nuestra paleta de colores aquí dentro de @theme */
+@theme {
+  --color-uefa-dark-blue: #040220;
+  --color-uefa-dark-blue-secondary: #100c3b;
+  --color-uefa-magenta: #e90052;
+  --color-uefa-cyan: #00f0f0;
+  --color-uefa-text-secondary: #a9a5c4;
+  --color-uefa-border: rgba(128, 128, 255, 0.2);
+  --color-uefa-primary-blue: #0d69ff;
 }
 
-/* Estilo base para los inputs del dark mode con el plugin de forms */
+/* PASO 2: Usamos las variables CSS que acabamos de crear */
+body {
+  background-color: var(--color-uefa-dark-blue);
+  color: var(--color-uefa-text-secondary);
+}
+
+/* PASO 3: Actualizamos también los estilos de los formularios */
 .form-input, .form-select, .form-textarea {
     @apply bg-slate-800/80 border-slate-600 rounded-md shadow-sm text-slate-200;
 }
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-     @apply border-blue-500 ring-blue-500;
+    border-color: var(--color-uefa-magenta);
+    --tw-ring-color: var(--color-uefa-magenta); /* Esto controla el color del "anillo" de foco */
+    --tw-ring-offset-shadow: none; /* Mejoras opcionales */
+    --tw-ring-shadow: none;
+    box-shadow: none;
 }

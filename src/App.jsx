@@ -95,27 +95,29 @@ function App() {
 
     return (
         <div className="min-h-screen p-2 sm:p-4 lg:p-8">
-            <div className="w-full max-w-7xl mx-auto bg-gray-800 rounded-xl shadow-2xl p-4 sm:p-6">
-                <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 pb-6 border-b border-slate-700">
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">PolliTamayo</h1>
-                        <p className="text-sm text-slate-400 mt-1">Usuario: <span className="font-semibold text-slate-200">{user.displayName}</span></p>
-                    </div>
-                     <nav className="flex flex-wrap items-center space-x-2 sm:space-x-4 mt-4 sm:mt-0">
-                        <button onClick={() => setMainView('active')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'active' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Quiniela Activa</button>
-                        {/* --- BOTÓN MOVIDO DE AQUÍ --- */}
-                        <button onClick={() => setMainView('history')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'history' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Historial</button>
-                        <button onClick={() => setMainView('leaderboard')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'leaderboard' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Leaderboard</button>
-                        {!isAdmin && <button onClick={() => setMainView('profile')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'profile' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Mi Perfil</button>}
-                    </nav>
-                    {/* --- ▼▼▼ NUEVO CONTENEDOR PARA LOS BOTONES DE LA DERECHA ▼▼▼ --- */}
-                    <div className="flex flex-col items-stretch gap-y-2 mt-4 sm:mt-0">
-                        <button onClick={handleLogout} className="bg-slate-600 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md text-sm transition-colors duration-200">Cerrar Sesión</button>
-                        <button onClick={() => setMainView('leagueChampions')} className={`text-center py-2 px-4 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'leagueChampions' ? 'bg-blue-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>
-                            Polla Campeones
-                        </button>
-                    </div>
-                </header>
+            <div className="w-full max-w-7xl mx-auto bg-uefa-dark-blue-secondary rounded-xl shadow-2xl p-4 sm:p-6">
+                <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 pb-6 border-b border-uefa-border">
+    <div>
+        <h1 className="text-2xl font-bold text-white">PolliTamayo</h1>
+        {/* Usamos el nuevo color de texto secundario */}
+        <p className="text-sm text-uefa-text-secondary mt-1">Usuario: <span className="font-semibold text-white">{user.displayName}</span></p>
+    </div>
+    {/* Cambiamos los colores de los botones de navegación */}
+    <nav className="flex flex-wrap items-center space-x-2 sm:space-x-4 mt-4 sm:mt-0">
+        <button onClick={() => setMainView('active')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'active' ? 'bg-uefa-magenta text-white' : 'bg-transparent text-uefa-text-secondary hover:bg-white/10'}`}>Quiniela Activa</button>
+        <button onClick={() => setMainView('history')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'history' ? 'bg-uefa-magenta text-white' : 'bg-transparent text-uefa-text-secondary hover:bg-white/10'}`}>Historial</button>
+        <button onClick={() => setMainView('leaderboard')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'leaderboard' ? 'bg-uefa-magenta text-white' : 'bg-transparent text-uefa-text-secondary hover:bg-white/10'}`}>Leaderboard</button>
+        {!isAdmin && <button onClick={() => setMainView('profile')} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'profile' ? 'bg-uefa-magenta text-white' : 'bg-transparent text-uefa-text-secondary hover:bg-white/10'}`}>Mi Perfil</button>}
+    </nav>
+    <div className="flex flex-col items-stretch gap-y-2 mt-4 sm:mt-0">
+        {/* Dejamos el botón de logout con un rojo más vibrante para que destaque */}
+        <button onClick={handleLogout} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md text-sm transition-colors duration-200">Cerrar Sesión</button>
+        {/* Aplicamos el mismo estilo de navegación al botón de Polla Campeones */}
+        <button onClick={() => setMainView('leagueChampions')} className={`text-center py-2 px-4 text-sm font-semibold rounded-md transition-colors duration-200 ${mainView === 'leagueChampions' ? 'bg-uefa-magenta text-white' : 'bg-transparent text-uefa-text-secondary hover:bg-white/10'}`}>
+            Polla Campeones
+        </button>
+    </div>
+</header>
 
                 <main>
                     {mainView === 'leagueChampions' && <LeagueChampionsView isAdmin={isAdmin} />}

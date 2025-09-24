@@ -62,7 +62,8 @@ const QuinielaView = ({ user, quiniela, isAdmin = false }) => {
 
     return (
         <div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-amber-400 text-center mb-6">{quiniela.name}</h2>
+            
+            <h2 className="text-2xl sm:text-3xl font-bold text-uefa-cyan text-center mb-6">{quiniela.name}</h2>
             {isAdmin && <AdminPanel quiniela={quiniela} />}
             <Tabs activeTab={activeTab} setActiveTab={setActiveTab} isAdmin={isAdmin} resultsVisible={canViewScoring} />
             <div className="mt-6">
