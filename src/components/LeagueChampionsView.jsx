@@ -76,15 +76,15 @@ const calculatePlayerScores = (players, realStandings, leagues) => {
                 const playerSubChampions = [playerPrediction[2], playerPrediction[3]];
                 
                 // Puntos por cada campeón acertado
-                if (champions[0] && playerChampions.includes(champions[0])) totalPoints += 5;
-                if (champions[1] && playerChampions.includes(champions[1])) totalPoints += 5;
-                if (champions[0] && playerChampions.includes(champions[1])) totalPoints += 5;
-                if (champions[1] && playerChampions.includes(champions[0])) totalPoints += 5;
+                if (champions[0] && playerChampions.includes(champions[0]||champions[1])) totalPoints += 5;
+                if (champions[1] && playerChampions.includes(champions[1]||champions[0])) totalPoints += 5;
+                //if (champions[0] && playerChampions.includes(champions[1])) totalPoints += 5;
+                //if (champions[1] && playerChampions.includes(champions[0])) totalPoints += 5;
                 // Puntos por cada subcampeón acertado
-                if (subChampions[0] && playerSubChampions.includes(subChampions[0])) totalPoints += 2;
-                if (subChampions[1] && playerSubChampions.includes(subChampions[1])) totalPoints += 2;
-                if (subChampions[0] && playerSubChampions.includes(subChampions[1])) totalPoints += 2;
-                if (subChampions[1] && playerSubChampions.includes(subChampions[0])) totalPoints += 2;
+                if (subChampions[0] && playerSubChampions.includes(subChampions[0]||subChampions[1])) totalPoints += 2;
+                if (subChampions[1] && playerSubChampions.includes(subChampions[1]||subChampions[0])) totalPoints += 2;
+                //if (subChampions[0] && playerSubChampions.includes(subChampions[1])) totalPoints += 2;
+                //if (subChampions[1] && playerSubChampions.includes(subChampions[0])) totalPoints += 2;
             
             }
         });
