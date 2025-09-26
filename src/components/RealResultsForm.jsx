@@ -78,35 +78,48 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
     }, [quiniela]);
 
     useEffect(() => {
-        const fetchAndSaveLiveResults = async () => {
-            const matchIds = quiniela.matches.map(m => m.id).filter(id => typeof id === 'number');
-            if (matchIds.length === 0) {
-                setLastUpdate('No hay partidos de API en esta quiniela.');
-                return;
-            };
-            try {
-                const liveResults = await getLiveResultsByIds(matchIds);
-                if (Object.keys(liveResults).length > 0) {
-                    const docRef = doc(db, 'quinielas', quiniela.id);
-                    await updateDoc(docRef, { realResults: liveResults }, { merge: true });
-                    setLastUpdate(`Resultados guardados: ${new Date().toLocaleTimeString()}`);
-                } else {
-                    setLastUpdate(`Sin cambios: ${new Date().toLocaleTimeString()}`);
-                }
-            } catch (error) {
-                console.error("Error en la actualización en vivo:", error);
-                setLastUpdate("Error de conexión con la API.");
-            }
-        };
+    // La función interna no cambia, pero ahora SIEMPRE tendrá la última 'quiniela'
+    const fetchAndSaveLiveResults = async () => {
+        // --- ▼▼▼ CONSOLE LOG CLAVE ▼▼▼ ---
+        // Vamos a verificar qué hay en quiniela.matches en el momento exacto de la ejecución
+        
 
-        if (isLiveUpdating) {
-            fetchAndSaveLiveResults();
-            intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000);
-        }
-        return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current);
+        const matchIds = quiniela.matches.map(m => m.id).filter(id => typeof id === 'number');
+        if (matchIds.length === 0) {
+            setLastUpdate('No hay partidos de API en esta quiniela.');
+            return;
         };
-    }, [isLiveUpdating, quiniela.id, quiniela.matches]);
+        try {
+            const liveResults = await getLiveResultsByIds(matchIds);
+            if (Object.keys(liveResults).length > 0) {
+                const docRef = doc(db, 'quinielas', quiniela.id);
+                setResults(prevResults => ({...prevResults, ...liveResults}));
+                await updateDoc(docRef, { realResults: liveResults }, { merge: true });
+                setLastUpdate(`Resultados guardados: ${new Date().toLocaleTimeString()}`);
+            } else {
+                setLastUpdate(`Sin cambios: ${new Date().toLocaleTimeString()}`);
+            }
+        } catch (error) {
+            console.error("Error en la actualización en vivo:", error);
+            setLastUpdate("Error de conexión con la API.");
+        }
+    };
+
+    if (isLiveUpdating) {
+        fetchAndSaveLiveResults();
+        intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000);
+    }
+    
+    // La función de limpieza es importante para evitar fugas de memoria
+    return () => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
+    };
+    
+// --- ▼▼▼ CAMBIO PRINCIPAL AQUÍ ▼▼▼ ---
+// Al depender del objeto 'quiniela' completo, nos aseguramos de que siempre use la versión más fresca.
+}, [isLiveUpdating, quiniela]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;

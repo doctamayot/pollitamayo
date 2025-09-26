@@ -40,7 +40,7 @@ const HistoryView = ({ closedQuinielas, user }) => {
 
     return (
         <div className="bg-slate-800/50 p-4 sm:p-6 rounded-lg">
-            <h2 className="text-2xl font-bold text-blue-400 mb-6 text-center">Historial de Quinielas</h2>
+            <h2 className="text-2xl font-bold text-blue-400 mb-6 text-center">Historial de Pollas</h2>
             
             <div className="flex justify-center mb-6">
                 <QuinielaSelector 
