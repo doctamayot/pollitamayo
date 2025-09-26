@@ -18,52 +18,42 @@ const achievementsMap = {
 const ProfileView = ({ userId, currentUser }) => {
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [visibleHitsCount, setVisibleHitsCount] = useState(3);
+    // --- ▼▼▼ LÍNEA RESTAURADA ▼▼▼ ---
+    const [visibleHitsCount, setVisibleHitsCount] = useState(5);
 
     useEffect(() => {
         const calculateProfile = async () => {
-            if (!userId) {
-                setLoading(false); return;
-            }
+            if (!userId) { setLoading(false); return; }
             setLoading(true);
             try {
+                // ... (toda la lógica de fetching y cálculo no cambia)
                 const userDocRef = doc(db, 'users', userId);
                 const leaderboardDocRef = doc(db, 'leaderboard', userId);
                 const quinielasQuery = query(collection(db, 'quinielas'), where("isClosed", "==", true));
-                
                 const [userDocSnap, leaderboardDocSnap, quinielasSnapshot] = await Promise.all([
                     getDoc(userDocRef), getDoc(leaderboardDocRef), getDocs(quinielasQuery)
                 ]);
-
                 if (!userDocSnap.exists()) throw new Error("El perfil de este usuario no existe.");
-
                 const userProfile = userDocSnap.data();
                 const leaderboardEntry = leaderboardDocSnap.data();
                 const closedQuinielas = quinielasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
                 const predictionsPromises = closedQuinielas.map(q => getDoc(doc(db, 'quinielas', q.id, 'predictions', userId)));
                 const predictionsSnapshots = await Promise.all(predictionsPromises);
-                
                 let quinielasParticipadas = [];
                 predictionsSnapshots.forEach((predSnap, index) => {
                     if (predSnap.exists()) {
                         quinielasParticipadas.push({ ...closedQuinielas[index], userPredictionData: predSnap.data() });
                     }
                 });
-                
                 quinielasParticipadas.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-
                 let dynamicStats = { totalAciertosExactos: 0, mejorRachaVictorias: 0 };
                 let exactHitsDetails = [];
                 let newAchievements = [];
                 let currentAchievements = userProfile.achievements || [];
                 let rachaActualVictorias = 0;
-
                 quinielasParticipadas.forEach(quiniela => {
                     const esGanador = quiniela.winnersData?.some(winner => winner.userId === userId);
-                    if (esGanador) {
-                        rachaActualVictorias++;
-                    } else {
+                    if (esGanador) { rachaActualVictorias++; } else {
                         if (rachaActualVictorias > dynamicStats.mejorRachaVictorias) {
                             dynamicStats.mejorRachaVictorias = rachaActualVictorias;
                         }
@@ -85,21 +75,17 @@ const ProfileView = ({ userId, currentUser }) => {
                         }
                     });
                 });
-                
                 if (rachaActualVictorias > dynamicStats.mejorRachaVictorias) {
                     dynamicStats.mejorRachaVictorias = rachaActualVictorias;
                 }
-                
                 if (quinielasParticipadas.length > 0 && !currentAchievements.includes('ROMPIENDO_HIELO')) newAchievements.push('ROMPIENDO_HIELO');
                 if (leaderboardEntry && leaderboardEntry.totalWins > 0 && !currentAchievements.includes('REY_COLINA')) newAchievements.push('REY_COLINA');
                 if (dynamicStats.mejorRachaVictorias >= 3 && !currentAchievements.includes('EN_RACHA')) newAchievements.push('EN_RACHA');
                 if (dynamicStats.totalAciertosExactos > 0 && !currentAchievements.includes('FRANCOTIRADOR')) newAchievements.push('FRANCOTIRADOR');
                 if (userProfile.totalPoints >= 500 && !currentAchievements.includes('MARATON_PUNTOS')) newAchievements.push('MARATON_PUNTOS');
-
                 if (newAchievements.length > 0 && currentUser && currentUser.uid === userId) {
                     await updateDoc(userDocRef, { achievements: arrayUnion(...newAchievements) });
                 }
-                
                 setProfileData({
                     displayName: userProfile.displayName,
                     stats: {
@@ -113,12 +99,8 @@ const ProfileView = ({ userId, currentUser }) => {
                     achievements: [...new Set([...currentAchievements, ...newAchievements])],
                     exactHits: exactHitsDetails.reverse()
                 });
-
-            } catch (error) {
-                console.error("Error al calcular el perfil:", error);
-            } finally {
-                setLoading(false);
-            }
+            } catch (error) { console.error("Error al calcular el perfil:", error); }
+            finally { setLoading(false); }
         };
         calculateProfile();
     }, [userId, currentUser]);
@@ -127,9 +109,10 @@ const ProfileView = ({ userId, currentUser }) => {
     if (!profileData) return <div className="text-center text-uefa-text-secondary py-16">No se pudo cargar el perfil.</div>;
 
     const { displayName, stats, totalWins, achievements, exactHits } = profileData;
-
+    
+    // --- ▼▼▼ FUNCIÓN RESTAURADA ▼▼▼ ---
     const handleLoadMore = () => {
-        setVisibleHitsCount(prevCount => prevCount + 3);
+        setVisibleHitsCount(prevCount => prevCount + 5);
     };
 
     return (
@@ -166,17 +149,19 @@ const ProfileView = ({ userId, currentUser }) => {
                             <p className="text-xs text-uefa-text-secondary font-semibold mb-2">
                                 En la quiniela: <span className="text-uefa-cyan">{hit.quinielaName}</span>
                             </p>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2 text-sm text-white">
+                            <div className="flex items-center justify-between text-[10px] text-white">
+                                <div className="flex items-center justify-end flex-1 space-x-2">
+                                    <span className="text-right">{hit.matchData.home}</span>
                                     <img src={hit.matchData.homeCrest || `https://flagcdn.com/w20/${hit.matchData.homeCode}.png`} className="w-5 h-5 object-contain" alt={hit.matchData.home} />
-                                    <span>{hit.matchData.home}</span>
-                                    <span className="font-bold text-lg text-green-400">{hit.realResult.home}</span>
                                 </div>
-                                <span className="text-uefa-text-secondary text-sm">vs</span>
-                                <div className="flex items-center space-x-2 text-sm text-white">
+                                <div className="flex items-center justify-center space-x-2 w-20 flex-shrink-0">
+                                    <span className="font-bold text-lg text-green-400">{hit.realResult.home}</span>
+                                    <span className="text-uefa-text-secondary text-sm">vs</span>
                                     <span className="font-bold text-lg text-green-400">{hit.realResult.away}</span>
-                                    <span>{hit.matchData.away}</span>
+                                </div>
+                                <div className="flex items-center justify-start flex-1 space-x-2">
                                     <img src={hit.matchData.awayCrest || `https://flagcdn.com/w20/${hit.matchData.awayCode}.png`} className="w-5 h-5 object-contain" alt={hit.matchData.away} />
+                                    <span>{hit.matchData.away}</span>
                                 </div>
                             </div>
                         </div>
