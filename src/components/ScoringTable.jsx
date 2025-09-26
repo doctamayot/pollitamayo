@@ -3,6 +3,18 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../firebase';
 import { calculatePoints } from '../utils/scoring';
 
+const statusTranslations = {
+    SCHEDULED: 'Programado',
+    TIMED: 'Confirmado',
+    IN_PLAY: 'En Juego',
+    PAUSED: 'En Pausa',
+    FINISHED: 'Finalizado',
+    SUSPENDED: 'Suspendido',
+    POSTPONED: 'Pospuesto',
+    CANCELLED: 'Cancelado',
+    AWARDED: 'Adjudicado'
+};
+
 const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
     // --- Lógica interna sin cambios ---
     const [allUsers, setAllUsers] = useState([]);
@@ -105,6 +117,15 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                                 <img src={p.awayCrest || `https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-full w-full object-contain" />
                                             </div>
                                             <span className="text-[9px] font-bold text-uefa-text-secondary uppercase leading-none">{p.awayCode || p.away.substring(0, 3)}</span>
+                                        <span className={`text-[9px] font-bold ${
+    p.status === 'IN_PLAY' || p.status === 'PAUSED'
+        ? 'text-green-400 animate-pulse'
+        : p.status === 'FINISHED'
+        ? 'text-red-500'
+        : 'text-uefa-text-secondary'
+}`}>
+    {statusTranslations[p.status] || p.status}
+</span>
                                         </div>
                                     </th>
                                 ))}

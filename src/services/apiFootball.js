@@ -58,21 +58,36 @@ export const getMatchesByCompetition = async (competitionId) => {
     
 };
 
-export const getLiveResultsByIds = async (matchIds) => {
-    if (!matchIds || matchIds.length === 0) throw new Error("El ID de competición no puede ser nulo.");
-    const data = await fetchFromApi(`matches?ids=${matchIds.join(',')}`);
-    const resultsMap = {};
-    data.matches.forEach(match => {
-        if (match.status === 'IN_PLAY' || match.status === 'PAUSED' || match.status === 'FINISHED') {
-            resultsMap[match.id] = {
-                home: match.score.fullTime.home?.toString() || '0',
-                away: match.score.fullTime.away?.toString() || '0',
-            };
-        }
-    });
+export const getLiveUpdateDataByIds = async (matchIds) => {
+    if (!matchIds || matchIds.length === 0) {
+        // Si no hay IDs, devolvemos objetos vacíos para evitar errores
+        return { resultsMap: {}, statusMap: {} };
+    }
     
-    return resultsMap;
+    const data = await fetchFromApi(`matches?ids=${matchIds.join(',')}`);
+
+    const resultsMap = {};
+    const statusMap = {}; // <-- Nuevo mapa para los estados
+
+    if (data && data.matches) {
+        data.matches.forEach(match => {
+            // Siempre guardamos el estado más reciente del partido
+            statusMap[match.id] = match.status;
+
+            // Solo guardamos el resultado si el partido está en juego, pausado o finalizado
+            if (match.status === 'IN_PLAY' || match.status === 'PAUSED' || match.status === 'FINISHED') {
+                resultsMap[match.id] = {
+                    home: match.score.fullTime.home?.toString() || '0',
+                    away: match.score.fullTime.away?.toString() || '0',
+                };
+            }
+        });
+    }
+    
+    // Devolvemos un objeto con ambos mapas
+    return { resultsMap, statusMap };
 };
+
 
 
 export const getStandings = async (competitionId) => {

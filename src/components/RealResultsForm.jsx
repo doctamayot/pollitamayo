@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getLiveResultsByIds } from '../services/apiFootball';
+import { getLiveUpdateDataByIds } from '../services/apiFootball';
 
 // --- Diccionario de traducciones sin cambios ---
 const statusTranslations = {
@@ -78,48 +78,58 @@ const RealResultsForm = ({ quiniela, liveStatuses }) => {
     }, [quiniela]);
 
     useEffect(() => {
-    // La función interna no cambia, pero ahora SIEMPRE tendrá la última 'quiniela'
-    const fetchAndSaveLiveResults = async () => {
-        // --- ▼▼▼ CONSOLE LOG CLAVE ▼▼▼ ---
-        // Vamos a verificar qué hay en quiniela.matches en el momento exacto de la ejecución
-        
+        const fetchAndSaveLiveResults = async () => {
+            const matchIds = quiniela.matches.map(m => m.id).filter(id => typeof id === 'number');
+            if (matchIds.length === 0) {
+                setLastUpdate('No hay partidos de API en esta quiniela.');
+                return;
+            };
 
-        const matchIds = quiniela.matches.map(m => m.id).filter(id => typeof id === 'number');
-        if (matchIds.length === 0) {
-            setLastUpdate('No hay partidos de API en esta quiniela.');
-            return;
-        };
-        try {
-            const liveResults = await getLiveResultsByIds(matchIds);
-            if (Object.keys(liveResults).length > 0) {
+            try {
+                // --- ▼▼▼ 2. Usamos la nueva función y extraemos ambos mapas ▼▼▼ ---
+                const { resultsMap, statusMap } = await getLiveUpdateDataByIds(matchIds);
+
+                // --- ▼▼▼ 3. Preparamos los datos para la actualización ▼▼▼ ---
+                
+                // Creamos un nuevo array de partidos con los estados actualizados
+                const updatedMatches = quiniela.matches.map(match => {
+                    // Si hay un nuevo estado para este partido, lo usamos. Si no, dejamos el que tenía.
+                    if (statusMap[match.id] && statusMap[match.id] !== match.status) {
+                        return { ...match, status: statusMap[match.id] };
+                    }
+                    return match;
+                });
+                
+                const hasScoreUpdates = Object.keys(resultsMap).length > 0;
+                
+                // --- ▼▼▼ 4. Guardamos ambos campos en Firestore ▼▼▼ ---
                 const docRef = doc(db, 'quinielas', quiniela.id);
-                setResults(prevResults => ({...prevResults, ...liveResults}));
-                await updateDoc(docRef, { realResults: liveResults }, { merge: true });
-                setLastUpdate(`Resultados guardados: ${new Date().toLocaleTimeString()}`);
-            } else {
-                setLastUpdate(`Sin cambios: ${new Date().toLocaleTimeString()}`);
-            }
-        } catch (error) {
-            console.error("Error en la actualización en vivo:", error);
-            setLastUpdate("Error de conexión con la API.");
-        }
-    };
+                await updateDoc(docRef, {
+                    matches: updatedMatches, // Actualizamos el array de partidos con los nuevos estados
+                    realResults: resultsMap  // Actualizamos los resultados (si los hay)
+                }, { merge: true }); // Merge es importante para el realResults
 
-    if (isLiveUpdating) {
-        fetchAndSaveLiveResults();
-        intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000);
-    }
-    
-    // La función de limpieza es importante para evitar fugas de memoria
-    return () => {
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
+                // Actualizamos el estado local del formulario inmediatamente
+                if(hasScoreUpdates) {
+                    setResults(prevResults => ({...prevResults, ...resultsMap}));
+                }
+
+                setLastUpdate(`Actualizado: ${new Date().toLocaleTimeString()}`);
+
+            } catch (error) {
+                console.error("Error en la actualización en vivo:", error);
+                setLastUpdate("Error de conexión con la API.");
+            }
+        };
+
+        if (isLiveUpdating) {
+            fetchAndSaveLiveResults();
+            intervalRef.current = setInterval(fetchAndSaveLiveResults, 30000);
         }
-    };
-    
-// --- ▼▼▼ CAMBIO PRINCIPAL AQUÍ ▼▼▼ ---
-// Al depender del objeto 'quiniela' completo, nos aseguramos de que siempre use la versión más fresca.
-}, [isLiveUpdating, quiniela]);
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [isLiveUpdating, quiniela]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
