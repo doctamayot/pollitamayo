@@ -32,7 +32,8 @@ const ResultsTable = ({ quiniela, allPredictions, isAdmin }) => {
                                     <th scope="col" key={p.id} className="px-2 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider min-w-[70px]">
                                         <div className="flex flex-col items-center justify-center space-y-0.5">
                                             <span className="text-[9px] font-bold uppercase">{p.home.substring(0, 3)}</span>
-                                            <img src={`https://flagcdn.com/w20/${p.homeCode}.png`} title={p.home} className="h-3 rounded-sm bg-slate-600"/>
+                                            <img src={`https://flagcdn.com/w20/${p.homeCode}.png`} title=
+                                            {p.home} className="h-3 rounded-sm bg-slate-600"/>
                                             <span className="text-slate-400 text-[10px]">vs</span>
                                             <img src={`https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-3 rounded-sm bg-slate-600"/>
                                             <span className="text-[9px] font-bold uppercase">{p.away.substring(0, 3)}</span>

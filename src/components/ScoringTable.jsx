@@ -86,6 +86,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
 
     const maxRank = scores.length > 0 ? Math.max(...scores.map(s => s.rank)) : 0;
 
+
     return (
         // --- ▼▼▼ CÓDIGO DE LA INTERFAZ ACTUALIZADO ▼▼▼ ---
         <div className="overflow-x-auto">
@@ -106,9 +107,10 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                             <tr>
                                 <th scope="col" className="sticky left-0 bg-uefa-dark-blue-secondary z-10 py-3"></th>
                                 {Object.values(groupedMatches).flat().map(p => (
+                                    
                                     <th scope="col" key={p.id} className="px-1 py-3 text-center text-xs font-semibold text-white min-w-[75px]">
                                         <div className="flex flex-col items-center justify-center space-y-0.5">
-                                            <span className="text-[9px] font-bold text-uefa-text-secondary uppercase leading-none">{p.homeCode || p.home.substring(0, 3)}</span>
+                                            <span className="text-[9px] font-bold text-uefa-text-secondary uppercase leading-none">{String(p.id).substring(0, 3) === "man" ? p.home.substring(0, 3) : p.homeCode}</span>
                                             <div className="h-4 w-4 rounded-full overflow-hidden bg-slate-600">
                                                 <img src={p.homeCrest || `https://flagcdn.com/w20/${p.homeCode}.png`} title={p.home} className="h-full w-full object-contain" />
                                             </div>
@@ -116,7 +118,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
                                             <div className="h-4 w-4 rounded-full overflow-hidden bg-slate-600">
                                                 <img src={p.awayCrest || `https://flagcdn.com/w20/${p.awayCode}.png`} title={p.away} className="h-full w-full object-contain" />
                                             </div>
-                                            <span className="text-[9px] font-bold text-uefa-text-secondary uppercase leading-none">{p.awayCode || p.away.substring(0, 3)}</span>
+                                            <span className="text-[9px] font-bold text-uefa-text-secondary uppercase leading-none">{String(p.id).substring(0, 3) === "man" ? p.away.substring(0, 3) : p.awayCode}</span>
                                         <span className={`text-[9px] font-bold ${
     p.status === 'IN_PLAY' || p.status === 'PAUSED'
         ? 'text-green-400 animate-pulse'
@@ -124,7 +126,7 @@ const ScoringTable = ({ quiniela, allPredictions, currentUserDisplayName }) => {
         ? 'text-red-500'
         : 'text-uefa-text-secondary'
 }`}>
-    {statusTranslations[p.status] || p.status}
+    {statusTranslations[p.status] || p.status || "Confirmado"}
 </span>
                                         </div>
                                     </th>
