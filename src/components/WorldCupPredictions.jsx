@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
-import toast from 'react-hot-toast'; // <-- Sistema de avisos profesional
+import toast from 'react-hot-toast';
 
-// --- DICCIONARIO DE TRADUCCIÓN COMPLETO ---
+// --- DICCIONARIO DE TRADUCCIÓN (INGLÉS A ESPAÑOL) ---
 const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
     "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Bosnia and Herzegovina": "Bosnia y Herzegovina",
@@ -21,7 +21,7 @@ const teamTranslations = {
     "Norway": "Noruega", "Panama": "Panamá", "Paraguay": "Paraguay", "Peru": "Perú", 
     "Poland": "Polonia", "Portugal": "Portugal", "Qatar": "Catar", "Republic of Ireland": "República de Irlanda", 
     "Romania": "Rumania", "Russia": "Rusia", "Saudi Arabia": "Arabia Saudita", "Scotland": "Escocia", 
-    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovaquia", 
+    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovenia", 
     "South Africa": "Sudáfrica", "South Korea": "Corea del Sur", "Spain": "España", "Sweden": "Suecia", 
     "Switzerland": "Suiza", "Tunisia": "Túnez", "Turkey": "Turquía", "Ukraine": "Ucrania", 
     "United Arab Emirates": "Emiratos Árabes Unidos", "United States": "Estados Unidos", 
@@ -50,7 +50,6 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [extraPicks, setExtraPicks] = useState({});
     const [eventPicks, setEventPicks] = useState({});
 
-    // --- CONFIGURACIÓN DE UI ---
     const tabs = [
         { id: 'grupos', label: 'Fase de Grupos', icon: '📅' },
         { id: 'rondas', label: 'Clasificados', icon: '📈' },
@@ -97,7 +96,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         { id: 'penales_final', label: 'Final en Penales', desc: '¿La final se decide en penales?' }
     ];
 
-    // --- EFECTOS DE CARGA ---
     useEffect(() => {
         const fetchMatchesAndData = async () => {
             try {
@@ -142,7 +140,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             } catch (err) {
                 console.error(err);
                 setError('No se pudieron cargar los datos del Mundial.');
-                toast.error("Error al cargar datos del servidor");
             } finally {
                 setLoading(false);
             }
@@ -162,7 +159,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         return () => unsubscribe();
     }, [currentUser]);
 
-    // --- LÓGICA DE NEGOCIO ---
     const allTeams = useMemo(() => {
         const teamsMap = new Map();
         Object.values(matchesByGroup).flat().forEach(m => {
@@ -191,7 +187,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         setEventPicks(prev => ({ ...prev, [eventId]: value }));
     };
 
-    // --- GUARDADO PROFESIONAL CON TOASTS ---
     const handleSavePredictions = async () => {
         setSaving(true);
         const isAdmin = currentUser.email === 'doctamayot@gmail.com';
@@ -218,7 +213,7 @@ const WorldCupPredictions = ({ currentUser }) => {
 
         toast.promise(saveOp, {
             loading: isAdmin ? 'Publicando resultados oficiales...' : 'Guardando tus pronósticos...',
-            success: isAdmin ? '👑 ¡Resultados MAESTROS actualizados!' : '¡Predicciones guardadas con éxito! 🏆',
+            success: isAdmin ? '👑 ¡Resultados MAESTROS actualizados!' : '¡Tus predicciones se guardaron! 🏆',
             error: 'Error de red al guardar. Reintenta.',
         }, {
             style: { minWidth: '250px' },
@@ -234,7 +229,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     };
 
-    // --- CÁLCULOS DE TABLA Y POSICIONES ---
     const calculateStandings = (groupName) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const matches = matchesByGroup[groupName];
@@ -339,7 +333,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         if (Object.keys(matchesByGroup).length === 0) return []; 
         const missing = [];
         
-        // 1. Fase de Grupos: Validar que cada partido tenga goles de local y visitante
         const allGroupMatches = Object.values(matchesByGroup).flat();
         const totalMatches = allGroupMatches.length;
         const predictedCount = allGroupMatches.filter(m => {
@@ -349,51 +342,30 @@ const WorldCupPredictions = ({ currentUser }) => {
                    p.away !== '' && p.away !== undefined && p.away !== null;
         }).length;
 
-        if (predictedCount < totalMatches) {
-            missing.push(`Fase de Grupos (${predictedCount}/${totalMatches})`);
-        }
-
-        // 2. Rondas Eliminatorias
+        if (predictedCount < totalMatches) missing.push(`Fase de Grupos (${predictedCount}/${totalMatches})`);
         if (knockoutPicks.octavos.length < 16) missing.push(`Octavos (${knockoutPicks.octavos.length}/16)`);
         if (knockoutPicks.cuartos.length < 8) missing.push(`Cuartos (${knockoutPicks.cuartos.length}/8)`);
         if (knockoutPicks.semis.length < 4) missing.push(`Semifinales (${knockoutPicks.semis.length}/4)`);
         
-        // Validar Podio completo
-        const podiumMissing = [];
-        if (knockoutPicks.campeon.length === 0) podiumMissing.push('Campeón');
-        if (knockoutPicks.subcampeon.length === 0) podiumMissing.push('Subcampeón');
-        if (knockoutPicks.tercero.length === 0) podiumMissing.push('Tercero');
-        if (knockoutPicks.cuarto.length === 0) podiumMissing.push('Cuarto');
-        
-        if (podiumMissing.length > 0) {
-            missing.push(`Podio (Falta: ${podiumMissing.join(', ')})`);
-        }
+        const podMissing = [];
+        if (knockoutPicks.campeon.length === 0) podMissing.push('Campeón');
+        if (knockoutPicks.subcampeon.length === 0) podMissing.push('Subcampeón');
+        if (knockoutPicks.tercero.length === 0) podMissing.push('Tercero');
+        if (knockoutPicks.cuarto.length === 0) podMissing.push('Cuarto');
+        if (podMissing.length > 0) missing.push(`Podio (Falta: ${podMissing.join(', ')})`);
 
-        // 3. Extras (Aquí corregimos la detección)
         const filledExtras = extraQuestions.filter(q => {
-            const value = extraPicks[q.id];
-            // Verifica que el valor exista, no sea solo espacios y no sea undefined
-            return value !== undefined && value !== null && value.toString().trim() !== '';
+            const val = extraPicks[q.id];
+            return val !== undefined && val !== null && val.toString().trim() !== '';
         }).length;
+        if (filledExtras < extraQuestions.length) missing.push(`Extras (${filledExtras}/${extraQuestions.length})`);
 
-        if (filledExtras < extraQuestions.length) {
-            missing.push(`Extras (${filledExtras}/${extraQuestions.length})`);
-        }
-
-        // 4. Eventos SÍ/NO
-        const filledEvents = specialEvents.filter(e => {
-            const value = eventPicks[e.id];
-            return value === 'SI' || value === 'NO';
-        }).length;
-
-        if (filledEvents < specialEvents.length) {
-            missing.push(`Eventos (${filledEvents}/${specialEvents.length})`);
-        }
+        const filledEvents = specialEvents.filter(e => eventPicks[e.id] === 'SI' || eventPicks[e.id] === 'NO').length;
+        if (filledEvents < specialEvents.length) missing.push(`Eventos (${filledEvents}/${specialEvents.length})`);
 
         return missing;
     };
 
-    // --- RENDERIZADO FINAL ---
     const missingSections = getMissingSections();
     const isAdmin = currentUser.email === 'doctamayot@gmail.com';
 
@@ -412,7 +384,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     {isAdmin ? '👑 Resultados Reales' : 'Mis Predicciones'}
                 </h2>
                 <p className="text-foreground-muted">
-                    {isAdmin ? 'Estás guardando los resultados oficiales del torneo.' : 'Completa todas las secciones antes del inicio del torneo.'}
+                    {isAdmin ? 'Guardando resultados oficiales del torneo.' : 'Completa todas las secciones antes del inicio del torneo.'}
                 </p>
             </div>
 
@@ -432,7 +404,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     )}
                     {missingSections.length > 0 ? (
                         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 sm:p-5 flex items-start gap-3 shadow-sm animate-fade-in">
-                            <div className="text-2xl shrink-0">⚠️</div>
+                            <div className="text-2xl sm:text-3xl shrink-0">⚠️</div>
                             <div>
                                 <h3 className="font-bold text-red-500 mb-1 text-sm sm:text-base">Tu predicción está incompleta</h3>
                                 <p className="text-xs sm:text-sm text-foreground-muted leading-relaxed">
@@ -489,9 +461,8 @@ const WorldCupPredictions = ({ currentUser }) => {
 
                     {selectedGroup && (
                         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                            {/* PARTIDOS */}
                             <div className="xl:col-span-7 space-y-4">
-                                <h3 className="text-l font-black text-primary uppercase tracking-widest border-b border-border pb-3 mb-4">Partidos - {selectedGroup}</h3>
+                                <h3 className="text-2xl font-black text-primary uppercase tracking-widest border-b border-border pb-3 mb-4">Partidos - {selectedGroup}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {matchesByGroup[selectedGroup].map(match => (
                                         <div key={match.id} className="bg-card border border-card-border p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-colors">
@@ -518,7 +489,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     ))}
                                 </div>
                             </div>
-                            {/* TABLA */}
                             <div className="xl:col-span-5">
                                 <div className="bg-card border border-card-border rounded-3xl p-4 sm:p-6 shadow-sm sticky top-24">
                                     <h3 className="text-xl font-black text-foreground mb-4">Tabla en Vivo</h3>
@@ -557,13 +527,29 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             {activeTab === 'rondas' && (
                 <div className="animate-fade-in">
+                    <div className="bg-primary/10 border-l-4 border-primary p-4 mb-8 rounded-r-2xl animate-fade-in shadow-sm">
+                        <div className="flex items-start gap-3">
+                            <span className="text-xl">💡</span>
+                            <div>
+                                <h4 className="font-bold text-primary text-sm uppercase tracking-wider">¿Cómo funciona esta fase?</h4>
+                                <p className="text-xs sm:text-sm text-foreground-muted leading-relaxed">
+                                    {activeRoundTab === 'dieciseisavos' && "Los 32 clasificados aparecen automáticamente según los marcadores que pusiste en la 'Fase de Grupos'. Si falta alguien, revisa tus resultados allí."}
+                                    {activeRoundTab === 'octavos' && "Selecciona a los 16 ganadores de los cruces de Dieciseisavos. Solo puedes elegir equipos que 'clasificaron' en la pestaña anterior."}
+                                    {activeRoundTab === 'cuartos' && "Elige a los 8 mejores que avanzarán a Cuartos de Final desde tus seleccionados en Octavos."}
+                                    {activeRoundTab === 'semis' && "Define a los 4 semifinalistas que lucharán por el trofeo."}
+                                    {['campeon', 'subcampeon', 'tercero', 'cuarto'].includes(activeRoundTab) && `Selecciona quién ocupará el puesto de ${activeRoundTab.toUpperCase()} entre tus semifinalistas elegidos.`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-8 pb-4 border-b border-border snap-x">
                         {roundTabs.map(rt => (
                             <button
                                 key={rt.id}
                                 onClick={() => setActiveRoundTab(rt.id)}
                                 className={`snap-start whitespace-nowrap px-5 py-2.5 rounded-2xl font-bold text-sm border flex flex-col items-center gap-1 transition-all ${
-                                    activeRoundTab === rt.id ? 'bg-foreground text-background border-foreground' : 'bg-card text-foreground-muted border-border'
+                                    activeRoundTab === rt.id ? 'bg-foreground text-background border-foreground shadow-md' : 'bg-card text-foreground-muted border-border hover:bg-background-offset'
                                 }`}
                             >
                                 <span>{rt.label}</span>
@@ -609,22 +595,12 @@ const WorldCupPredictions = ({ currentUser }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
                     {extraQuestions.map(q => (
                         <div key={q.id} className="bg-background-offset border border-border rounded-2xl p-5 shadow-sm group hover:border-primary/50 transition-colors">
-                            <h4 className="text-base font-black text-foreground mb-1 group-hover:text-primary transition-colors">{q.label}</h4>
+                            <h4 className="text-base font-black text-foreground mb-1 group-hover:text-primary">{q.label}</h4>
                             <p className="text-xs text-foreground-muted mb-4">{q.desc}</p>
                             {q.type === 'player' ? (
-                                <input 
-                                    type="text" 
-                                    placeholder="Escribe el nombre..." 
-                                    value={extraPicks[q.id] || ''} 
-                                    onChange={(e) => handleExtraChange(q.id, e.target.value)} 
-                                    className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner" 
-                                />
+                                <input type="text" placeholder="Nombre del jugador..." value={extraPicks[q.id] || ''} onChange={(e) => handleExtraChange(q.id, e.target.value)} className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner" />
                             ) : (
-                                <select 
-                                    value={extraPicks[q.id] || ''} 
-                                    onChange={(e) => handleExtraChange(q.id, e.target.value)} 
-                                    className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner cursor-pointer"
-                                >
+                                <select value={extraPicks[q.id] || ''} onChange={(e) => handleExtraChange(q.id, e.target.value)} className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner cursor-pointer" >
                                     <option value="">Selecciona...</option>
                                     {q.type === 'team' ? allTeams.map(t => <option key={t.name} value={t.name}>{translateTeam(t.name)}</option>) : Object.keys(matchesByGroup).map(g => <option key={g} value={g}>{g}</option>)}
                                 </select>
@@ -642,15 +618,9 @@ const WorldCupPredictions = ({ currentUser }) => {
                                 <h4 className="text-base font-black text-foreground mb-1">{e.label}</h4>
                                 <p className="text-xs text-foreground-muted">{e.desc}</p>
                             </div>
-                            <div className="flex items-center gap-2 bg-card p-1.5 rounded-xl border border-card-border">
+                            <div className="flex items-center gap-2 bg-card p-1.5 rounded-xl border border-card-border shadow-inner">
                                 {['SI', 'NO'].map(opt => (
-                                    <button 
-                                        key={opt} 
-                                        onClick={() => handleEventChange(e.id, opt)} 
-                                        className={`w-20 py-2 rounded-lg font-black text-sm transition-all ${eventPicks[e.id] === opt ? (opt === 'SI' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'text-foreground-muted hover:text-foreground'}`}
-                                    >
-                                        {opt}
-                                    </button>
+                                    <button key={opt} onClick={() => handleEventChange(e.id, opt)} className={`w-20 py-2 rounded-lg font-black text-sm transition-all ${eventPicks[e.id] === opt ? (opt === 'SI' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'text-foreground-muted hover:text-foreground'}`}>{opt}</button>
                                 ))}
                             </div>
                         </div>
@@ -658,20 +628,24 @@ const WorldCupPredictions = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* BOTÓN FLOTANTE (FAB) DE GUARDADO */}
+            {/* BOTÓN FLOTANTE (FAB) DE GUARDADO - RESPONSIVE */}
             <div className="fixed bottom-24 right-4 sm:bottom-10 sm:right-10 z-[100]">
                 <button 
                     onClick={handleSavePredictions}
                     disabled={saving}
-                    className="bg-primary text-primary-foreground font-black text-base py-4 px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-3 disabled:opacity-50 uppercase tracking-tighter"
+                    className="bg-primary text-primary-foreground font-black py-3 px-5 sm:py-4 sm:px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-2 sm:gap-3 disabled:opacity-50 uppercase tracking-tighter text-xs sm:text-base"
                 >
                     {saving ? (
                         <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Procesando...
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Guardando</span>
                         </>
                     ) : (
-                        <><span>💾</span> Guardar</>
+                        <>
+                            <span className="text-base sm:text-lg">💾</span>
+                            <span className="hidden sm:inline">Guardar Predicciones</span>
+                            <span className="sm:hidden">Guardar</span>
+                        </>
                     )}
                 </button>
             </div>
