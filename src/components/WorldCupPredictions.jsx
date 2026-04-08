@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
-import toast from 'react-hot-toast';
+import toast from 'react-hot-toast'; // <-- Sistema de avisos profesional
 
-// --- DICCIONARIO DE TRADUCCIÓN (INGLÉS A ESPAÑOL) ---
+// --- DICCIONARIO DE TRADUCCIÓN COMPLETO ---
 const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
     "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Bosnia and Herzegovina": "Bosnia y Herzegovina",
@@ -21,7 +21,7 @@ const teamTranslations = {
     "Norway": "Noruega", "Panama": "Panamá", "Paraguay": "Paraguay", "Peru": "Perú", 
     "Poland": "Polonia", "Portugal": "Portugal", "Qatar": "Catar", "Republic of Ireland": "República de Irlanda", 
     "Romania": "Rumania", "Russia": "Rusia", "Saudi Arabia": "Arabia Saudita", "Scotland": "Escocia", 
-    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovenia", 
+    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovaquia", 
     "South Africa": "Sudáfrica", "South Korea": "Corea del Sur", "Spain": "España", "Sweden": "Suecia", 
     "Switzerland": "Suiza", "Tunisia": "Túnez", "Turkey": "Turquía", "Ukraine": "Ucrania", 
     "United Arab Emirates": "Emiratos Árabes Unidos", "United States": "Estados Unidos", 
@@ -50,6 +50,7 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [extraPicks, setExtraPicks] = useState({});
     const [eventPicks, setEventPicks] = useState({});
 
+    // --- CONFIGURACIÓN DE UI ---
     const tabs = [
         { id: 'grupos', label: 'Fase de Grupos', icon: '📅' },
         { id: 'rondas', label: 'Clasificados', icon: '📈' },
@@ -96,6 +97,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         { id: 'penales_final', label: 'Final en Penales', desc: '¿La final se decide en penales?' }
     ];
 
+    // --- EFECTOS DE CARGA ---
     useEffect(() => {
         const fetchMatchesAndData = async () => {
             try {
@@ -140,6 +142,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             } catch (err) {
                 console.error(err);
                 setError('No se pudieron cargar los datos del Mundial.');
+                toast.error("Error al cargar datos del servidor");
             } finally {
                 setLoading(false);
             }
@@ -159,6 +162,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         return () => unsubscribe();
     }, [currentUser]);
 
+    // --- LÓGICA DE NEGOCIO ---
     const allTeams = useMemo(() => {
         const teamsMap = new Map();
         Object.values(matchesByGroup).flat().forEach(m => {
@@ -187,6 +191,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         setEventPicks(prev => ({ ...prev, [eventId]: value }));
     };
 
+    // --- GUARDADO PROFESIONAL CON TOASTS ---
     const handleSavePredictions = async () => {
         setSaving(true);
         const isAdmin = currentUser.email === 'doctamayot@gmail.com';
@@ -307,6 +312,18 @@ const WorldCupPredictions = ({ currentUser }) => {
                 return newPicks;
             } else {
                 const newPicks = { ...prev };
+                
+                // --- LÓGICA DE REEMPLAZO AUTOMÁTICO PARA PODIO (LIMIT 1) ---
+                if (limit === 1) {
+                    // Quitamos este equipo de cualquier otra posición del podio para evitar duplicados
+                    podiumSlots.forEach(slot => {
+                        newPicks[slot] = newPicks[slot].filter(t => t.name !== team.name);
+                    });
+                    // Reemplazamos el actual (limite 1)
+                    newPicks[roundId] = [team];
+                    return newPicks;
+                }
+
                 if (podiumSlots.includes(roundId)) {
                     podiumSlots.forEach(slot => newPicks[slot] = newPicks[slot].filter(t => t.name !== team.name));
                 }
@@ -333,6 +350,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         if (Object.keys(matchesByGroup).length === 0) return []; 
         const missing = [];
         
+        // 1. Fase de Grupos
         const allGroupMatches = Object.values(matchesByGroup).flat();
         const totalMatches = allGroupMatches.length;
         const predictedCount = allGroupMatches.filter(m => {
@@ -343,29 +361,34 @@ const WorldCupPredictions = ({ currentUser }) => {
         }).length;
 
         if (predictedCount < totalMatches) missing.push(`Fase de Grupos (${predictedCount}/${totalMatches})`);
+
+        // 2. Rondas
         if (knockoutPicks.octavos.length < 16) missing.push(`Octavos (${knockoutPicks.octavos.length}/16)`);
         if (knockoutPicks.cuartos.length < 8) missing.push(`Cuartos (${knockoutPicks.cuartos.length}/8)`);
         if (knockoutPicks.semis.length < 4) missing.push(`Semifinales (${knockoutPicks.semis.length}/4)`);
         
-        const podMissing = [];
-        if (knockoutPicks.campeon.length === 0) podMissing.push('Campeón');
-        if (knockoutPicks.subcampeon.length === 0) podMissing.push('Subcampeón');
-        if (knockoutPicks.tercero.length === 0) podMissing.push('Tercero');
-        if (knockoutPicks.cuarto.length === 0) podMissing.push('Cuarto');
-        if (podMissing.length > 0) missing.push(`Podio (Falta: ${podMissing.join(', ')})`);
+        const podiumMissing = [];
+        if (knockoutPicks.campeon.length === 0) podiumMissing.push('Campeón');
+        if (knockoutPicks.subcampeon.length === 0) podiumMissing.push('Subcampeón');
+        if (knockoutPicks.tercero.length === 0) podiumMissing.push('Tercero');
+        if (knockoutPicks.cuarto.length === 0) podiumMissing.push('Cuarto');
+        if (podiumMissing.length > 0) missing.push(`Podio (Falta: ${podiumMissing.join(', ')})`);
 
+        // 3. Extras
         const filledExtras = extraQuestions.filter(q => {
-            const val = extraPicks[q.id];
-            return val !== undefined && val !== null && val.toString().trim() !== '';
+            const value = extraPicks[q.id];
+            return value !== undefined && value !== null && value.toString().trim() !== '';
         }).length;
         if (filledExtras < extraQuestions.length) missing.push(`Extras (${filledExtras}/${extraQuestions.length})`);
 
+        // 4. Eventos
         const filledEvents = specialEvents.filter(e => eventPicks[e.id] === 'SI' || eventPicks[e.id] === 'NO').length;
         if (filledEvents < specialEvents.length) missing.push(`Eventos (${filledEvents}/${specialEvents.length})`);
 
         return missing;
     };
 
+    // --- RENDERIZADO FINAL ---
     const missingSections = getMissingSections();
     const isAdmin = currentUser.email === 'doctamayot@gmail.com';
 
@@ -384,7 +407,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     {isAdmin ? '👑 Resultados Reales' : 'Mis Predicciones'}
                 </h2>
                 <p className="text-foreground-muted">
-                    {isAdmin ? 'Guardando resultados oficiales del torneo.' : 'Completa todas las secciones antes del inicio del torneo.'}
+                    {isAdmin ? 'Estás guardando los resultados oficiales del torneo.' : 'Completa todas las secciones antes del inicio del torneo.'}
                 </p>
             </div>
 
@@ -404,7 +427,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     )}
                     {missingSections.length > 0 ? (
                         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 sm:p-5 flex items-start gap-3 shadow-sm animate-fade-in">
-                            <div className="text-2xl sm:text-3xl shrink-0">⚠️</div>
+                            <div className="text-2xl shrink-0">⚠️</div>
                             <div>
                                 <h3 className="font-bold text-red-500 mb-1 text-sm sm:text-base">Tu predicción está incompleta</h3>
                                 <p className="text-xs sm:text-sm text-foreground-muted leading-relaxed">
@@ -424,20 +447,22 @@ const WorldCupPredictions = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* TABS PRINCIPALES */}
-            <div className="flex w-full justify-between sm:justify-start gap-2 sm:gap-4 mb-8 pb-2 border-b border-border overflow-x-auto hide-scrollbar">
+            {/* TABS PRINCIPALES CON MICRO-ETIQUETAS PARA MÓVIL */}
+            <div className="flex w-full justify-between sm:justify-start gap-1 sm:gap-4 mb-8 pb-2 border-b border-border overflow-x-auto hide-scrollbar">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-2xl font-bold transition-all whitespace-nowrap ${
+                        className={`flex-1 sm:flex-none flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1 py-3 sm:px-6 rounded-xl sm:rounded-2xl font-bold transition-all whitespace-nowrap ${
                             activeTab === tab.id 
                             ? 'bg-primary text-primary-foreground shadow-md' 
                             : 'bg-card text-foreground-muted border border-card-border hover:bg-background-offset'
                         }`}
                     >
-                        <span>{tab.icon}</span>
-                        <span className="hidden sm:block text-base">{tab.label}</span>
+                        <span className="text-xl sm:text-base">{tab.icon}</span>
+                        <span className="text-[9px] sm:text-base uppercase sm:normal-case tracking-tighter sm:tracking-normal font-black sm:font-bold">
+                            {tab.label}
+                        </span>
                     </button>
                 ))}
             </div>
@@ -472,14 +497,14 @@ const WorldCupPredictions = ({ currentUser }) => {
                                             <div className="flex flex-col gap-3">
                                                 <div className="flex items-center justify-between bg-background-offset p-2 sm:p-3 rounded-xl border border-border">
                                                     <div className="flex items-center gap-3 overflow-hidden pr-2">
-                                                        <img src={match.homeTeam.crest} className="w-8 h-8 object-cover rounded-full border border-border shrink-0" />
+                                                        <img src={match.homeTeam.crest} className="w-8 h-8 object-cover rounded-full border border-border shrink-0" alt="" />
                                                         <span className="font-bold text-sm text-foreground truncate">{translateTeam(match.homeTeam.name)}</span>
                                                     </div>
                                                     <input type="number" className="w-12 h-12 text-center bg-card border border-card-border rounded-lg text-lg font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner" placeholder="-" value={predictions[match.id]?.home ?? ''} onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)} />
                                                 </div>
                                                 <div className="flex items-center justify-between bg-background-offset p-2 sm:p-3 rounded-xl border border-border">
                                                     <div className="flex items-center gap-3 overflow-hidden pr-2">
-                                                        <img src={match.awayTeam.crest} className="w-8 h-8 object-cover rounded-full border border-border shrink-0" />
+                                                        <img src={match.awayTeam.crest} className="w-8 h-8 object-cover rounded-full border border-border shrink-0" alt="" />
                                                         <span className="font-bold text-sm text-foreground truncate">{translateTeam(match.awayTeam.name)}</span>
                                                     </div>
                                                     <input type="number" className="w-12 h-12 text-center bg-card border border-card-border rounded-lg text-lg font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner" placeholder="-" value={predictions[match.id]?.away ?? ''} onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)} />
@@ -507,7 +532,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                                     <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
                                                         <td className="py-3 flex items-center gap-2">
                                                             <span className={`w-5 text-xs font-bold ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
-                                                            <img src={team.crest} className="w-6 h-6 rounded-full border border-border" />
+                                                            <img src={team.crest} className="w-6 h-6 rounded-full border border-border" alt="" />
                                                             <span className="font-semibold truncate max-w-[120px]">{translateTeam(team.name)}</span>
                                                         </td>
                                                         <td className="py-3 text-center text-foreground-muted">{team.pj}</td>
@@ -527,44 +552,53 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             {activeTab === 'rondas' && (
                 <div className="animate-fade-in">
+                    {/* INSTRUCCIONES DINÁMICAS BASADAS EN LA RONDA */}
                     <div className="bg-primary/10 border-l-4 border-primary p-4 mb-8 rounded-r-2xl animate-fade-in shadow-sm">
                         <div className="flex items-start gap-3">
                             <span className="text-xl">💡</span>
                             <div>
-                                <h4 className="font-bold text-primary text-sm uppercase tracking-wider">¿Cómo funciona esta fase?</h4>
-                                <p className="text-xs sm:text-sm text-foreground-muted leading-relaxed">
-                                    {activeRoundTab === 'dieciseisavos' && "Los 32 clasificados aparecen automáticamente según los marcadores que pusiste en la 'Fase de Grupos'. Si falta alguien, revisa tus resultados allí."}
-                                    {activeRoundTab === 'octavos' && "Selecciona a los 16 ganadores de los cruces de Dieciseisavos. Solo puedes elegir equipos que 'clasificaron' en la pestaña anterior."}
-                                    {activeRoundTab === 'cuartos' && "Elige a los 8 mejores que avanzarán a Cuartos de Final desde tus seleccionados en Octavos."}
-                                    {activeRoundTab === 'semis' && "Define a los 4 semifinalistas que lucharán por el trofeo."}
-                                    {['campeon', 'subcampeon', 'tercero', 'cuarto'].includes(activeRoundTab) && `Selecciona quién ocupará el puesto de ${activeRoundTab.toUpperCase()} entre tus semifinalistas elegidos.`}
+                                <h4 className="font-bold text-primary text-xs sm:text-sm uppercase tracking-wider">¿Cómo funciona esta fase?</h4>
+                                <p className="text-[11px] sm:text-sm text-foreground-muted mt-1 leading-relaxed">
+                                    {activeRoundTab === 'dieciseisavos' && "Los 32 clasificados aparecen automáticamente según los marcadores que pusiste en la pestaña 'Grupos'."}
+                                    {activeRoundTab === 'octavos' && "Selecciona a los 16 ganadores que avanzarán desde los Dieciseisavos de la lista anterior."}
+                                    {activeRoundTab === 'cuartos' && "Elige a los 8 mejores equipos que avanzarán a Cuartos de Final."}
+                                    {activeRoundTab === 'semis' && "Define a los 4 semifinalistas que lucharán por el trofeo mundial."}
+                                    {['campeon', 'subcampeon', 'tercero', 'cuarto'].includes(activeRoundTab) && `Selecciona a tu favorito para el puesto de ${activeRoundTab.toUpperCase()}. Si cambias de opinión, toca a otro equipo.`}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-8 pb-4 border-b border-border snap-x">
+                    {/* TABS DE RONDAS CON MICRO-ETIQUETAS */}
+                    <div className="flex overflow-x-auto hide-scrollbar gap-1.5 mb-8 pb-4 border-b border-border snap-x">
                         {roundTabs.map(rt => (
                             <button
                                 key={rt.id}
                                 onClick={() => setActiveRoundTab(rt.id)}
-                                className={`snap-start whitespace-nowrap px-5 py-2.5 rounded-2xl font-bold text-sm border flex flex-col items-center gap-1 transition-all ${
-                                    activeRoundTab === rt.id ? 'bg-foreground text-background border-foreground shadow-md' : 'bg-card text-foreground-muted border-border hover:bg-background-offset'
+                                className={`snap-start whitespace-nowrap px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold transition-all border flex flex-col items-center gap-0.5 ${
+                                    activeRoundTab === rt.id 
+                                    ? 'bg-foreground text-background border-foreground shadow-md' 
+                                    : 'bg-card text-foreground-muted border-border hover:border-foreground/50'
                                 }`}
                             >
-                                <span>{rt.label}</span>
-                                <span className={`text-[10px] uppercase ${rt.id === 'dieciseisavos' || knockoutPicks[rt.id].length === rt.limit ? 'text-green-500' : 'opacity-70'}`}>
-                                    {rt.id === 'dieciseisavos' ? 32 : knockoutPicks[rt.id].length} / {rt.limit}
+                                <span className="text-[9px] sm:text-sm uppercase tracking-tighter">{rt.label}</span>
+                                <span className={`text-[8px] sm:text-[10px] font-black uppercase ${
+                                    rt.id === 'dieciseisavos' || knockoutPicks[rt.id]?.length === rt.limit 
+                                    ? (activeRoundTab === rt.id ? 'text-background/80' : 'text-green-500') 
+                                    : 'opacity-70'
+                                }`}>
+                                    {rt.id === 'dieciseisavos' ? 32 : knockoutPicks[rt.id]?.length || 0}/{rt.limit}
                                 </span>
                             </button>
                         ))}
                     </div>
+
                     <div className="bg-background-offset border border-border p-6 sm:p-10 rounded-3xl shadow-sm">
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                             {activeRoundTab === 'dieciseisavos' ? (
                                 qualifiedRoundOf32.all32.map((team, idx) => (
                                     <div key={idx} className="bg-card border border-card-border p-4 rounded-xl flex flex-col items-center text-center shadow-sm">
-                                        <img src={team.crest} className="w-10 h-10 rounded-full border border-border mb-2" />
+                                        <img src={team.crest} className="w-10 h-10 rounded-full border border-border mb-2" alt="" />
                                         <span className="font-bold text-xs text-foreground leading-tight">{translateTeam(team.name)}</span>
                                     </div>
                                 ))
@@ -580,7 +614,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                                 isSelected ? 'bg-primary/10 border-primary scale-105 shadow-md' : 'bg-card border-card-border hover:border-primary/50'
                                             }`}
                                         >
-                                            <img src={team.crest} className="w-12 h-12 rounded-full border border-border mb-3" />
+                                            <img src={team.crest} className="w-12 h-12 rounded-full border border-border mb-3" alt="" />
                                             <span className={`font-bold text-xs sm:text-sm ${isSelected ? 'text-primary' : 'text-foreground'}`}>{translateTeam(team.name)}</span>
                                         </button>
                                     );
@@ -598,9 +632,19 @@ const WorldCupPredictions = ({ currentUser }) => {
                             <h4 className="text-base font-black text-foreground mb-1 group-hover:text-primary">{q.label}</h4>
                             <p className="text-xs text-foreground-muted mb-4">{q.desc}</p>
                             {q.type === 'player' ? (
-                                <input type="text" placeholder="Nombre del jugador..." value={extraPicks[q.id] || ''} onChange={(e) => handleExtraChange(q.id, e.target.value)} className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Escribe el nombre..." 
+                                    value={extraPicks[q.id] || ''} 
+                                    onChange={(e) => handleExtraChange(q.id, e.target.value)} 
+                                    className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner" 
+                                />
                             ) : (
-                                <select value={extraPicks[q.id] || ''} onChange={(e) => handleExtraChange(q.id, e.target.value)} className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner cursor-pointer" >
+                                <select 
+                                    value={extraPicks[q.id] || ''} 
+                                    onChange={(e) => handleExtraChange(q.id, e.target.value)} 
+                                    className="w-full bg-card border border-card-border rounded-xl py-3 px-4 text-sm font-semibold text-foreground focus:ring-2 focus:ring-primary shadow-inner cursor-pointer"
+                                >
                                     <option value="">Selecciona...</option>
                                     {q.type === 'team' ? allTeams.map(t => <option key={t.name} value={t.name}>{translateTeam(t.name)}</option>) : Object.keys(matchesByGroup).map(g => <option key={g} value={g}>{g}</option>)}
                                 </select>
@@ -620,7 +664,13 @@ const WorldCupPredictions = ({ currentUser }) => {
                             </div>
                             <div className="flex items-center gap-2 bg-card p-1.5 rounded-xl border border-card-border shadow-inner">
                                 {['SI', 'NO'].map(opt => (
-                                    <button key={opt} onClick={() => handleEventChange(e.id, opt)} className={`w-20 py-2 rounded-lg font-black text-sm transition-all ${eventPicks[e.id] === opt ? (opt === 'SI' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'text-foreground-muted hover:text-foreground'}`}>{opt}</button>
+                                    <button 
+                                        key={opt} 
+                                        onClick={() => handleEventChange(e.id, opt)} 
+                                        className={`w-20 py-2 rounded-lg font-black text-sm transition-all ${eventPicks[e.id] === opt ? (opt === 'SI' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'text-foreground-muted hover:text-foreground'}`}
+                                    >
+                                        {opt}
+                                    </button>
                                 ))}
                             </div>
                         </div>
@@ -628,7 +678,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* BOTÓN FLOTANTE (FAB) DE GUARDADO - RESPONSIVE */}
+            {/* BOTÓN FLOTANTE (FAB) DE GUARDADO - OPTIMIZADO RESPONSIVE */}
             <div className="fixed bottom-24 right-4 sm:bottom-10 sm:right-10 z-[100]">
                 <button 
                     onClick={handleSavePredictions}
@@ -636,13 +686,11 @@ const WorldCupPredictions = ({ currentUser }) => {
                     className="bg-primary text-primary-foreground font-black py-3 px-5 sm:py-4 sm:px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-2 sm:gap-3 disabled:opacity-50 uppercase tracking-tighter text-xs sm:text-base"
                 >
                     {saving ? (
-                        <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            <span>Guardando</span>
-                        </>
+                        <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>...</span></>
                     ) : (
                         <>
                             <span className="text-base sm:text-lg">💾</span>
+                            {/* Ocultamos "Predicciones" en móvil */}
                             <span className="hidden sm:inline">Guardar Predicciones</span>
                             <span className="sm:hidden">Guardar</span>
                         </>
