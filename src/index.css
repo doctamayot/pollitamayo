@@ -1,30 +1,78 @@
 @import "tailwindcss";
 
-/* PASO 1: Definimos toda nuestra paleta de colores aquí dentro de @theme */
+/* PASO 1: Variables CSS puras. Esto garantiza que el botón de Modo Oscuro funcione. */
+:root {
+  /* MODO CLARO (Por defecto) */
+  --bg-base: #f9fafb; /* Blanco roto / Gris muy claro */
+  --bg-offset: #ffffff; /* Blanco puro para la barra lateral */
+  --text-base: #111827; /* Gris casi negro */
+  --text-muted: #6b7280;
+  --primary-base: #f59e0b; /* Dorado Premium */
+  --primary-text: #ffffff;
+  --border-base: #e5e7eb;
+  --card-base: #ffffff;
+  --card-border: rgba(0,0,0,0.05);
+}
+
+.dark {
+  /* MODO OSCURO (Se activa al presionar la luna) */
+  --bg-base: #111827; /* Fondo general oscuro */
+  --bg-offset: #1f2937; /* Barra lateral un tono más claro para contrastar */
+  --text-base: #f9fafb;
+  --text-muted: #9ca3af;
+  --primary-base: #f59e0b; /* El mismo dorado */
+  --primary-text: #ffffff;
+  --border-base: #374151;
+  --card-base: #1f2937;
+  --card-border: rgba(255,255,255,0.05);
+}
+
+/* PASO 2: Le decimos a Tailwind v4 que use nuestras variables */
 @theme {
-  --color-uefa-dark-blue: #040220;
-  --color-uefa-dark-blue-secondary: #100c3b;
-  --color-uefa-magenta: #e90052;
-  --color-uefa-cyan: #00f0f0;
-  --color-uefa-text-secondary: #a9a5c4;
-  --color-uefa-border: rgba(128, 128, 255, 0.2);
-  --color-uefa-primary-blue: #0d69ff;
+  --color-background: var(--bg-base);
+  --color-background-offset: var(--bg-offset);
+  --color-foreground: var(--text-base);
+  --color-foreground-muted: var(--text-muted);
+  --color-primary: var(--primary-base);
+  --color-primary-foreground: var(--primary-text);
+  --color-border: var(--border-base);
+  --color-card: var(--card-base);
+  --color-card-border: var(--card-border);
 }
 
-/* PASO 2: Usamos las variables CSS que acabamos de crear */
+/* PASO 3: Estilos globales obligatorios */
 body {
-  background-color: var(--color-uefa-dark-blue);
-  color: var(--color-uefa-text-secondary);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* PASO 3: Actualizamos también los estilos de los formularios */
+/* Formularios */
 .form-input, .form-select, .form-textarea {
-    @apply bg-slate-800/80 border-slate-600 rounded-md shadow-sm text-slate-200;
+  @apply bg-background border border-border rounded-lg shadow-sm px-4 py-2.5 text-sm;
+  color: var(--color-foreground);
+  transition: all 0.2s;
 }
+
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-    border-color: var(--color-uefa-magenta);
-    --tw-ring-color: var(--color-uefa-magenta); /* Esto controla el color del "anillo" de foco */
-    --tw-ring-offset-shadow: none; /* Mejoras opcionales */
-    --tw-ring-shadow: none;
-    box-shadow: none;
+  @apply ring-2;
+  border-color: var(--color-primary);
+  --tw-ring-color: rgba(245, 158, 11, 0.2); 
+  outline: none;
+}
+
+::placeholder {
+  color: var(--color-foreground-muted);
+  opacity: 0.7;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }

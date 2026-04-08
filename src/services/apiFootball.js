@@ -121,3 +121,17 @@ export const getLiveStatusesByIds = async (matchIds) => {
     });
     return statusMap;
 };
+
+// Añade esto al final de tu apiFootball.js
+
+export const getWorldCupMatches = async () => {
+    // Usamos tu función centralizada para evitar el CORS.
+    // Pasamos el path exacto del Mundial (WC)
+    const data = await fetchFromApi('competitions/WC/matches');
+    
+    if (!data || !data.matches) {
+        throw new Error("La respuesta de la API no contiene los partidos del mundial.");
+    }
+
+    return data; 
+};

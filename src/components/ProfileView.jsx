@@ -18,7 +18,6 @@ const achievementsMap = {
 const ProfileView = ({ userId, currentUser }) => {
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
-    // --- ▼▼▼ LÍNEA RESTAURADA ▼▼▼ ---
     const [visibleHitsCount, setVisibleHitsCount] = useState(5);
 
     useEffect(() => {
@@ -26,7 +25,6 @@ const ProfileView = ({ userId, currentUser }) => {
             if (!userId) { setLoading(false); return; }
             setLoading(true);
             try {
-                // ... (toda la lógica de fetching y cálculo no cambia)
                 const userDocRef = doc(db, 'users', userId);
                 const leaderboardDocRef = doc(db, 'leaderboard', userId);
                 const quinielasQuery = query(collection(db, 'quinielas'), where("isClosed", "==", true));
@@ -105,82 +103,150 @@ const ProfileView = ({ userId, currentUser }) => {
         calculateProfile();
     }, [userId, currentUser]);
 
-    if (loading) return <div className="text-center text-uefa-text-secondary py-16">Calculando estadísticas...</div>;
-    if (!profileData) return <div className="text-center text-uefa-text-secondary py-16">No se pudo cargar el perfil.</div>;
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-foreground-muted font-bold tracking-widest uppercase text-sm">Calculando Estadísticas...</p>
+        </div>
+    );
+    
+    if (!profileData) return (
+        <div className="text-center py-16 animate-fade-in bg-card border border-card-border rounded-3xl shadow-sm">
+            <div className="text-5xl mb-4 opacity-50">👤</div>
+            <h3 className="text-xl font-bold text-foreground mb-2">Perfil no encontrado</h3>
+            <p className="text-foreground-muted">No se pudo cargar la información de este usuario.</p>
+        </div>
+    );
 
     const { displayName, stats, totalWins, achievements, exactHits } = profileData;
     
-    // --- ▼▼▼ FUNCIÓN RESTAURADA ▼▼▼ ---
     const handleLoadMore = () => {
         setVisibleHitsCount(prevCount => prevCount + 5);
     };
 
     return (
-        <div className="bg-uefa-dark-blue-secondary p-4 sm:p-8 rounded-lg max-w-4xl mx-auto border border-uefa-border">
-            <h2 className="text-3xl font-bold text-uefa-cyan mb-8 text-center">{displayName}</h2>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-center mb-10">
-                <div className="bg-uefa-dark-blue/50 p-4 rounded-lg border border-uefa-border/50"><p className="text-3xl font-bold text-white">{stats.quinielasJugadas}</p><p className="text-xs text-uefa-text-secondary uppercase tracking-wider">Jugadas</p></div>
-                <div className="bg-uefa-dark-blue/50 p-4 rounded-lg border border-uefa-border/50"><p className="text-3xl font-bold text-white">{totalWins}</p><p className="text-xs text-uefa-text-secondary uppercase tracking-wider">Victorias</p></div>
-                <div className="bg-uefa-dark-blue/50 p-4 rounded-lg border border-uefa-border/50"><p className="text-3xl font-bold text-white">{stats.totalPoints}</p><p className="text-xs text-uefa-text-secondary uppercase tracking-wider">Puntos Totales</p></div>
-                <div className="bg-uefa-dark-blue/50 p-4 rounded-lg border border-uefa-border/50"><p className="text-3xl font-bold text-white">{stats.totalAciertosExactos}</p><p className="text-xs text-uefa-text-secondary uppercase tracking-wider">Aciertos Exactos</p></div>
-                <div className="bg-uefa-dark-blue/50 p-4 rounded-lg border border-uefa-border/50"><p className="text-3xl font-bold text-white">{stats.mejorRachaVictorias}</p><p className="text-xs text-uefa-text-secondary uppercase tracking-wider">Mejor Racha</p></div>
-                <div className="bg-uefa-dark-blue/50 p-4 rounded-lg border border-uefa-border/50"><p className="text-3xl font-bold text-white">{stats.lastPlaceFinishes}</p><p className="text-xs text-uefa-text-secondary uppercase tracking-wider">Último Lugar</p></div>
+        <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border max-w-4xl mx-auto shadow-sm animate-fade-in w-full">
+            <div className="text-center mb-10">
+                <div className="w-20 h-20 bg-background-offset border border-border rounded-full flex items-center justify-center text-4xl mx-auto mb-4 shadow-inner">
+                    👤
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tighter">
+                    {displayName}
+                </h2>
+                <p className="text-primary font-bold tracking-widest uppercase text-xs mt-2">
+                    Estadísticas Oficiales
+                </p>
             </div>
             
-            <h3 className="text-xl font-bold text-uefa-cyan mb-4 text-center">Insignias y Logros</h3>
-            <div className="space-y-3">
-                {achievements && achievements.length > 0 ? achievements.map(key => achievementsMap[key] && (
-                    <div key={key} className="flex items-center bg-uefa-dark-blue/50 p-4 rounded-md border border-uefa-border/50">
-                        <span className="text-3xl mr-4">{achievementsMap[key].icon}</span>
-                        <div>
-                            <p className="font-bold text-white">{achievementsMap[key].name}</p>
-                            <p className="text-sm text-uefa-text-secondary">{achievementsMap[key].desc}</p>
-                        </div>
-                    </div>
-                )) : (<p className="text-center text-uefa-text-secondary py-4">Aún no has desbloqueado ninguna insignia.</p>)}
+            {/* --- ESTADÍSTICAS GENERALES --- */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-12">
+                <div className="bg-background-offset p-4 rounded-2xl border border-border text-center flex flex-col justify-center shadow-inner hover:border-primary/50 transition-colors">
+                    <p className="text-3xl font-black text-foreground">{stats.quinielasJugadas}</p>
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mt-1">Jugadas</p>
+                </div>
+                <div className="bg-background-offset p-4 rounded-2xl border border-border text-center flex flex-col justify-center shadow-inner hover:border-primary/50 transition-colors">
+                    <p className="text-3xl font-black text-primary">{totalWins}</p>
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mt-1">Victorias</p>
+                </div>
+                <div className="bg-background-offset p-4 rounded-2xl border border-border text-center flex flex-col justify-center shadow-inner hover:border-primary/50 transition-colors">
+                    <p className="text-3xl font-black text-foreground">{stats.totalPoints}</p>
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mt-1">Pts Totales</p>
+                </div>
+                <div className="bg-background-offset p-4 rounded-2xl border border-border text-center flex flex-col justify-center shadow-inner hover:border-primary/50 transition-colors">
+                    <p className="text-3xl font-black text-green-500">{stats.totalAciertosExactos}</p>
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mt-1">Aciertos 100%</p>
+                </div>
+                <div className="bg-background-offset p-4 rounded-2xl border border-border text-center flex flex-col justify-center shadow-inner hover:border-primary/50 transition-colors">
+                    <p className="text-3xl font-black text-amber-500">{stats.mejorRachaVictorias}</p>
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mt-1">Mejor Racha</p>
+                </div>
+                <div className="bg-background-offset p-4 rounded-2xl border border-border text-center flex flex-col justify-center shadow-inner hover:border-primary/50 transition-colors">
+                    <p className="text-3xl font-black text-red-500">{stats.lastPlaceFinishes}</p>
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mt-1">Último Lugar</p>
+                </div>
             </div>
-
-            <h3 className="text-xl font-bold text-uefa-cyan mt-10 mb-4 text-center">Muro de la Fama: Aciertos Perfectos</h3>
-            <div className="space-y-3">
-                {exactHits && exactHits.length > 0 ? (
-                    exactHits.slice(0, visibleHitsCount).map(hit => (
-                        <div key={hit.id} className="bg-uefa-dark-blue/60 p-4 rounded-md border border-uefa-border/50">
-                            <p className="text-xs text-uefa-text-secondary font-semibold mb-2">
-                                En la quiniela: <span className="text-uefa-cyan">{hit.quinielaName}</span>
-                            </p>
-                            <div className="flex items-center justify-between text-[10px] text-white">
-                                <div className="flex items-center justify-end flex-1 space-x-2">
-                                    <span className="text-right">{hit.matchData.home}</span>
-                                    <img src={hit.matchData.homeCrest || `https://flagcdn.com/w20/${hit.matchData.homeCode}.png`} className="w-5 h-5 object-contain" alt={hit.matchData.home} />
-                                </div>
-                                <div className="flex items-center justify-center space-x-2 w-20 flex-shrink-0">
-                                    <span className="font-bold text-lg text-green-400">{hit.realResult.home}</span>
-                                    <span className="text-uefa-text-secondary text-sm">vs</span>
-                                    <span className="font-bold text-lg text-green-400">{hit.realResult.away}</span>
-                                </div>
-                                <div className="flex items-center justify-start flex-1 space-x-2">
-                                    <img src={hit.matchData.awayCrest || `https://flagcdn.com/w20/${hit.matchData.awayCode}.png`} className="w-5 h-5 object-contain" alt={hit.matchData.away} />
-                                    <span>{hit.matchData.away}</span>
-                                </div>
+            
+            {/* --- INSIGNIAS Y LOGROS --- */}
+            <div className="mb-12">
+                <h3 className="text-2xl font-black text-foreground mb-6 flex items-center gap-3 border-b border-border pb-3">
+                    <span>🎖️</span> Insignias y Logros
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {achievements && achievements.length > 0 ? achievements.map(key => achievementsMap[key] && (
+                        <div key={key} className="flex items-center bg-background-offset p-4 rounded-2xl border border-border hover:border-primary/50 transition-colors group shadow-sm">
+                            <span className="text-4xl mr-4 group-hover:scale-110 transition-transform">{achievementsMap[key].icon}</span>
+                            <div>
+                                <p className="font-bold text-foreground">{achievementsMap[key].name}</p>
+                                <p className="text-xs text-foreground-muted leading-relaxed mt-1">{achievementsMap[key].desc}</p>
                             </div>
                         </div>
-                    ))
-                ) : (
-                    <p className="text-center text-uefa-text-secondary py-4">Aún no has logrado un acierto perfecto.</p>
-                )}
+                    )) : (
+                        <div className="col-span-full bg-background-offset p-6 rounded-2xl border border-border text-center">
+                            <p className="text-foreground-muted font-semibold">Aún no se han desbloqueado insignias.</p>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {exactHits && visibleHitsCount < exactHits.length && (
-                <div className="text-center mt-6">
-                    <button 
-                        onClick={handleLoadMore}
-                        className="bg-uefa-primary-blue hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg transition duration-300"
-                    >
-                        Cargar Más
-                    </button>
+            {/* --- MURO DE LA FAMA (ACIERTOS PERFECTOS) --- */}
+            <div>
+                <h3 className="text-2xl font-black text-foreground mb-6 flex items-center gap-3 border-b border-border pb-3">
+                    <span>🎯</span> Muro de la Fama: Aciertos Perfectos
+                </h3>
+                <div className="space-y-4">
+                    {exactHits && exactHits.length > 0 ? (
+                        <>
+                            {exactHits.slice(0, visibleHitsCount).map(hit => (
+                                <div key={hit.id} className="bg-background-offset p-4 sm:p-5 rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-green-500/50 transition-colors">
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1">En la quiniela</p>
+                                        <p className="text-sm font-black text-primary truncate max-w-[200px] sm:max-w-xs">{hit.quinielaName}</p>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-center bg-card p-3 rounded-xl border border-card-border shadow-inner shrink-0">
+                                        <div className="flex items-center justify-end w-24 sm:w-32 gap-2">
+                                            <span className="text-xs font-bold text-foreground truncate">{hit.matchData.home}</span>
+                                            <div className="w-6 h-6 bg-background rounded-full border border-border flex items-center justify-center shrink-0">
+                                                <img src={hit.matchData.homeCrest || `https://flagcdn.com/w20/${hit.matchData.homeCode}.png`} className="w-4 h-4 object-contain" alt={hit.matchData.home} />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-center gap-2 px-3">
+                                            <span className="font-black text-lg text-green-500">{hit.realResult.home}</span>
+                                            <span className="text-foreground-muted text-xs font-bold">-</span>
+                                            <span className="font-black text-lg text-green-500">{hit.realResult.away}</span>
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-start w-24 sm:w-32 gap-2">
+                                            <div className="w-6 h-6 bg-background rounded-full border border-border flex items-center justify-center shrink-0">
+                                                <img src={hit.matchData.awayCrest || `https://flagcdn.com/w20/${hit.matchData.awayCode}.png`} className="w-4 h-4 object-contain" alt={hit.matchData.away} />
+                                            </div>
+                                            <span className="text-xs font-bold text-foreground truncate">{hit.matchData.away}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {visibleHitsCount < exactHits.length && (
+                                <div className="text-center pt-4">
+                                    <button 
+                                        onClick={handleLoadMore}
+                                        className="bg-card border border-border hover:border-primary text-foreground font-bold py-2.5 px-6 rounded-full transition-colors text-sm shadow-sm"
+                                    >
+                                        Ver Más Aciertos ({exactHits.length - visibleHitsCount})
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="bg-background-offset p-8 rounded-2xl border border-border text-center shadow-inner">
+                            <div className="text-4xl mb-3 opacity-50">🔭</div>
+                            <p className="text-foreground-muted font-semibold">Aún no se ha logrado un acierto perfecto.</p>
+                            <p className="text-xs text-foreground-muted mt-2">¡Sigue intentando para aparecer aquí!</p>
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
+
         </div>
     );
 };

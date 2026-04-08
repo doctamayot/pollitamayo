@@ -33,16 +33,24 @@ const HistoryView = ({ closedQuinielas, user }) => {
     }, [selectedId]);
 
     if (closedQuinielas.length === 0) {
-        return <div className="text-center text-slate-400 py-16">Aún no hay quinielas en el historial.</div>;
+        return (
+            <div className="text-center py-16 animate-fade-in">
+                <div className="text-5xl mb-4 opacity-50">📅</div>
+                <h3 className="text-xl font-bold text-foreground mb-2">Sin Historial</h3>
+                <p className="text-foreground-muted">Aún no hay quinielas cerradas en el historial.</p>
+            </div>
+        );
     }
 
     const selectedQuiniela = closedQuinielas.find(q => q.id === selectedId);
 
     return (
-        <div className="bg-slate-800/50 p-4 sm:p-6 rounded-lg">
-            <h2 className="text-2xl font-bold text-blue-400 mb-6 text-center">Historial de Pollas</h2>
+        <div className="bg-card border border-card-border p-4 sm:p-8 rounded-3xl shadow-sm animate-fade-in w-full">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tighter mb-8 text-center flex items-center justify-center gap-3">
+                <span>Historial de Pollas</span>
+            </h2>
             
-            <div className="flex justify-center mb-6">
+            <div className="flex justify-center mb-8 bg-background-offset p-2 sm:p-3 rounded-2xl sm:rounded-full border border-border shadow-inner">
                 <QuinielaSelector 
                     quinielas={closedQuinielas}
                     selectedId={selectedId}
@@ -50,14 +58,21 @@ const HistoryView = ({ closedQuinielas, user }) => {
                 />
             </div>
 
-            {loading && <p className="text-center text-slate-400">Cargando tabla de posiciones...</p>}
+            {loading && (
+                <div className="flex flex-col items-center justify-center py-12">
+                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p className="text-foreground-muted font-bold tracking-widest uppercase text-sm">Cargando posiciones...</p>
+                </div>
+            )}
 
             {!loading && selectedQuiniela && (
-                <ScoringTable 
-                    quiniela={selectedQuiniela}
-                    allPredictions={predictions}
-                    currentUserDisplayName={user.displayName}
-                />
+                <div className="overflow-hidden rounded-2xl border border-border">
+                    <ScoringTable 
+                        quiniela={selectedQuiniela}
+                        allPredictions={predictions}
+                        currentUserDisplayName={user.displayName}
+                    />
+                </div>
             )}
         </div>
     );

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// Componentesss
-import QuinielaEditor from './QuinielaEditor'; // <-- Cambiado de CreateQuiniela
+// Componentes
+import QuinielaEditor from './QuinielaEditor'; 
 import QuinielaView from './QuinielaView';
 import QuinielaSelector from './QuinielaSelector';
 
@@ -55,51 +55,80 @@ const AdminDashboard = ({ user, allQuinielas }) => {
             case 'manage':
             default:
                 return selectedQuiniela ? (
-                    <>
+                    <div className="animate-fade-in">
                         <QuinielaView user={user} quiniela={selectedQuiniela} isAdmin={true} />
-                        <div className="mt-8 pt-6 border-t border-red-500/20 text-center">
-                             <button onClick={handleDeleteQuiniela} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-md text-sm transition duration-300 disabled:bg-red-800 disabled:cursor-wait">
-                                {isDeleting ? 'Borrando...' : 'Borrar Esta Quiniela'}
+                        <div className="mt-12 pt-6 border-t border-red-500/20 text-center">
+                             <button 
+                                onClick={handleDeleteQuiniela} 
+                                disabled={isDeleting} 
+                                className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 font-bold py-2.5 px-6 rounded-xl text-sm transition-colors duration-300 disabled:opacity-50 disabled:cursor-wait"
+                            >
+                                {isDeleting ? 'Borrando...' : '🗑️ Borrar Esta Quiniela'}
                             </button>
-                            <p className="text-xs text-slate-500 mt-2">Esta acción no se puede deshacer.</p>
+                            <p className="text-xs text-foreground-muted mt-3">Esta acción eliminará todos los pronósticos de los jugadores y no se puede deshacer.</p>
                         </div>
-                    </>
+                    </div>
                 ) : (
-                    <div className="text-center py-16 text-slate-400">
-                        <p>No has creado ninguna quiniela todavía.</p>
-                        <p className="mt-2 text-sm">Usa la pestaña "Crear Nueva Quiniela" para empezar.</p>
+                    <div className="text-center py-16 animate-fade-in bg-card border border-card-border rounded-3xl shadow-sm">
+                        <div className="text-5xl mb-4 opacity-50">⚽</div>
+                        <h3 className="text-xl font-bold text-foreground mb-2">Sin Quinielas</h3>
+                        <p className="text-foreground-muted">No has creado ninguna quiniela todavía.</p>
+                        <button 
+                            onClick={() => setActiveView('create')}
+                            className="mt-6 bg-primary text-primary-foreground font-bold py-2 px-6 rounded-full hover:bg-amber-600 transition-colors shadow-sm"
+                        >
+                            Crear mi primera quiniela
+                        </button>
                     </div>
                 );
         }
     };
 
     return (
-        <div>
-            <div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700 mb-6 gap-4">
-                <div className="flex space-x-2">
-                    <button onClick={() => setActiveView('manage')} className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${activeView === 'manage' ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
-                        Gestionar
+        <div className="w-full">
+            {/* TABS Y CONTROLES SUPERIORES */}
+            <div className="flex flex-col md:flex-row justify-between items-center border-b border-border mb-8 gap-4 pb-2">
+                <div className="flex space-x-2 w-full md:w-auto overflow-x-auto hide-scrollbar">
+                    <button 
+                        onClick={() => setActiveView('manage')} 
+                        className={`px-5 py-3 font-bold text-sm rounded-t-xl transition-colors whitespace-nowrap ${
+                            activeView === 'manage' 
+                            ? 'bg-card border-t border-x border-card-border text-primary shadow-sm relative top-[1px]' 
+                            : 'text-foreground-muted hover:text-foreground hover:bg-background-offset'
+                        }`}
+                    >
+                        Gestionar Activas
                     </button>
-                    <button onClick={() => setActiveView('create')} className={`px-4 py-3 font-semibold text-sm rounded-t-md border-b-2 transition-colors duration-200 ${activeView === 'create' ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                    <button 
+                        onClick={() => setActiveView('create')} 
+                        className={`px-5 py-3 font-bold text-sm rounded-t-xl transition-colors whitespace-nowrap ${
+                            activeView === 'create' 
+                            ? 'bg-card border-t border-x border-card-border text-primary shadow-sm relative top-[1px]' 
+                            : 'text-foreground-muted hover:text-foreground hover:bg-background-offset'
+                        }`}
+                    >
                         Crear Nueva
                     </button>
                 </div>
                 
                 {activeView === 'manage' && selectedQuiniela && (
-                    <div className="flex items-center gap-x-4">
-                        <QuinielaSelector quinielas={allQuinielas} selectedId={selectedId} setSelectedId={setSelectedId}/>
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <div className="flex-1 md:flex-none">
+                            <QuinielaSelector quinielas={allQuinielas} selectedId={selectedId} setSelectedId={setSelectedId}/>
+                        </div>
                         <button 
                             onClick={() => setActiveView('edit')} 
                             disabled={selectedQuiniela.isClosed}
-                            className="bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
+                            className="bg-background-offset border border-border hover:border-foreground/50 text-foreground font-bold py-2.5 px-5 rounded-xl text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             title={selectedQuiniela.isClosed ? "No se puede editar una quiniela cerrada" : "Editar quiniela seleccionada"}
                         >
-                            Editar
+                            <span>✏️</span> <span className="hidden sm:inline">Editar</span>
                         </button>
                     </div>
                 )}
             </div>
 
+            {/* CONTENIDO (VISTA O EDITOR) */}
             {renderContent()}
         </div>
     );
