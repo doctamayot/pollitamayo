@@ -420,7 +420,10 @@ const WorldCupPredictions = ({ currentUser }) => {
                             <div>
                                 <h3 className="font-bold text-amber-500 mb-1 text-sm sm:text-base">Pago Pendiente</h3>
                                 <p className="text-xs sm:text-sm text-foreground-muted leading-relaxed">
-                                    Aún no se ha confirmado el pago de tu inscripción. Recuerda que es requisito indispensable para participar por los premios.
+                                    Aún no se ha confirmado el pago de tu inscripción. Recuerda que es requisito indispensable para participar.{' '}
+                                    <a href="https://wa.me/573144261190" target="_blank" rel="noopener noreferrer" className="text-amber-500 font-bold underline hover:text-amber-400 transition-colors">
+                                        Paga aquí vía WhatsApp.
+                                    </a>
                                 </p>
                             </div>
                         </div>

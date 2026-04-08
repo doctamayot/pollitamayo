@@ -1,24 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-// AÑADIMOS query Y where PARA EL TIEMPO REAL EXACTO
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 
 const WorldCupPot = () => {
     const [paidUsersCount, setPaidUsersCount] = useState(0);
+    const [unpaidUsersCount, setUnpaidUsersCount] = useState(0); // Nuevo estado para los que faltan
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Creamos una consulta (query) que SOLO escucha a los usuarios que ya pagaron
-        const q = query(collection(db, 'worldCupPredictions'), where('hasPaid', '==', true));
+        // Quitamos el 'where' para escuchar a TODOS los inscritos en la polla
+        const q = query(collection(db, 'worldCupPredictions'));
         
-        // onSnapshot mantendrá un túnel abierto en tiempo real con esa consulta
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            // snapshot.size nos da el número exacto al instante, sin tener que filtrar nada
-            setPaidUsersCount(snapshot.size);
+            let paid = 0;
+            let unpaid = 0;
+
+            // Recorremos todos los documentos y los dividimos
+            snapshot.forEach((doc) => {
+                if (doc.data().hasPaid === true) {
+                    paid++;
+                } else {
+                    unpaid++;
+                }
+            });
+
+            setPaidUsersCount(paid);
+            setUnpaidUsersCount(unpaid);
             setLoading(false);
         });
 
-        // Limpiamos el túnel cuando cerramos la pantalla
         return () => unsubscribe();
     }, []);
 
@@ -26,13 +36,18 @@ const WorldCupPot = () => {
     const ENTRY_FEE = 170000;
     const grossPot = paidUsersCount * ENTRY_FEE;
     
+    // Cálculos del posible pot (sumando los que no han pagado)
+    const totalUsers = paidUsersCount + unpaidUsersCount;
+    const possibleGrossPot = totalUsers * ENTRY_FEE;
+    const possibleNetPot = possibleGrossPot * 0.90; // El premio posible descontando el 10%
+    
     // El 10% es para gastos internos
     const adminFee = grossPot * 0.10;
     
-    // El 90% restante es la Bolsa de Premios (Net Pot)
+    // El 90% restante es la Bolsa de Premios real (Net Pot)
     const netPot = grossPot * 0.90;
 
-    // Distribución del Net Pot
+    // Distribución del Net Pot real
     const firstPlace = netPot * 0.70;
     const secondPlace = netPot * 0.20;
     const thirdPlace = netPot * 0.05;
@@ -77,8 +92,11 @@ const WorldCupPot = () => {
                 <p className="text-5xl sm:text-7xl font-black text-white drop-shadow-md relative z-10 transition-all duration-500">
                     {formatCOP(netPot)}
                 </p>
-                <p className="text-amber-100/80 text-sm mt-4 font-medium relative z-10">
-                    Basado en {paidUsersCount} participantes confirmados
+                <p className="text-amber-100/80 text-sm mt-4 font-medium relative z-10 leading-relaxed">
+                    Basado en {paidUsersCount} participantes confirmados.<br className="hidden sm:block" />
+                    <span className="text-amber-200/90 text-xs sm:text-sm mt-1 sm:mt-0 block sm:inline">
+                        Hay {unpaidUsersCount} inscritos pendientes de pago para un posible Pot de <strong className="text-white">{formatCOP(possibleNetPot)}</strong>.
+                    </span>
                 </p>
             </div>
 
