@@ -147,7 +147,7 @@ const WorldCupPot = () => {
                     </li>
                     <li className="flex items-start gap-3">
                         <span className="text-primary mt-0.5">⚙️</span>
-                        <p>Del 100% recaudado ({formatCOP(grossPot)}), <strong>se deduce un 10% ({formatCOP(adminFee)})</strong> destinado exclusivamente a gastos internos de administración, plataformas y gestión de la polla.</p>
+                        <p>Del 100% recaudado ({formatCOP(grossPot)}), <strong>se deduce un 10% </strong> destinado exclusivamente a gastos internos de administración, plataformas y gestión de la polla.</p>
                     </li>
                     <li className="flex items-start gap-3">
                         <span className="text-primary mt-0.5">🎯</span>
