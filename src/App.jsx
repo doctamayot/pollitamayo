@@ -225,7 +225,7 @@ function App() {
                     </h3>
                     
                     <p className="text-foreground-muted text-sm lg:text-base mb-8 leading-relaxed max-w-xs relative z-10">
-                        El torneo definitivo. Pronostica grupos, llaves y la gloria mundial. (5 pts pleno / 3 pts resultado).
+                        El torneo definitivo. Pronostica resultados, grupos, clasificados, eventos y la gloria mundial.
                     </p>
                     
                     <span className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-black uppercase tracking-wider py-3.5 px-10 rounded-full inline-block mt-auto shadow-[0_8px_20px_rgba(245,158,11,0.3)] transition-all relative z-10 text-sm lg:text-base border border-amber-400/50 group-hover:shadow-[0_10px_25px_rgba(245,158,11,0.5)]">
