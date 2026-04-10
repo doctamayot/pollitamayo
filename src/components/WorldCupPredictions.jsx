@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
@@ -199,6 +199,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         }));
     };
 
+    // --- MOTOR DE DESEMPATE REACTIVO ---
     const handleManualTiebreaker = (group, teamName, direction) => {
         setManualTiebreakers(prev => {
             const groupTies = prev[group] || {};
@@ -213,7 +214,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
     };
 
-    // --- BOTÓN DE LIMPIAR TODO PARA EL ADMIN ---
     const handleClearData = () => {
         if (!window.confirm("⚠️ ¡Atención Admin! Vas a BORRAR TODAS tus respuestas y dejarlas en blanco. ¿Deseas continuar?")) return;
 
@@ -228,7 +228,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         toast.success("🧹 ¡Todo ha sido borrado! Recuerda presionar Guardar.");
     };
 
-    // --- BOTÓN DE SIMULACIÓN PARA EL ADMIN ---
     const handleSimulateData = () => {
         if (!window.confirm("🎲 ¡Atención Admin! Vas a sobreescribir TODAS tus respuestas con datos aleatorios. ¿Deseas continuar?")) return;
 
@@ -315,7 +314,8 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     };
 
-    const calculateStandings = (groupName) => {
+    // --- CÁLCULO DE TABLAS MEMOIZADO (A prueba de balas) ---
+    const calculateStandings = useCallback((groupName) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const matches = matchesByGroup[groupName];
         const teams = {};
@@ -366,18 +366,32 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
 
         return teamsArray.sort((a, b) => {
+            // 1. Puntos
             if (b.pts !== a.pts) return b.pts - a.pts;
+            // 2. Diferencia de Goles
             if (b.dg !== a.dg) return b.dg - a.dg;
+            // 3. Goles a Favor
             if (b.gf !== a.gf) return b.gf - a.gf;
             
+            // 4. Desempate Manual (Reactivo)
             const tieA = manualTiebreakers[groupName]?.[a.name] || 0;
             const tieB = manualTiebreakers[groupName]?.[b.name] || 0;
             
             if (tieA !== tieB) return tieA - tieB; 
 
+            // 5. Alfabeto si no se ha desempatado manualmente
             return translateTeam(a.name).localeCompare(translateTeam(b.name));
         });
-    };
+    }, [matchesByGroup, predictions, manualTiebreakers]);
+
+    // Tabla del grupo seleccionado generada en tiempo real
+    const currentGroupStandings = useMemo(() => {
+        return calculateStandings(selectedGroup);
+    }, [calculateStandings, selectedGroup]);
+
+    const hasTiesInGroup = useMemo(() => {
+        return currentGroupStandings.some(t => t.isTied);
+    }, [currentGroupStandings]);
 
     const qualifiedRoundOf32 = useMemo(() => {
         let top2 = [];
@@ -391,7 +405,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         const best8Thirds = thirds.slice(0, 8); 
         return { top2, best8Thirds, all32: [...top2, ...best8Thirds] };
-    }, [matchesByGroup, predictions, manualTiebreakers]);
+    }, [matchesByGroup, calculateStandings]);
 
     const toggleKnockoutPick = (roundId, team, limit) => {
         setKnockoutPicks(prev => {
@@ -542,7 +556,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* TABS PRINCIPALES CON MICRO-ETIQUETAS PARA MÓVIL */}
+            {/* TABS PRINCIPALES */}
             <div className="flex w-full justify-between sm:justify-start gap-1 sm:gap-4 mb-8 pb-2 border-b border-border overflow-x-auto hide-scrollbar">
                 {tabs.map((tab) => (
                     <button
@@ -590,7 +604,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     </h3>
                                     
                                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                                        {calculateStandings(selectedGroup).map(team => (
+                                        {currentGroupStandings.map(team => (
                                             <div key={team.name} className="w-5 h-3.5 sm:w-7 sm:h-5 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 relative" title={translateTeam(team.name)}>
                                                 <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[3px] z-10 pointer-events-none"></div>
                                                 <img src={team.crest} className="w-full h-full object-cover" alt="" />
@@ -643,13 +657,14 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     ))}
                                 </div>
                             </div>
+                            
                             <div className="xl:col-span-5">
                                 <div className="bg-card border border-card-border rounded-3xl p-3 sm:p-6 shadow-sm sticky top-24">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-xl font-black text-foreground ml-2 sm:ml-0">Tabla en Vivo</h3>
                                     </div>
                                     
-                                    {calculateStandings(selectedGroup).some(t => t.isTied) && (
+                                    {hasTiesInGroup && (
                                         <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-4 flex items-start gap-2 animate-fade-in mx-2 sm:mx-0">
                                             <span className="text-amber-500 text-lg">⚖️</span>
                                             <p className="text-[11px] sm:text-xs text-amber-500 font-bold leading-tight">
@@ -658,56 +673,60 @@ const WorldCupPredictions = ({ currentUser }) => {
                                         </div>
                                     )}
 
+                                    {/* --- TABLA BLINDADA CON TABLE-FIXED Y PORCENTAJES MATEMÁTICOS --- */}
                                     <div className="overflow-x-auto px-2 sm:px-0">
-                                        <table className="w-full text-sm">
+                                        <table className="w-full text-sm table-fixed">
                                             <thead>
-                                                <tr className="border-b border-border text-foreground-muted text-[10px] sm:text-sm">
-                                                    <th className="pb-2 text-left">País</th>
-                                                    <th className="pb-2 text-center w-6 sm:w-8" title="Partidos Jugados">PJ</th>
-                                                    <th className="pb-2 text-center w-6 sm:w-8" title="Goles a Favor">GF</th>
-                                                    <th className="pb-2 text-center w-6 sm:w-8" title="Diferencia de Goles">DG</th>
-                                                    <th className="pb-2 text-center font-black text-primary w-6 sm:w-8">PTS</th>
-                                                    {calculateStandings(selectedGroup).some(t => t.isTied) && (
-                                                        <th className="pb-2 text-center text-[10px] uppercase text-amber-500 w-8">Play</th>
-                                                    )}
+                                                <tr className="border-b border-border text-foreground-muted text-[10px] sm:text-[11px]">
+                                                    <th className="pb-2 text-left w-[42%] sm:w-[45%]">País</th>
+                                                    <th className="pb-2 text-center w-[10%]" title="Partidos Jugados">PJ</th>
+                                                    <th className="pb-2 text-center w-[10%]" title="Goles a Favor">GF</th>
+                                                    <th className="pb-2 text-center w-[10%]" title="Diferencia de Goles">DG</th>
+                                                    <th className="pb-2 text-center font-black text-primary w-[10%]">PTS</th>
+                                                    
+                                                    {/* Columna Permanente de Desempate (El % restante: 18% a 15%) */}
+                                                    <th className="pb-2 text-center text-[9px] sm:text-[10px] uppercase text-amber-500 w-[18%] sm:w-[15%]">
+                                                        {hasTiesInGroup ? 'Play' : ''}
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {calculateStandings(selectedGroup).map((team, index) => (
+                                                {currentGroupStandings.map((team, index) => (
                                                     <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
-                                                        <td className="py-3 align-middle">
+                                                        <td className="py-3 align-middle pr-1 overflow-hidden">
                                                             <div className="flex items-center gap-1.5 sm:gap-2">
-                                                                <span className={`w-4 sm:w-5 text-[10px] sm:text-xs font-bold ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
+                                                                <span className={`w-3 sm:w-4 text-[10px] sm:text-xs font-bold shrink-0 ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
                                                                 <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0 relative">
                                                                     <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-sm z-10 pointer-events-none"></div>
                                                                     <img src={team.crest} className="w-full h-full object-cover" alt="" />
                                                                 </div>
-                                                                <span className="font-semibold text-[11px] sm:text-sm truncate max-w-[65px] sm:max-w-[120px]" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
+                                                                <span className="font-semibold text-[10px] sm:text-[13px] truncate leading-tight" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted">{team.pj}</td>
-                                                        <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted font-medium">{team.gf}</td>
-                                                        <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
-                                                        <td className="py-3 text-center text-[11px] sm:text-sm font-black text-primary">{team.pts}</td>
+                                                        <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.pj}</td>
+                                                        <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted font-medium">{team.gf}</td>
+                                                        <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
+                                                        <td className="py-3 text-center text-[11px] sm:text-[14px] font-black text-primary">{team.pts}</td>
                                                         
-                                                        {calculateStandings(selectedGroup).some(t => t.isTied) && (
-                                                            <td className="py-3 text-center">
-                                                                {team.isTied && (
-                                                                    <div className="flex flex-col items-center justify-center bg-background rounded-lg border border-border w-6 sm:w-8 mx-auto">
-                                                                        <button 
-                                                                            type="button"
-                                                                            onClick={() => handleManualTiebreaker(selectedGroup, team.name, -1)} 
-                                                                            className="text-[10px] text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-t-lg py-0.5"
-                                                                        >▲</button>
-                                                                        <button 
-                                                                            type="button"
-                                                                            onClick={() => handleManualTiebreaker(selectedGroup, team.name, 1)} 
-                                                                            className="text-[10px] text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-b-lg py-0.5"
-                                                                        >▼</button>
-                                                                    </div>
-                                                                )}
-                                                            </td>
-                                                        )}
+                                                        {/* Celda Permanente para Botones / Fantasma */}
+                                                        <td className="py-3 text-center">
+                                                            {team.isTied ? (
+                                                                <div className="flex flex-col items-center justify-center bg-background rounded-lg border border-border w-5 sm:w-8 mx-auto shadow-sm">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={(e) => { e.preventDefault(); handleManualTiebreaker(selectedGroup, team.name, -1); }} 
+                                                                        className="text-[9px] sm:text-xs text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-t-lg py-0.5 active:bg-amber-500/20 transition-colors leading-none"
+                                                                    >▲</button>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={(e) => { e.preventDefault(); handleManualTiebreaker(selectedGroup, team.name, 1); }} 
+                                                                        className="text-[9px] sm:text-xs text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-b-lg py-0.5 active:bg-amber-500/20 transition-colors leading-none"
+                                                                    >▼</button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-5 sm:w-8 mx-auto"></div>
+                                                            )}
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
