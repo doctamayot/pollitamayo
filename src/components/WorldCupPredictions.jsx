@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
-import toast from 'react-hot-toast'; // <-- Sistema de avisos profesional
+import toast from 'react-hot-toast'; 
+import logocopa from '../assets/logocopa.png'; // <-- IMPORTAMOS EL LOGO DE LA COPA
 
 // --- DICCIONARIO DE TRADUCCIÓN COMPLETO ---
 const teamTranslations = {
@@ -28,6 +29,19 @@ const teamTranslations = {
     "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Wales": "Gales", "Por definir": "Por definir"
 };
 
+// --- DICCIONARIO DE ESTADOS DEL PARTIDO ---
+const matchStatusTranslations = {
+    SCHEDULED: 'Programado',
+    TIMED: 'Confirmado',
+    IN_PLAY: 'En Juego',
+    PAUSED: 'En Pausa',
+    FINISHED: 'Finalizado',
+    SUSPENDED: 'Suspendido',
+    POSTPONED: 'Pospuesto',
+    CANCELLED: 'Cancelado',
+    AWARDED: 'Adjudicado'
+};
+
 const translateTeam = (englishName) => {
     return teamTranslations[englishName] || englishName;
 };
@@ -37,6 +51,10 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [matchesByGroup, setMatchesByGroup] = useState({});
     const [selectedGroup, setSelectedGroup] = useState(null); 
     const [predictions, setPredictions] = useState({});
+    
+    // ESTADO PARA DESEMPATES MANUALES
+    const [manualTiebreakers, setManualTiebreakers] = useState({});
+    
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -52,17 +70,17 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     // --- CONFIGURACIÓN DE UI ---
     const tabs = [
-        { id: 'grupos', label: 'Fase de Grupos', icon: '📅' },
-        { id: 'rondas', label: 'Clasificados', icon: '📈' },
-        { id: 'extras', label: 'Extras (11)', icon: '⭐' },
-        { id: 'eventos', label: 'Eventos SÍ/NO', icon: '❓' }
+        { id: 'grupos', label: 'Grupos', icon: '📅' },
+        { id: 'rondas', label: 'Rondas', icon: '📈' },
+        { id: 'extras', label: 'Extras', icon: '⭐' },
+        { id: 'eventos', label: 'Eventos', icon: '❓' }
     ];
 
     const roundTabs = [
-        { id: 'dieciseisavos', label: 'Dieciseisavos', limit: 32 },
-        { id: 'octavos', label: 'Octavos', limit: 16 },
-        { id: 'cuartos', label: 'Cuartos', limit: 8 },
-        { id: 'semis', label: 'Semifinales', limit: 4 },
+        { id: 'dieciseisavos', label: '16vos', limit: 32 },
+        { id: 'octavos', label: '8vos', limit: 16 },
+        { id: 'cuartos', label: '4tos', limit: 8 },
+        { id: 'semis', label: 'Semis', limit: 4 },
         { id: 'campeon', label: 'Campeón', limit: 1 },
         { id: 'subcampeon', label: 'Subcampeón', limit: 1 },
         { id: 'tercero', label: 'Tercero', limit: 1 },
@@ -137,6 +155,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                         if (savedData.knockoutPicks) setKnockoutPicks(savedData.knockoutPicks);
                         if (savedData.extraPicks) setExtraPicks(savedData.extraPicks);
                         if (savedData.eventPicks) setEventPicks(savedData.eventPicks);
+                        if (savedData.manualTiebreakers) setManualTiebreakers(savedData.manualTiebreakers);
                     }
                 }
             } catch (err) {
@@ -191,6 +210,20 @@ const WorldCupPredictions = ({ currentUser }) => {
         setEventPicks(prev => ({ ...prev, [eventId]: value }));
     };
 
+    const handleManualTiebreaker = (group, teamName, direction) => {
+        setManualTiebreakers(prev => {
+            const groupTies = prev[group] || {};
+            const currentVal = groupTies[teamName] || 0;
+            return {
+                ...prev,
+                [group]: {
+                    ...groupTies,
+                    [teamName]: currentVal + direction 
+                }
+            };
+        });
+    };
+
     // --- GUARDADO PROFESIONAL CON TOASTS ---
     const handleSavePredictions = async () => {
         setSaving(true);
@@ -201,6 +234,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             knockoutPicks,
             extraPicks,
             eventPicks,
+            manualTiebreakers,
             updatedAt: new Date().toISOString()
         };
 
@@ -242,8 +276,8 @@ const WorldCupPredictions = ({ currentUser }) => {
         matches.forEach(m => {
             const home = m.homeTeam?.name || 'Por definir';
             const away = m.awayTeam?.name || 'Por definir';
-            if (!teams[home]) teams[home] = { name: home, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
-            if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
+            if (!teams[home]) teams[home] = { name: home, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false };
+            if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false };
         });
 
         matches.forEach(m => {
@@ -270,10 +304,33 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
         });
 
-        return Object.values(teams).sort((a, b) => {
+        const teamsArray = Object.values(teams);
+
+        // PASO 1: Detectar Empates Totales
+        const statsCount = {};
+        teamsArray.forEach(t => {
+            const key = `${t.pts}_${t.dg}_${t.gf}`;
+            statsCount[key] = (statsCount[key] || 0) + 1;
+        });
+
+        teamsArray.forEach(t => {
+            const key = `${t.pts}_${t.dg}_${t.gf}`;
+            if (statsCount[key] > 1) {
+                t.isTied = true;
+            }
+        });
+
+        // PASO 2: Ordenar la tabla
+        return teamsArray.sort((a, b) => {
             if (b.pts !== a.pts) return b.pts - a.pts;
             if (b.dg !== a.dg) return b.dg - a.dg;
             if (b.gf !== a.gf) return b.gf - a.gf;
+            
+            const tieA = manualTiebreakers[groupName]?.[a.name] || 0;
+            const tieB = manualTiebreakers[groupName]?.[b.name] || 0;
+            
+            if (tieA !== tieB) return tieA - tieB; 
+
             return translateTeam(a.name).localeCompare(translateTeam(b.name));
         });
     };
@@ -283,14 +340,15 @@ const WorldCupPredictions = ({ currentUser }) => {
         let thirds = [];
         Object.keys(matchesByGroup).forEach(groupName => {
             const standings = calculateStandings(groupName);
-            if (standings.length > 0) top2.push({ ...standings[0], group: groupName });
-            if (standings.length > 1) top2.push({ ...standings[1], group: groupName });
-            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName });
+            // Agregamos qualReason (1º, 2º o Mejor 3º)
+            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         const best8Thirds = thirds.slice(0, 8); 
         return { top2, best8Thirds, all32: [...top2, ...best8Thirds] };
-    }, [matchesByGroup, predictions]);
+    }, [matchesByGroup, predictions, manualTiebreakers]);
 
     const toggleKnockoutPick = (roundId, team, limit) => {
         setKnockoutPicks(prev => {
@@ -313,13 +371,10 @@ const WorldCupPredictions = ({ currentUser }) => {
             } else {
                 const newPicks = { ...prev };
                 
-                // --- LÓGICA DE REEMPLAZO AUTOMÁTICO PARA PODIO (LIMIT 1) ---
                 if (limit === 1) {
-                    // Quitamos este equipo de cualquier otra posición del podio para evitar duplicados
                     podiumSlots.forEach(slot => {
                         newPicks[slot] = newPicks[slot].filter(t => t.name !== team.name);
                     });
-                    // Reemplazamos el actual (limite 1)
                     newPicks[roundId] = [team];
                     return newPicks;
                 }
@@ -490,57 +545,139 @@ const WorldCupPredictions = ({ currentUser }) => {
                     {selectedGroup && (
                         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                             <div className="xl:col-span-7 space-y-4">
-                                <h3 className="text-2xl font-black text-primary uppercase tracking-widest border-b border-border pb-3 mb-4">Partidos - {selectedGroup}</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {matchesByGroup[selectedGroup].map(match => (
-                                        <div key={match.id} className="bg-card border border-card-border p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-colors">
-                                            <div className="text-[10px] text-foreground-muted text-center mb-4 font-semibold uppercase tracking-wider">
-                                                {new Date(match.utcDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour:'2-digit', minute:'2-digit' })}
+                                
+                                {/* HEADER PROFESIONAL CON LOGOCOPA Y TITULO DE GRUPO */}
+                                {/* HEADER PROFESIONAL CON LOGOCOPA Y BANDERITAS */}
+                                <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+                                    <h3 className="text-xl sm:text-2xl font-black text-primary uppercase tracking-widest flex items-center gap-2 sm:gap-3">
+                                        <img src={logocopa} alt="Copa" className="w-6 h-6 sm:w-9 sm:h-9 object-contain filter drop-shadow-md shrink-0" />
+                                        <span className="truncate">{selectedGroup}</span>
+                                    </h3>
+                                    
+                                    {/* BANDERITAS DEL GRUPO */}
+                                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                                        {calculateStandings(selectedGroup).map(team => (
+                                            <div key={team.name} className="w-5 h-3.5 sm:w-7 sm:h-5 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 relative" title={translateTeam(team.name)}>
+                                                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[3px] z-10 pointer-events-none"></div>
+                                                <img src={team.crest} className="w-full h-full object-cover" alt="" />
                                             </div>
-                                            <div className="flex flex-col gap-3">
-                                                <div className="flex items-center justify-between bg-background-offset p-2 sm:p-3 rounded-xl border border-border">
-                                                    <div className="flex items-center gap-3 overflow-hidden pr-2">
-                                                        <img src={match.homeTeam.crest} className="w-8 h-8 object-cover rounded-full border border-border shrink-0" alt="" />
-                                                        <span className="font-bold text-sm text-foreground truncate">{translateTeam(match.homeTeam.name)}</span>
-                                                    </div>
-                                                    <input type="number" className="w-12 h-12 text-center bg-card border border-card-border rounded-lg text-lg font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner" placeholder="-" value={predictions[match.id]?.home ?? ''} onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)} />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                    {matchesByGroup[selectedGroup].map(match => (
+                                        <div key={match.id} className="bg-card border border-card-border rounded-2xl shadow-sm hover:shadow-md hover:border-primary/50 transition-all duration-300 overflow-hidden group relative">
+                                            
+                                            {/* HEADER DEL PARTIDO (STATUS + JORNADA) */}
+                                            <div className="bg-background-offset px-4 py-2.5 flex justify-between items-center border-b border-border">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-black text-background bg-primary px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
+                                                        Jornada {match.matchday || 1}
+                                                    </span>
+                                                    <span className={`text-[9px] font-bold uppercase tracking-wider ${match.status === 'IN_PLAY' || match.status === 'PAUSED' ? 'text-green-500 animate-pulse' : 'text-foreground-muted'}`}>
+                                                        {matchStatusTranslations[match.status] || match.status || 'Programado'}
+                                                    </span>
                                                 </div>
-                                                <div className="flex items-center justify-between bg-background-offset p-2 sm:p-3 rounded-xl border border-border">
-                                                    <div className="flex items-center gap-3 overflow-hidden pr-2">
-                                                        <img src={match.awayTeam.crest} className="w-8 h-8 object-cover rounded-full border border-border shrink-0" alt="" />
-                                                        <span className="font-bold text-sm text-foreground truncate">{translateTeam(match.awayTeam.name)}</span>
+                                                <span className="text-[10px] text-foreground-muted font-semibold uppercase tracking-wider">
+                                                    {new Date(match.utcDate).toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour:'2-digit', minute:'2-digit' }).replace('.', '')}
+                                                </span>
+                                            </div>
+
+                                            {/* CUERPO DEL PARTIDO (BANDERAS RECTANGULARES) */}
+                                            <div className="p-4 flex flex-col gap-3 relative z-10">
+                                                <img src={logocopa} alt="" className="absolute right-2 top-1/2 -translate-y-1/2 w-28 opacity-[0.03] grayscale pointer-events-none" />
+                                                
+                                                {[match.homeTeam, match.awayTeam].map((team, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between relative z-10">
+                                                        <div className="flex items-center gap-2 sm:gap-4 overflow-hidden pr-2">
+                                                            <div className="w-12 h-8 sm:w-14 sm:h-9 bg-background rounded-[4px] overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.1)] border border-border/50 shrink-0 relative group-hover:shadow-md transition-shadow">
+                                                                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[4px] z-10 pointer-events-none"></div>
+                                                                <img src={team.crest} className="w-full h-full object-cover" alt={team.name} />
+                                                            </div>
+                                                            <span className="font-bold text-sm sm:text-base text-foreground truncate drop-shadow-sm">{translateTeam(team.name)}</span>
+                                                        </div>
+                                                        <input 
+                                                            type="number" 
+                                                            className="w-12 h-12 sm:w-14 sm:h-14 text-center bg-background border border-card-border rounded-xl text-xl sm:text-2xl font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner shrink-0 transition-all" 
+                                                            placeholder="-" 
+                                                            value={predictions[match.id]?.[idx === 0 ? 'home' : 'away'] ?? ''} 
+                                                            onChange={(e) => handleScoreChange(match.id, idx === 0 ? 'home' : 'away', e.target.value)} 
+                                                        />
                                                     </div>
-                                                    <input type="number" className="w-12 h-12 text-center bg-card border border-card-border rounded-lg text-lg font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner" placeholder="-" value={predictions[match.id]?.away ?? ''} onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)} />
-                                                </div>
+                                                ))}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                             <div className="xl:col-span-5">
-                                <div className="bg-card border border-card-border rounded-3xl p-4 sm:p-6 shadow-sm sticky top-24">
-                                    <h3 className="text-xl font-black text-foreground mb-4">Tabla en Vivo</h3>
-                                    <div className="overflow-x-auto">
+                                <div className="bg-card border border-card-border rounded-3xl p-3 sm:p-6 shadow-sm sticky top-24">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xl font-black text-foreground ml-2 sm:ml-0">Tabla en Vivo</h3>
+                                    </div>
+                                    
+                                    {/* ALERTA DE EMPATE TOTAL */}
+                                    {calculateStandings(selectedGroup).some(t => t.isTied) && (
+                                        <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-4 flex items-start gap-2 animate-fade-in mx-2 sm:mx-0">
+                                            <span className="text-amber-500 text-lg">⚖️</span>
+                                            <p className="text-[11px] sm:text-xs text-amber-500 font-bold leading-tight">
+                                                Hay un empate total en puntos y goles. Usa las flechas (▲/▼) en la tabla para decidir el desempate por <strong className="text-amber-400">Fair Play</strong> o sorteo FIFA.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="overflow-x-auto px-2 sm:px-0">
                                         <table className="w-full text-sm">
                                             <thead>
-                                                <tr className="border-b border-border text-foreground-muted">
+                                                <tr className="border-b border-border text-foreground-muted text-[10px] sm:text-sm">
                                                     <th className="pb-2 text-left">País</th>
-                                                    <th className="pb-2 text-center">PJ</th>
-                                                    <th className="pb-2 text-center">DG</th>
-                                                    <th className="pb-2 text-center font-black text-primary">PTS</th>
+                                                    <th className="pb-2 text-center w-6 sm:w-8" title="Partidos Jugados">PJ</th>
+                                                    <th className="pb-2 text-center w-6 sm:w-8" title="Goles a Favor">GF</th>
+                                                    <th className="pb-2 text-center w-6 sm:w-8" title="Diferencia de Goles">DG</th>
+                                                    <th className="pb-2 text-center font-black text-primary w-6 sm:w-8">PTS</th>
+                                                    {calculateStandings(selectedGroup).some(t => t.isTied) && (
+                                                        <th className="pb-2 text-center text-[10px] uppercase text-amber-500 w-8">Play</th>
+                                                    )}
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {calculateStandings(selectedGroup).map((team, index) => (
                                                     <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
-                                                        <td className="py-3 flex items-center gap-2">
-                                                            <span className={`w-5 text-xs font-bold ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
-                                                            <img src={team.crest} className="w-6 h-6 rounded-full border border-border" alt="" />
-                                                            <span className="font-semibold truncate max-w-[120px]">{translateTeam(team.name)}</span>
-                                                        </td>
-                                                        <td className="py-3 text-center text-foreground-muted">{team.pj}</td>
-                                                        <td className="py-3 text-center text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
-                                                        <td className="py-3 text-center font-black text-primary">{team.pts}</td>
+                                                        <td className="py-3 align-middle">
+    <div className="flex items-center gap-1.5 sm:gap-2">
+        <span className={`w-4 sm:w-5 text-[10px] sm:text-xs font-bold ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
+        <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0 relative">
+            <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-sm z-10 pointer-events-none"></div>
+            <img src={team.crest} className="w-full h-full object-cover" alt="" />
+        </div>
+        <span className="font-semibold text-[11px] sm:text-sm truncate max-w-[65px] sm:max-w-[120px]" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
+    </div>
+</td>
+                                                        <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted">{team.pj}</td>
+                                                        <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted font-medium">{team.gf}</td>
+                                                        <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
+                                                        <td className="py-3 text-center text-[11px] sm:text-sm font-black text-primary">{team.pts}</td>
+                                                        
+                                                        {/* CONTROLES DE DESEMPATE MANUAL */}
+                                                        {calculateStandings(selectedGroup).some(t => t.isTied) && (
+                                                            <td className="py-3 text-center">
+                                                                {team.isTied && (
+                                                                    <div className="flex flex-col items-center justify-center bg-background rounded-lg border border-border w-6 sm:w-8 mx-auto">
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => handleManualTiebreaker(selectedGroup, team.name, -1)} 
+                                                                            className="text-[10px] text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-t-lg py-0.5"
+                                                                        >▲</button>
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => handleManualTiebreaker(selectedGroup, team.name, 1)} 
+                                                                            className="text-[10px] text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-b-lg py-0.5"
+                                                                        >▼</button>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        )}
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -600,9 +737,18 @@ const WorldCupPredictions = ({ currentUser }) => {
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                             {activeRoundTab === 'dieciseisavos' ? (
                                 qualifiedRoundOf32.all32.map((team, idx) => (
-                                    <div key={idx} className="bg-card border border-card-border p-4 rounded-xl flex flex-col items-center text-center shadow-sm">
-                                        <img src={team.crest} className="w-10 h-10 rounded-full border border-border mb-2" alt="" />
-                                        <span className="font-bold text-xs text-foreground leading-tight">{translateTeam(team.name)}</span>
+                                    <div key={idx} className="bg-card border border-card-border p-3 sm:p-4 rounded-xl flex flex-col items-center text-center shadow-sm relative overflow-hidden h-full">
+                                        <div className="w-12 h-8 bg-background rounded-[4px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0 relative">
+                                            <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[4px] z-10 pointer-events-none"></div>
+                                            <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                                        </div>
+                                        <span className="font-bold text-[11px] sm:text-xs text-foreground leading-tight mb-3 flex-grow flex items-center justify-center w-full">
+                                            {translateTeam(team.name)}
+                                        </span>
+                                        {/* ETIQUETA DE POR QUÉ CLASIFICÓ ALINEADA AL FONDO */}
+                                        <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shrink-0 mt-auto">
+                                            {team.qualReason} {team.group ? team.group.replace('Grupo ', '') : ''}
+                                        </span>
                                     </div>
                                 ))
                             ) : (
@@ -613,12 +759,17 @@ const WorldCupPredictions = ({ currentUser }) => {
                                         <button 
                                             key={idx} 
                                             onClick={() => toggleKnockoutPick(activeRoundTab, team, limit)} 
-                                            className={`p-4 rounded-2xl flex flex-col items-center text-center transition-all border-2 ${
+                                            className={`p-3 sm:p-4 rounded-2xl flex flex-col items-center text-center transition-all border-2 h-full ${
                                                 isSelected ? 'bg-primary/10 border-primary scale-105 shadow-md' : 'bg-card border-card-border hover:border-primary/50'
                                             }`}
                                         >
-                                            <img src={team.crest} className="w-12 h-12 rounded-full border border-border mb-3" alt="" />
-                                            <span className={`font-bold text-xs sm:text-sm ${isSelected ? 'text-primary' : 'text-foreground'}`}>{translateTeam(team.name)}</span>
+                                            <div className="w-12 h-8 sm:w-14 sm:h-9 bg-background rounded-[4px] overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.1)] border border-border/50 mb-2 sm:mb-3 shrink-0 relative">
+                                                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-[4px] z-10 pointer-events-none"></div>
+                                                <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                                            </div>
+                                            <span className={`font-bold text-[11px] sm:text-sm flex-grow flex items-center justify-center w-full leading-tight ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                                                {translateTeam(team.name)}
+                                            </span>
                                         </button>
                                     );
                                 })

@@ -9,6 +9,7 @@ import { Toaster } from 'react-hot-toast';
 import logoMundial from './assets/logomundial.png';
 import logoQuinielas from './assets/logoquinielas.png';
 import logoGeneral from './assets/logogeneral.png';
+import logocopa from './assets/logocopa.png';
 
 // Componentes
 import AuthScreen from './components/AuthScreen';
@@ -173,39 +174,62 @@ function App() {
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 w-full max-w-5xl">
                 
+                {/* TARJETA POLLA MUNDIALISTA - PREMIUM */}
                 <div 
                     onClick={() => navigateTo('worldCup_predictions')}
-                    className="bg-card border border-card-border hover:border-primary rounded-3xl p-8 lg:p-10 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 group shadow-lg hover:shadow-[0_12px_40px_-10px_rgba(245,158,11,0.2)] flex flex-col items-center text-center relative overflow-hidden"
+                    className="bg-gradient-to-b from-card to-background-offset border border-primary/30 hover:border-primary rounded-[2.5rem] p-8 lg:p-10 cursor-pointer transition-all duration-500 transform hover:-translate-y-2 group shadow-xl hover:shadow-[0_20px_50px_-15px_rgba(245,158,11,0.4)] flex flex-col items-center text-center relative overflow-hidden"
                 >
-                    <div className="w-[300px] h-[150px] md:w-[200px] md:h-[200px] lg:w-[250px] lg:h-[250px] mb-6 lg:mb-8 group-hover:scale-105 transition-transform duration-300 relative z-10 flex items-center justify-center">
-                        <img src={logoMundial} alt="Mundial 2026" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]" />
+                    {/* MARCA DE AGUA LOGOCOPA */}
+                    <img 
+                        src={logocopa} 
+                        alt="" 
+                        className="absolute -right-10 -bottom-10 w-64 h-64 object-contain opacity-[0.04] dark:opacity-[0.08] group-hover:opacity-10 dark:group-hover:opacity-20 group-hover:scale-110 transition-all duration-700 pointer-events-none z-0 rotate-12" 
+                    />
+                    
+                    {/* BRILLO DE FONDO */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1/2 bg-gradient-to-b from-primary/10 to-transparent z-0 pointer-events-none"></div>
+
+                    {/* BADGE PREMIUM */}
+                    <div className="absolute top-6 left-6 z-20">
+                        <span className="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md shadow-sm">
+                            ⭐ Edición Premium
+                        </span>
+                    </div>
+
+                    <div className="w-[220px] h-[140px] md:w-[180px] md:h-[180px] lg:w-[220px] lg:h-[220px] mb-8 mt-6 group-hover:scale-110 transition-transform duration-500 relative z-10 flex items-center justify-center">
+                        <img src={logoMundial} alt="Mundial 2026" className="w-full h-full object-contain drop-shadow-[0_10px_20px_rgba(245,158,11,0.4)]" />
                     </div>
                     
-                    <h3 className="text-xl lg:text-2xl font-extrabold text-foreground mb-3 tracking-tight relative z-10">Polla Mundialista 2026</h3>
-                    <p className="text-foreground-muted text-sm lg:text-base mb-8 leading-relaxed max-w-xs relative z-10">
-                        El torneo definitivo. Reglas Premium, formato de llaves y la gloria mundial en juego. (5 pts por pleno)
-                    </p>
-                    <span className="bg-primary hover:bg-amber-600 text-primary-foreground font-bold py-3 px-8 rounded-full inline-block mt-auto shadow-[0_4px_12px_rgba(245,158,11,0.2)] transition relative z-10 text-sm lg:text-base">
-                        Ir al Mundial
-                    </span>
+                    <h3 className="text-2xl lg:text-3xl font-black text-foreground mb-3 tracking-tighter relative z-10 drop-shadow-sm">
+                        Copa Mundial <span className="text-primary">2026</span>
+                    </h3>
                     
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary rounded-full filter blur-[100px] opacity-0 group-hover:opacity-10 dark:group-hover:opacity-[0.05] transition-opacity duration-300 z-0"></div>
+                    <p className="text-foreground-muted text-sm lg:text-base mb-8 leading-relaxed max-w-xs relative z-10">
+                        El torneo definitivo. Pronostica grupos, llaves y la gloria mundial. (5 pts pleno / 3 pts resultado).
+                    </p>
+                    
+                    <span className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-black uppercase tracking-wider py-3.5 px-10 rounded-full inline-block mt-auto shadow-[0_8px_20px_rgba(245,158,11,0.3)] transition-all relative z-10 text-sm lg:text-base border border-amber-400/50 group-hover:shadow-[0_10px_25px_rgba(245,158,11,0.5)]">
+                        Ir al Mundial 🏆
+                    </span>
                 </div>
 
+                {/* TARJETA QUINIELAS LIGAS */}
                 <div 
                     onClick={() => navigateTo('active')}
-                    className="bg-card border border-card-border hover:border-border rounded-3xl p-8 lg:p-10 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 group shadow-lg flex flex-col items-center text-center relative overflow-hidden"
+                    className="bg-card border border-card-border hover:border-border rounded-[2.5rem] p-8 lg:p-10 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 group shadow-lg flex flex-col items-center text-center relative overflow-hidden"
                 >
-                    <div className="w-[300px] h-[150px] md:w-[200px] md:h-[200px] lg:w-[250px] lg:h-[250px] mb-6 lg:mb-8 group-hover:scale-105 transition-transform duration-300 relative z-10 flex items-center justify-center">
-                        <img src={logoQuinielas} alt="Quinielas Ligas" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.05)]" />
+                    <div className="w-[220px] h-[140px] md:w-[180px] md:h-[180px] lg:w-[220px] lg:h-[220px] mb-8 mt-6 group-hover:scale-105 transition-transform duration-300 relative z-10 flex items-center justify-center">
+                        <img src={logoQuinielas} alt="Quinielas Ligas" className="w-full h-full object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.2)] dark:drop-shadow-[0_10px_20px_rgba(255,255,255,0.05)]" />
                     </div>
 
-                    <h3 className="text-xl lg:text-2xl font-extrabold text-foreground mb-3 tracking-tight">Quinielas Ligas</h3>
+                    <h3 className="text-2xl lg:text-3xl font-black text-foreground mb-3 tracking-tighter">
+                        Quinielas Ligas
+                    </h3>
                     <p className="text-foreground-muted text-sm lg:text-base mb-8 leading-relaxed max-w-xs">
                         Pronostica las fechas de las principales ligas del mundo y compite por el ranking general semanal.
                     </p>
-                    <span className="bg-slate-900 text-white dark:bg-slate-800 font-semibold py-3 px-8 rounded-full inline-block mt-auto border border-slate-800 dark:border-slate-600 group-hover:bg-slate-700 dark:group-hover:bg-slate-600 transition text-sm lg:text-base">
-                        Entrar a la Liga
+                    <span className="bg-slate-900 text-white dark:bg-slate-800 font-bold uppercase tracking-wider py-3.5 px-10 rounded-full inline-block mt-auto border border-slate-800 dark:border-slate-600 group-hover:bg-slate-700 dark:group-hover:bg-slate-600 transition text-sm lg:text-base shadow-md">
+                        Entrar a la Liga ⚽
                     </span>
                 </div>
 
