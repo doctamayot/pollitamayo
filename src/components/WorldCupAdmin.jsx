@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 
 const WorldCupAdmin = () => {
     const [participants, setParticipants] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [liveMenuMode, setLiveMenuMode] = useState(false); // Estado para el botón
 
     useEffect(() => {
         // Escuchamos en tiempo real la colección donde se guardan las predicciones del mundial
@@ -17,8 +18,29 @@ const WorldCupAdmin = () => {
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        // Escuchamos en tiempo real el ajuste del Modo Live
+        const settingsRef = doc(db, 'worldCupAdmin', 'settings');
+        const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setLiveMenuMode(!!docSnap.data().liveMenuMode);
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            unsubSettings();
+        };
     }, []);
+
+    const toggleLiveMode = async () => {
+        try {
+            const settingsRef = doc(db, 'worldCupAdmin', 'settings');
+            await setDoc(settingsRef, { liveMenuMode: !liveMenuMode }, { merge: true });
+        } catch (error) {
+            console.error("Error al cambiar de modo:", error);
+            alert("No se pudo actualizar el menú de la aplicación.");
+        }
+    };
 
     const togglePaymentStatus = async (userId, currentStatus) => {
         try {
@@ -46,19 +68,44 @@ const WorldCupAdmin = () => {
     };
 
     if (loading) {
-        return <div className="text-center py-20 text-foreground-muted font-bold tracking-widest uppercase text-sm">Cargando Panel Admin...</div>;
+        return <div className="text-center py-20 text-foreground-muted font-bold tracking-widest uppercase text-sm">Cargando Panel de Control...</div>;
     }
 
     return (
         <div className="max-w-6xl mx-auto pb-20 animate-fade-in">
-            <div className="mb-8 text-center">
+            <div className="mb-8 text-center relative">
                 <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 text-4xl mb-4 mx-auto border border-red-500/20">👑</div>
                 <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tighter mb-2">
-                    Panel de Control Mundial
+                    Panel de Control
                 </h2>
                 <p className="text-foreground-muted">
-                    Gestiona los participantes, sus pagos y permisos.
+                    Gestiona a los jugadores, sus pagos y el estado global del sistema.
                 </p>
+            </div>
+
+            {/* BOTON DE CAMBIO DE MODO GLOBAL */}
+            <div className="mb-10 bg-background-offset border border-border p-6 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div>
+                    <h3 className="text-lg font-black flex items-center gap-2">
+                        <span>📱</span> Menú Principal de la App
+                    </h3>
+                    <p className="text-sm text-foreground-muted mt-1">
+                        Controla qué botones aparecen en la barra inferior de todos los usuarios.
+                    </p>
+                </div>
+                
+                <button 
+                    onClick={toggleLiveMode}
+                    className={`relative w-64 h-14 rounded-full p-1 transition-colors duration-300 flex items-center ${liveMenuMode ? 'bg-green-500' : 'bg-amber-500'}`}
+                >
+                    <div className="absolute inset-0 flex justify-between items-center px-4 font-bold text-[10px] sm:text-xs text-white uppercase tracking-widest pointer-events-none">
+                        <span className={`${liveMenuMode ? 'opacity-100' : 'opacity-0'}`}>Torneo Vivo</span>
+                        <span className={`${!liveMenuMode ? 'opacity-100' : 'opacity-0'}`}>Pre-Mundial</span>
+                    </div>
+                    <div className={`w-12 h-12 bg-white rounded-full shadow-md transform transition-transform duration-300 flex items-center justify-center text-xl ${liveMenuMode ? 'translate-x-[200px]' : 'translate-x-0'}`}>
+                        {liveMenuMode ? '📡' : '✍️'}
+                    </div>
+                </button>
             </div>
 
             <div className="bg-card border border-card-border rounded-3xl shadow-xl overflow-hidden">

@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import toast from 'react-hot-toast'; 
-import logocopa from '../assets/logocopa.png'; // <-- IMPORTAMOS EL LOGO DE LA COPA
+import logocopa from '../assets/logocopa.png';
 
 // --- DICCIONARIO DE TRADUCCIÓN COMPLETO ---
 const teamTranslations = {
@@ -29,32 +29,19 @@ const teamTranslations = {
     "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Wales": "Gales", "Por definir": "Por definir"
 };
 
-// --- DICCIONARIO DE ESTADOS DEL PARTIDO ---
 const matchStatusTranslations = {
-    SCHEDULED: 'Programado',
-    TIMED: 'Confirmado',
-    IN_PLAY: 'En Juego',
-    PAUSED: 'En Pausa',
-    FINISHED: 'Finalizado',
-    SUSPENDED: 'Suspendido',
-    POSTPONED: 'Pospuesto',
-    CANCELLED: 'Cancelado',
-    AWARDED: 'Adjudicado'
+    SCHEDULED: 'Programado', TIMED: 'Confirmado', IN_PLAY: 'En Juego', PAUSED: 'En Pausa',
+    FINISHED: 'Finalizado', SUSPENDED: 'Suspendido', POSTPONED: 'Pospuesto', CANCELLED: 'Cancelado', AWARDED: 'Adjudicado'
 };
 
-const translateTeam = (englishName) => {
-    return teamTranslations[englishName] || englishName;
-};
+const translateTeam = (englishName) => teamTranslations[englishName] || englishName;
 
 const WorldCupPredictions = ({ currentUser }) => {
     const [activeTab, setActiveTab] = useState('grupos');
     const [matchesByGroup, setMatchesByGroup] = useState({});
     const [selectedGroup, setSelectedGroup] = useState(null); 
     const [predictions, setPredictions] = useState({});
-    
-    // ESTADO PARA DESEMPATES MANUALES
     const [manualTiebreakers, setManualTiebreakers] = useState({});
-    
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -68,7 +55,6 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [extraPicks, setExtraPicks] = useState({});
     const [eventPicks, setEventPicks] = useState({});
 
-    // --- CONFIGURACIÓN DE UI ---
     const tabs = [
         { id: 'grupos', label: 'Grupos', icon: '📅' },
         { id: 'rondas', label: 'Rondas', icon: '📈' },
@@ -115,7 +101,8 @@ const WorldCupPredictions = ({ currentUser }) => {
         { id: 'penales_final', label: 'Final en Penales', desc: '¿La final se decide en penales?' }
     ];
 
-    // --- EFECTOS DE CARGA ---
+    const isAdmin = currentUser.email === 'doctamayot@gmail.com';
+
     useEffect(() => {
         const fetchMatchesAndData = async () => {
             try {
@@ -144,7 +131,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 if (sortedGroups.length > 0) setSelectedGroup(sortedGroups[0]);
 
                 if (currentUser) {
-                    const docRef = currentUser.email === 'doctamayot@gmail.com' 
+                    const docRef = isAdmin 
                         ? doc(db, 'worldCupAdmin', 'results') 
                         : doc(db, 'worldCupPredictions', currentUser.uid);
                     
@@ -167,10 +154,10 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
         };
         fetchMatchesAndData();
-    }, [currentUser]);
+    }, [currentUser, isAdmin]);
 
     useEffect(() => {
-        if (!currentUser || currentUser.email === 'doctamayot@gmail.com') return;
+        if (!currentUser || isAdmin) return;
         const docRef = doc(db, 'worldCupPredictions', currentUser.uid);
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -179,9 +166,8 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
         });
         return () => unsubscribe();
-    }, [currentUser]);
+    }, [currentUser, isAdmin]);
 
-    // --- LÓGICA DE NEGOCIO ---
     const allTeams = useMemo(() => {
         const teamsMap = new Map();
         Object.values(matchesByGroup).flat().forEach(m => {
@@ -207,7 +193,10 @@ const WorldCupPredictions = ({ currentUser }) => {
     };
 
     const handleEventChange = (eventId, value) => {
-        setEventPicks(prev => ({ ...prev, [eventId]: value }));
+        setEventPicks(prev => ({ 
+            ...prev, 
+            [eventId]: prev[eventId] === value ? '' : value 
+        }));
     };
 
     const handleManualTiebreaker = (group, teamName, direction) => {
@@ -224,11 +213,69 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
     };
 
-    // --- GUARDADO PROFESIONAL CON TOASTS ---
+    // --- BOTÓN DE LIMPIAR TODO PARA EL ADMIN ---
+    const handleClearData = () => {
+        if (!window.confirm("⚠️ ¡Atención Admin! Vas a BORRAR TODAS tus respuestas y dejarlas en blanco. ¿Deseas continuar?")) return;
+
+        setPredictions({});
+        setEventPicks({});
+        setExtraPicks({});
+        setKnockoutPicks({
+            octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: []
+        });
+        setManualTiebreakers({});
+
+        toast.success("🧹 ¡Todo ha sido borrado! Recuerda presionar Guardar.");
+    };
+
+    // --- BOTÓN DE SIMULACIÓN PARA EL ADMIN ---
+    const handleSimulateData = () => {
+        if (!window.confirm("🎲 ¡Atención Admin! Vas a sobreescribir TODAS tus respuestas con datos aleatorios. ¿Deseas continuar?")) return;
+
+        const newPreds = {};
+        Object.values(matchesByGroup).flat().forEach(m => {
+            newPreds[m.id] = {
+                home: Math.floor(Math.random() * 4),
+                away: Math.floor(Math.random() * 4)
+            };
+        });
+        setPredictions(newPreds);
+
+        const newEvents = {};
+        specialEvents.forEach(e => {
+            newEvents[e.id] = Math.random() > 0.5 ? 'SI' : 'NO';
+        });
+        setEventPicks(newEvents);
+
+        const newExtras = {};
+        extraQuestions.forEach(q => {
+            if (q.type === 'team') {
+                newExtras[q.id] = allTeams[Math.floor(Math.random() * allTeams.length)]?.name || '';
+            } else if (q.type === 'group') {
+                const groups = Object.keys(matchesByGroup);
+                newExtras[q.id] = groups[Math.floor(Math.random() * groups.length)] || '';
+            } else {
+                newExtras[q.id] = 'Jugador Test ' + Math.floor(Math.random() * 100);
+            }
+        });
+        setExtraPicks(newExtras);
+
+        const shuffledTeams = [...allTeams].sort(() => 0.5 - Math.random());
+        setKnockoutPicks({
+            octavos: shuffledTeams.slice(0, 16),
+            cuartos: shuffledTeams.slice(0, 8),
+            semis: shuffledTeams.slice(0, 4),
+            campeon: [shuffledTeams[0]],
+            subcampeon: [shuffledTeams[1]],
+            tercero: [shuffledTeams[2]],
+            cuarto: [shuffledTeams[3]]
+        });
+
+        toast.success("✅ ¡Datos aleatorios inyectados! Recuerda presionar Guardar.");
+    };
+
     const handleSavePredictions = async () => {
         setSaving(true);
-        const isAdmin = currentUser.email === 'doctamayot@gmail.com';
-        
         const predictionData = {
             predictions,
             knockoutPicks,
@@ -305,8 +352,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
 
         const teamsArray = Object.values(teams);
-
-        // PASO 1: Detectar Empates Totales
         const statsCount = {};
         teamsArray.forEach(t => {
             const key = `${t.pts}_${t.dg}_${t.gf}`;
@@ -320,7 +365,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
         });
 
-        // PASO 2: Ordenar la tabla
         return teamsArray.sort((a, b) => {
             if (b.pts !== a.pts) return b.pts - a.pts;
             if (b.dg !== a.dg) return b.dg - a.dg;
@@ -340,7 +384,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         let thirds = [];
         Object.keys(matchesByGroup).forEach(groupName => {
             const standings = calculateStandings(groupName);
-            // Agregamos qualReason (1º, 2º o Mejor 3º)
             if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
             if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
             if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
@@ -405,7 +448,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         if (Object.keys(matchesByGroup).length === 0) return []; 
         const missing = [];
         
-        // 1. Fase de Grupos
         const allGroupMatches = Object.values(matchesByGroup).flat();
         const totalMatches = allGroupMatches.length;
         const predictedCount = allGroupMatches.filter(m => {
@@ -417,7 +459,6 @@ const WorldCupPredictions = ({ currentUser }) => {
 
         if (predictedCount < totalMatches) missing.push(`Fase de Grupos (${predictedCount}/${totalMatches})`);
 
-        // 2. Rondas
         if (knockoutPicks.octavos.length < 16) missing.push(`Octavos (${knockoutPicks.octavos.length}/16)`);
         if (knockoutPicks.cuartos.length < 8) missing.push(`Cuartos (${knockoutPicks.cuartos.length}/8)`);
         if (knockoutPicks.semis.length < 4) missing.push(`Semifinales (${knockoutPicks.semis.length}/4)`);
@@ -429,23 +470,19 @@ const WorldCupPredictions = ({ currentUser }) => {
         if (knockoutPicks.cuarto.length === 0) podiumMissing.push('Cuarto');
         if (podiumMissing.length > 0) missing.push(`Podio (Falta: ${podiumMissing.join(', ')})`);
 
-        // 3. Extras
         const filledExtras = extraQuestions.filter(q => {
             const value = extraPicks[q.id];
             return value !== undefined && value !== null && value.toString().trim() !== '';
         }).length;
         if (filledExtras < extraQuestions.length) missing.push(`Extras (${filledExtras}/${extraQuestions.length})`);
 
-        // 4. Eventos
         const filledEvents = specialEvents.filter(e => eventPicks[e.id] === 'SI' || eventPicks[e.id] === 'NO').length;
         if (filledEvents < specialEvents.length) missing.push(`Eventos (${filledEvents}/${specialEvents.length})`);
 
         return missing;
     };
 
-    // --- RENDERIZADO FINAL ---
     const missingSections = getMissingSections();
-    const isAdmin = currentUser.email === 'doctamayot@gmail.com';
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center py-20">
@@ -528,7 +565,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             {/* --- CONTENIDO DINÁMICO POR TABS --- */}
             {activeTab === 'grupos' && (
                 <div className="animate-fade-in">
-                    <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-6 pb-4 snap-x">
+                    <div className="flex flex-nowrap md:flex-wrap overflow-x-auto hide-scrollbar gap-2 sm:gap-3 mb-6 pb-4 snap-x md:snap-none">
                         {Object.keys(matchesByGroup).sort((a,b)=>a.localeCompare(b)).map(gn => (
                             <button
                                 key={gn}
@@ -546,15 +583,12 @@ const WorldCupPredictions = ({ currentUser }) => {
                         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                             <div className="xl:col-span-7 space-y-4">
                                 
-                                {/* HEADER PROFESIONAL CON LOGOCOPA Y TITULO DE GRUPO */}
-                                {/* HEADER PROFESIONAL CON LOGOCOPA Y BANDERITAS */}
                                 <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
                                     <h3 className="text-xl sm:text-2xl font-black text-primary uppercase tracking-widest flex items-center gap-2 sm:gap-3">
                                         <img src={logocopa} alt="Copa" className="w-6 h-6 sm:w-9 sm:h-9 object-contain filter drop-shadow-md shrink-0" />
                                         <span className="truncate">{selectedGroup}</span>
                                     </h3>
                                     
-                                    {/* BANDERITAS DEL GRUPO */}
                                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                                         {calculateStandings(selectedGroup).map(team => (
                                             <div key={team.name} className="w-5 h-3.5 sm:w-7 sm:h-5 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 relative" title={translateTeam(team.name)}>
@@ -569,7 +603,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     {matchesByGroup[selectedGroup].map(match => (
                                         <div key={match.id} className="bg-card border border-card-border rounded-2xl shadow-sm hover:shadow-md hover:border-primary/50 transition-all duration-300 overflow-hidden group relative">
                                             
-                                            {/* HEADER DEL PARTIDO (STATUS + JORNADA) */}
                                             <div className="bg-background-offset px-4 py-2.5 flex justify-between items-center border-b border-border">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[9px] font-black text-background bg-primary px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
@@ -584,7 +617,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                                                 </span>
                                             </div>
 
-                                            {/* CUERPO DEL PARTIDO (BANDERAS RECTANGULARES) */}
                                             <div className="p-4 flex flex-col gap-3 relative z-10">
                                                 <img src={logocopa} alt="" className="absolute right-2 top-1/2 -translate-y-1/2 w-28 opacity-[0.03] grayscale pointer-events-none" />
                                                 
@@ -617,7 +649,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                                         <h3 className="text-xl font-black text-foreground ml-2 sm:ml-0">Tabla en Vivo</h3>
                                     </div>
                                     
-                                    {/* ALERTA DE EMPATE TOTAL */}
                                     {calculateStandings(selectedGroup).some(t => t.isTied) && (
                                         <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-4 flex items-start gap-2 animate-fade-in mx-2 sm:mx-0">
                                             <span className="text-amber-500 text-lg">⚖️</span>
@@ -645,21 +676,20 @@ const WorldCupPredictions = ({ currentUser }) => {
                                                 {calculateStandings(selectedGroup).map((team, index) => (
                                                     <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
                                                         <td className="py-3 align-middle">
-    <div className="flex items-center gap-1.5 sm:gap-2">
-        <span className={`w-4 sm:w-5 text-[10px] sm:text-xs font-bold ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
-        <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0 relative">
-            <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-sm z-10 pointer-events-none"></div>
-            <img src={team.crest} className="w-full h-full object-cover" alt="" />
-        </div>
-        <span className="font-semibold text-[11px] sm:text-sm truncate max-w-[65px] sm:max-w-[120px]" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
-    </div>
-</td>
+                                                            <div className="flex items-center gap-1.5 sm:gap-2">
+                                                                <span className={`w-4 sm:w-5 text-[10px] sm:text-xs font-bold ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
+                                                                <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0 relative">
+                                                                    <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-sm z-10 pointer-events-none"></div>
+                                                                    <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                                                                </div>
+                                                                <span className="font-semibold text-[11px] sm:text-sm truncate max-w-[65px] sm:max-w-[120px]" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
+                                                            </div>
+                                                        </td>
                                                         <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted">{team.pj}</td>
                                                         <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted font-medium">{team.gf}</td>
                                                         <td className="py-3 text-center text-[11px] sm:text-sm text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
                                                         <td className="py-3 text-center text-[11px] sm:text-sm font-black text-primary">{team.pts}</td>
                                                         
-                                                        {/* CONTROLES DE DESEMPATE MANUAL */}
                                                         {calculateStandings(selectedGroup).some(t => t.isTied) && (
                                                             <td className="py-3 text-center">
                                                                 {team.isTied && (
@@ -692,7 +722,6 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             {activeTab === 'rondas' && (
                 <div className="animate-fade-in">
-                    {/* INSTRUCCIONES DINÁMICAS BASADAS EN LA RONDA */}
                     <div className="bg-primary/10 border-l-4 border-primary p-4 mb-8 rounded-r-2xl animate-fade-in shadow-sm">
                         <div className="flex items-start gap-3">
                             <span className="text-xl">💡</span>
@@ -709,7 +738,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                         </div>
                     </div>
 
-                    {/* TABS DE RONDAS CON MICRO-ETIQUETAS */}
                     <div className="flex overflow-x-auto hide-scrollbar gap-1.5 mb-8 pb-4 border-b border-border snap-x">
                         {roundTabs.map(rt => (
                             <button
@@ -745,7 +773,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                                         <span className="font-bold text-[11px] sm:text-xs text-foreground leading-tight mb-3 flex-grow flex items-center justify-center w-full">
                                             {translateTeam(team.name)}
                                         </span>
-                                        {/* ETIQUETA DE POR QUÉ CLASIFICÓ ALINEADA AL FONDO */}
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shrink-0 mt-auto">
                                             {team.qualReason} {team.group ? team.group.replace('Grupo ', '') : ''}
                                         </span>
@@ -832,8 +859,31 @@ const WorldCupPredictions = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* BOTÓN FLOTANTE (FAB) DE GUARDADO - OPTIMIZADO RESPONSIVE */}
-            <div className="fixed bottom-24 right-4 sm:bottom-10 sm:right-10 z-[100]">
+            {/* BOTONES FLOTANTES DE ACCIÓN */}
+            <div className="fixed bottom-24 right-4 sm:bottom-10 sm:right-10 z-[100] flex flex-col gap-3 items-end">
+                {isAdmin && (
+                    <div className="flex flex-col gap-2">
+                        <button 
+                            onClick={handleClearData}
+                            type="button"
+                            className="bg-red-600 text-white font-black py-2.5 px-4 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform flex items-center gap-2"
+                            title="Borrar todo"
+                        >
+                            <span>🧹</span>
+                            <span className="text-xs uppercase tracking-wider hidden sm:inline">Limpiar Todo</span>
+                        </button>
+                        <button 
+                            onClick={handleSimulateData}
+                            type="button"
+                            className="bg-purple-600 text-white font-black py-2.5 px-4 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform flex items-center gap-2"
+                            title="Simular datos al azar"
+                        >
+                            <span>🎲</span>
+                            <span className="text-xs uppercase tracking-wider hidden sm:inline">Llenar Random</span>
+                        </button>
+                    </div>
+                )}
+                
                 <button 
                     onClick={handleSavePredictions}
                     disabled={saving}
@@ -844,7 +894,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                     ) : (
                         <>
                             <span className="text-base sm:text-lg">💾</span>
-                            {/* Ocultamos "Predicciones" en móvil */}
                             <span className="hidden sm:inline">Guardar Predicciones</span>
                             <span className="sm:hidden">Guardar</span>
                         </>

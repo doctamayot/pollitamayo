@@ -22,8 +22,11 @@ import QuinielaSelector from './components/QuinielaSelector';
 import LeagueChampionsView from './components/LeagueChampionsView';
 import WorldCupRules from './components/WorldCupRules'; 
 import WorldCupPredictions from './components/WorldCupPredictions';
+import WorldCupMyReport from './components/WorldCupMyReport';
 import WorldCupAdmin from './components/WorldCupAdmin'; 
 import WorldCupPot from './components/WorldCupPot'; 
+import WorldCupGrid from './components/WorldCupGrid';
+import WorldCupRanking from './components/WorldCupRanking';
 
 // Config
 import { ADMIN_EMAIL, USERS_COLLECTION } from './config';
@@ -40,6 +43,7 @@ function App() {
     const [authReason, setAuthReason] = useState(null);
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [liveMenuMode, setLiveMenuMode] = useState(false);
 
     const activeQuinielas = useMemo(() => 
         allQuinielas.filter(q => q.isActive && !q.isClosed),
@@ -121,6 +125,26 @@ function App() {
         });
         return () => unsubscribe();
     }, [user]);
+
+    // ESCUCHAR EL MODO LIVE DESDE FIREBASE
+    useEffect(() => {
+        const settingsRef = doc(db, 'worldCupAdmin', 'settings');
+        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const isLive = !!docSnap.data().liveMenuMode;
+                setLiveMenuMode(isLive);
+                
+                // Si el modo live se apaga y el usuario está en la grilla, lo devolvemos a predicciones (EXCEPTO AL ADMIN)
+                if (!isLive && mainView === 'worldCup_grid' && user?.email !== 'doctamayot@gmail.com') {
+                    setMainView('worldCup_predictions');
+                }
+            } else {
+                setLiveMenuMode(false);
+                if (mainView === 'worldCup_grid' && user?.email !== 'doctamayot@gmail.com') setMainView('worldCup_predictions');
+            }
+        });
+        return () => unsubscribeSettings();
+    }, [mainView, user]);
     
     useEffect(() => {
         if (isAdmin) {
@@ -174,22 +198,18 @@ function App() {
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 w-full max-w-5xl">
                 
-                {/* TARJETA POLLA MUNDIALISTA - PREMIUM */}
                 <div 
                     onClick={() => navigateTo('worldCup_predictions')}
                     className="bg-gradient-to-b from-card to-background-offset border border-primary/30 hover:border-primary rounded-[2.5rem] p-8 lg:p-10 cursor-pointer transition-all duration-500 transform hover:-translate-y-2 group shadow-xl hover:shadow-[0_20px_50px_-15px_rgba(245,158,11,0.4)] flex flex-col items-center text-center relative overflow-hidden"
                 >
-                    {/* MARCA DE AGUA LOGOCOPA */}
                     <img 
                         src={logocopa} 
                         alt="" 
                         className="absolute -right-10 -bottom-10 w-64 h-64 object-contain opacity-[0.04] dark:opacity-[0.08] group-hover:opacity-10 dark:group-hover:opacity-20 group-hover:scale-110 transition-all duration-700 pointer-events-none z-0 rotate-12" 
                     />
                     
-                    {/* BRILLO DE FONDO */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1/2 bg-gradient-to-b from-primary/10 to-transparent z-0 pointer-events-none"></div>
 
-                    {/* BADGE PREMIUM */}
                     <div className="absolute top-6 left-6 z-20">
                         <span className="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md shadow-sm">
                             ⭐ Edición Premium
@@ -213,7 +233,6 @@ function App() {
                     </span>
                 </div>
 
-                {/* TARJETA QUINIELAS LIGAS */}
                 <div 
                     onClick={() => navigateTo('active')}
                     className="bg-card border border-card-border hover:border-border rounded-[2.5rem] p-8 lg:p-10 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 group shadow-lg flex flex-col items-center text-center relative overflow-hidden"
@@ -291,8 +310,19 @@ function App() {
                             <span className="text-xl">🎯</span> {user.email === 'doctamayot@gmail.com' ? 'Ajustar Resultados' : 'Mis predicciones'}
                         </button>
                         
+                        {/* BOTÓN GRILLA: APARECE SI ESTÁ EN MODO LIVE O SI ES EL ADMIN */}
+                        {(liveMenuMode || user.email === 'doctamayot@gmail.com') && (
+                            <button onClick={() => navigateTo('worldCup_grid')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_grid' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
+                                <span className="text-xl">📡</span> Grilla Live
+                            </button>
+                        )}
+                        
+                        <button onClick={() => navigateTo('worldCup_myReport')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_myReport' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
+                            <span className="text-xl">👁️</span> Mi Polla
+                        </button>
+                        
                         <button onClick={() => navigateTo('worldCup_ranking')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_ranking' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
-                            <span className="text-xl">🏆</span> Ranking
+                            <span className="text-xl">🏆</span> Ranking Oficial
                         </button>
                         
                         <button onClick={() => navigateTo('worldCup_rules')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_rules' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
@@ -308,7 +338,7 @@ function App() {
                             <>
                                 <span className="text-xs text-red-500 font-bold tracking-wider uppercase px-4 block pb-1 border-b border-red-500/20 mb-3 mt-6">Administración</span>
                                 <button onClick={() => navigateTo('worldCup_admin')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_admin' ? 'bg-red-500 text-white shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
-                                    <span className="text-xl">👑</span> Panel Usuarios
+                                    <span className="text-xl">👑</span> Panel Control
                                 </button>
                             </>
                         )}
@@ -346,19 +376,30 @@ function App() {
 
     // --- MENÚ INFERIOR DINÁMICO (BOTTOM NAV) ---
     const renderMobileBottomNav = () => {
-        // Si estamos en el selector de inicio, no mostramos el menú de abajo
         if (!isWorldCupView && !isQuinielaView) return null;
 
         let navItems = [];
 
-        // Definimos los botones dependiendo de dónde esté el usuario
         if (isWorldCupView) {
-            navItems = [
-                { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Resultados' : 'Predicciones', icon: '🎯' },
-                { id: 'worldCup_ranking', label: 'Ranking', icon: '🏆' },
-                { id: 'worldCup_rules', label: 'Reglamento', icon: '📜' },
-                { id: 'worldCup_pot', label: 'Pot', icon: '💰' },
-            ];
+            if (liveMenuMode) {
+                navItems = [
+                    { id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' },
+                    { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Resultados' : 'Predicciones', icon: '🎯' },
+                    { id: 'worldCup_ranking', label: 'Ranking', icon: '🏆' },
+                    { id: 'worldCup_rules', label: 'Reglamento', icon: '📜' },
+                ];
+            } else {
+                navItems = [
+                    { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Resultados' : 'Predicciones', icon: '🎯' },
+                    { id: 'worldCup_myReport', label: 'Mi Polla', icon: '👁️' },
+                    { id: 'worldCup_rules', label: 'Reglamento', icon: '📜' },
+                    { id: 'worldCup_pot', label: 'Pot', icon: '💰' },
+                ];
+                // Si es el admin y está en pre-mundial, le inyectamos la grilla para que pueda probar (5 iconos en la barra)
+                if (user.email === 'doctamayot@gmail.com') {
+                    navItems.unshift({ id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' });
+                }
+            }
         } else if (isQuinielaView) {
             navItems = [
                 { id: 'active', label: 'Activa', icon: '⚽' },
@@ -371,10 +412,9 @@ function App() {
         return (
             <nav className="lg:hidden fixed bottom-0 left-0 w-full bg-card border-t border-card-border z-50 flex justify-around items-center h-16 px-2 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
                 {navItems.map(item => {
-                    // Lógica para iluminar el botón correcto
                     const isActive = mainView === item.id || 
                                      (item.id === 'worldCup_predictions' && mainView === 'worldCup') ||
-                                     (item.id === 'leaderboard' && mainView === 'viewProfile'); // Mantiene iluminado el ranking al ver un perfil
+                                     (item.id === 'leaderboard' && mainView === 'viewProfile');
                     
                     return (
                         <button
@@ -484,11 +524,15 @@ function App() {
                         </div>
                     )}
 
+                    {mainView === 'worldCup_myReport' && (
+                        <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
+                            <WorldCupMyReport currentUser={user} />
+                        </div>
+                    )}
+
                     {mainView === 'worldCup_ranking' && (
-                        <div className="bg-card p-6 sm:p-12 rounded-3xl border border-card-border shadow-xl flex flex-col items-center text-center relative">
-                            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-4xl mb-6">🏆</div>
-                            <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tighter mb-4">Ranking Oficial</h2>
-                            <p className="text-foreground-muted">Próximamente: La tabla global de posiciones del Mundial.</p>
+                        <div className="bg-card p-4 sm:p-0 rounded-3xl border border-card-border shadow-xl overflow-hidden">
+                            <WorldCupRanking />
                         </div>
                     )}
 
@@ -509,10 +553,16 @@ function App() {
                             <WorldCupAdmin />
                         </div>
                     )}
+                    
+                    {mainView === 'worldCup_grid' && (
+                        <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
+                            <WorldCupGrid currentUser={user} />
+                        </div>
+                    )}
 
                 </div>
             </main>
-<Toaster 
+        <Toaster 
             position="top-center"
             toastOptions={{
                 className: 'bg-card text-foreground border border-border rounded-2xl shadow-xl font-bold',
