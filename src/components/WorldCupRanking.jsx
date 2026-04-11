@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
@@ -20,6 +20,8 @@ const teamTranslations = {
     "Portugal": "Portugal", "Senegal": "Senegal", "South Korea": "Corea del Sur", "Spain": "España", 
     "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir"
 };
+
+const translateTeam = (name) => teamTranslations[name] || name;
 
 const extraQuestions = [
     { id: 'goleador', manual: true }, { id: 'equipo_goleador' }, { id: 'equipo_menos_goleador' },
@@ -91,29 +93,41 @@ const WorldCupRanking = () => {
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, []);
 
-    const getStandings = (groupMatches, preds, ties) => {
+    const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
         groupMatches.forEach(m => {
             const h = m.homeTeam.name; const v = m.awayTeam.name;
             if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
             if (!teams[v]) teams[v] = { name: v, pts: 0, dg: 0, gf: 0 };
+        });
+
+        groupMatches.forEach(m => {
             const pr = preds?.[m.id];
-            if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '') {
-                const gh = parseInt(pr.home); const ga = parseInt(pr.away);
-                teams[h].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
-                teams[v].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
-                teams[h].dg += (gh - ga); teams[v].dg += (ga - gh);
-                teams[h].gf += gh; teams[v].gf += ga;
+            if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '' && pr.away !== undefined) {
+                const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
+                teams[m.homeTeam.name].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
+                teams[m.awayTeam.name].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
+                teams[m.homeTeam.name].dg += (gh - ga); teams[m.awayTeam.name].dg += (ga - gh);
+                teams[m.homeTeam.name].gf += gh; teams[m.awayTeam.name].gf += ga;
             }
         });
-        return Object.values(teams).sort((a,b) => (b.pts - a.pts) || (b.dg - a.dg) || (b.gf - a.gf) || ((ties?.[a.name] || 0) - (ties?.[b.name] || 0)));
-    };
+
+        return Object.values(teams).sort((a, b) => {
+            if (b.pts !== a.pts) return b.pts - a.pts;
+            if (b.dg !== a.dg) return b.dg - a.dg;
+            if (b.gf !== a.gf) return b.gf - a.gf;
+            const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
+            const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
+            if (tieA !== tieB) return tieA - tieB; 
+            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+        });
+    }, []);
 
     const isGroupStageFinished = useMemo(() => {
         if (matches.length === 0) return false;
         return matches.every(m => {
             const apiFinished = m.status === 'FINISHED';
-            const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '';
+            const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
             return apiFinished || adminFinished;
         });
     }, [matches, adminResults]);
@@ -127,12 +141,12 @@ const WorldCupRanking = () => {
         }, {});
         
         Object.keys(byGroup).forEach(g => {
-            const st = getStandings(byGroup[g], adminResults.predictions, adminResults.manualTiebreakers?.[g]);
+            const st = getStandings(byGroup[g], adminResults.predictions, g, adminResults.manualTiebreakers);
             if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return [...top2, ...thirds.slice(0, 8)];
-    }, [matches, adminResults]);
+    }, [matches, adminResults, getStandings]);
 
 
     const ranking = useMemo(() => {
@@ -148,11 +162,10 @@ const WorldCupRanking = () => {
 
             const stats = { plenosCount: 0, ptsPlenos: 0, ptsOtrosAciertos: 0, ptsHonorYBonos: 0, ptsRondas: 0, ptsExtras: 0, ptsEventos: 0, total: 0 };
 
-            // 1. Partidos Fase de Grupos
             matches.forEach(m => {
                 const p = userData.predictions?.[m.id]; const a = adminResults?.predictions?.[m.id];
-                const rH = a?.home !== undefined ? a.home : m.score?.fullTime?.home;
-                const rA = a?.away !== undefined ? a.away : m.score?.fullTime?.away;
+                const rH = a?.home !== undefined && a?.home !== '' ? a.home : m.score?.fullTime?.home;
+                const rA = a?.away !== undefined && a?.away !== '' ? a.away : m.score?.fullTime?.away;
                 const hasO = (a && a.home !== '' && a.away !== '') || m.status === 'FINISHED' || m.status.includes('PLAY');
                 if (hasO && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
@@ -166,27 +179,28 @@ const WorldCupRanking = () => {
                 }
             });
 
-            // 2. Plenos de Grupo
             let userTop2 = []; let userThirds = [];
             Object.keys(byGroup).forEach(g => {
                 const isGroupFinished = byGroup[g].every(m => {
                     const apiFinished = m.status === 'FINISHED';
-                    const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '';
+                    const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
                     return apiFinished || adminFinished;
                 });
                 
-                const uT = getStandings(byGroup[g], userData.predictions, userData.manualTiebreakers?.[g]);
+                const uT = getStandings(byGroup[g], userData.predictions, g, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
                 
                 if (isGroupFinished) {
-                    const aT = getStandings(byGroup[g], adminResults?.predictions, adminResults?.manualTiebreakers?.[g]);
-                    if (uT.length >= 4 && aT.length >= 4 && uT.slice(0,4).map(t=>t.name).every((v,i) => v === aT[i].name)) stats.ptsHonorYBonos += 8;
+                    const aT = getStandings(byGroup[g], adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                    if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
+                        stats.ptsHonorYBonos += 8;
+                    }
                 }
             });
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            // 3. Rondas (AQUÍ ESTÁ LA CORRECCIÓN: Faltaban estas líneas en el useMemo)
+            // Rondas Clásicas (16vos a Semis)
             roundTabs.forEach(r => {
                 const is16 = r.id === 'dieciseisavos';
                 if (is16 && !isGroupStageFinished) return;
@@ -197,7 +211,23 @@ const WorldCupRanking = () => {
                 }
             });
 
-            // 4. Extras y Eventos
+            // NUEVO: Aciertos de llegar a la Gran Final (6 pts c/u) y 3er Puesto (4 pts c/u)
+            const uFinalists = [...(userData.knockoutPicks?.campeon || []), ...(userData.knockoutPicks?.subcampeon || [])];
+            const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
+            if (aFinalists.length > 0) {
+                uFinalists.forEach(ut => {
+                    if (ut && aFinalists.some(at => at && at.name === ut.name)) stats.ptsRondas += 6;
+                });
+            }
+
+            const uThirds = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
+            const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+            if (aThirds.length > 0) {
+                uThirds.forEach(ut => {
+                    if (ut && aThirds.some(at => at && at.name === ut.name)) stats.ptsRondas += 4;
+                });
+            }
+
             extraQuestions.forEach(q => {
                 const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
                 if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) stats.ptsExtras += 6;
@@ -207,13 +237,18 @@ const WorldCupRanking = () => {
                 if (u && a === u) stats.ptsEventos += (u === 'SI' ? 5 : 2);
             });
 
-            // 5. Cuadro de Honor
             const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
             let honorHits = 0;
             honorSlots.forEach(s => {
                 if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { stats.ptsHonorYBonos += s.pts; honorHits++; }
             });
-            if (honorHits === 4) stats.ptsHonorYBonos += 10;
+            
+            // Evaluamos si atinó el orden exacto del Top 4 (Super Bono)
+            let isSuperBono = false;
+            if (adminResults?.knockoutPicks) {
+                isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
+            }
+            if (isSuperBono) stats.ptsHonorYBonos += 10;
 
             stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
             ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa, ...stats });
@@ -226,7 +261,7 @@ const WorldCupRanking = () => {
             r.position = currentRank;
         });
         return ranks;
-    }, [allPredictions, matches, adminResults, usersInfo, isGroupStageFinished, adminQualified32]);
+    }, [allPredictions, matches, adminResults, usersInfo, isGroupStageFinished, adminQualified32, getStandings]);
 
     const premiosRepartidos = useMemo(() => {
         if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, r1: 1, r2: 0, r3: 0 };
@@ -349,20 +384,14 @@ const WorldCupRanking = () => {
                     
                     return (
                         <div key={user.uid} className={`bg-card border ${isExpanded ? 'border-primary shadow-lg ring-1 ring-primary/20' : 'border-card-border hover:border-border'} rounded-2xl overflow-hidden transition-all duration-300`}>
-                            
-                            {/* --- CONTENEDOR ROW REPARADO (RESPONSIVE SEGURO) --- */}
                             <div onClick={() => setExpandedUser(isExpanded ? null : user.uid)} className="flex items-center p-3 sm:p-5 cursor-pointer relative overflow-hidden select-none">
-                                
-                                {/* Decoradores de Posición Podio */}
                                 {user.position === premiosRepartidos.r1 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-400"></div>}
                                 {user.position === premiosRepartidos.r2 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-400"></div>}
                                 {user.position === premiosRepartidos.r3 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-600"></div>}
                                 
-                                {/* Número y Avatar */}
                                 <div className="w-8 sm:w-14 flex justify-center shrink-0 font-black text-lg sm:text-2xl text-foreground-muted/30">{user.position}</div>
                                 <img src={user.photoURL} className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover shadow-sm mr-3 sm:mr-5 border shrink-0 border-border`} alt="" />
                                 
-                                {/* Nombre y Etiquetas (Flexible, colapsable con ... si es muy largo) */}
                                 <div className="flex flex-col flex-1 min-w-0 pr-2">
                                     <span className="font-bold text-sm sm:text-lg text-foreground leading-tight truncate">{formatShortName(user.name)}</span>
                                     <div className="flex flex-wrap gap-1 mt-1">
@@ -371,7 +400,6 @@ const WorldCupRanking = () => {
                                     </div>
                                 </div>
 
-                                {/* Zona de Puntos (Ancho Fijo y Alineación a la Derecha) */}
                                 <div className="flex items-center justify-end gap-2 sm:gap-4 shrink-0 border-l border-border/20 pl-2 sm:pl-5 min-w-[65px] sm:min-w-[100px]">
                                     <div className="flex flex-col items-end justify-center w-full">
                                         <span className="font-black text-xl sm:text-3xl text-foreground tabular-nums leading-none truncate w-full text-right tracking-tighter">{user.total}</span>
@@ -380,8 +408,6 @@ const WorldCupRanking = () => {
                                     <span className={`transition-transform duration-300 opacity-30 text-xs ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                                 </div>
                             </div>
-                            
-                            {/* --- ACORDEÓN EXPANDIBLE --- */}
                             {isExpanded && (
                                 <div className="bg-background-offset border-t border-border p-5 sm:p-8 animate-fade-in">
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">

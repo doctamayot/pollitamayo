@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
@@ -65,27 +65,14 @@ const roundTabs = [
 
 const translateTeam = (englishName) => teamTranslations[englishName] || englishName;
 
-// --- MOTOR INTELIGENTE PARA EXTRAS MANUALES (SMART MATCH) ---
 const isSmartMatch = (userText, adminText) => {
     if (!userText || !adminText) return false;
-
-    // 1. Limpieza total
-    const clean = (str) => str.toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-        .replace(/[^a-z0-9]/g, " ") 
-        .replace(/\s+/g, " ")
-        .trim();
-
+    const clean = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
     const u = clean(userText);
     const a = clean(adminText);
-
     if (u === a) return true;
-
-    // 2. Si lo que escribió el usuario es una parte importante de la respuesta
     if (u.length >= 4 && a.includes(u)) return true;
     if (a.length >= 4 && u.includes(a)) return true;
-
-    // 3. Algoritmo de Distancia Levenshtein para perdonar errores ortográficos (Ej: olice vs olise)
     const getLevenshtein = (s, t) => {
         if (!s.length) return t.length;
         if (!t.length) return s.length;
@@ -103,49 +90,36 @@ const isSmartMatch = (userText, adminText) => {
         }
         return arr[t.length][s.length];
     };
-
-    // Revisar palabra por palabra (por si el jugador puso "M olise" y el admin "Michael Olise")
     const uWords = u.split(' ');
     const aWords = a.split(' ');
-
     for (const uWord of uWords) {
         if (uWord.length < 4) continue; 
         for (const aWord of aWords) {
             if (aWord.length < 4) continue;
             if (uWord === aWord) return true;
-            
             const dist = getLevenshtein(uWord, aWord);
             const threshold = aWord.length > 5 ? 2 : 1; 
             if (dist <= threshold) return true;
         }
     }
-
-    // Ultimo intento uniendo todo (por si escriben "molise")
     const uNoSpace = u.replace(/\s/g, '');
     const aNoSpace = a.replace(/\s/g, '');
     if (uNoSpace.length > 4 && aNoSpace.includes(uNoSpace)) return true;
-
     const distFull = getLevenshtein(uNoSpace, aNoSpace);
     const thresholdFull = aNoSpace.length > 8 ? 2 : 1;
     if (distFull <= thresholdFull) return true;
-
     return false;
 };
 
 const WorldCupMyReport = ({ currentUser }) => {
     const [matches, setMatches] = useState([]);
     const [matchesByGroup, setMatchesByGroup] = useState({});
-    
-    // ESTADOS DE PREDICCIONES DEL USUARIO
     const [predictions, setPredictions] = useState({});
     const [knockoutPicks, setKnockoutPicks] = useState(null);
     const [extraPicks, setExtraPicks] = useState({});
     const [eventPicks, setEventPicks] = useState({});
     const [manualTiebreakers, setManualTiebreakers] = useState({});
-    
-    // ESTADO DEL ADMIN (RESULTADOS OFICIALES)
     const [adminResults, setAdminResults] = useState(null);
-
     const [loading, setLoading] = useState(true);
     const [reportTab, setReportTab] = useState('partidos'); 
     const [matchFilter, setMatchFilter] = useState('ALL'); 
@@ -160,7 +134,6 @@ const WorldCupMyReport = ({ currentUser }) => {
                 if (data && data.matches) {
                     const groupStageMatches = data.matches.filter(m => m.stage === 'GROUP_STAGE');
                     setMatches(groupStageMatches);
-
                     const grouped = groupStageMatches.reduce((acc, match) => {
                         let groupName = match.group || 'Fase de Grupos';
                         groupName = groupName.replace('GROUP_', 'Grupo ');
@@ -210,36 +183,28 @@ const WorldCupMyReport = ({ currentUser }) => {
 
     const displayedMatches = useMemo(() => {
         let filtered = matches;
-        
         if (matchFilter === 'FINISHED') {
             filtered = matches.filter(m => {
                 const adminPred = adminResults?.predictions?.[m.id];
                 const hasAdminResult = adminPred && adminPred.home !== '' && adminPred.away !== '';
                 return hasAdminResult || m.status === 'FINISHED';
             });
-            // Ordenar Ya Jugados: DESCENDENTE (El más reciente y recién terminado arriba)
             return filtered.sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate));
         }
-        
         if (matchFilter === 'PENDING') {
             filtered = matches.filter(m => {
                 const adminPred = adminResults?.predictions?.[m.id];
                 const hasAdminResult = adminPred && adminPred.home !== '' && adminPred.away !== '';
                 return !hasAdminResult && m.status !== 'FINISHED';
             });
-            // Ordenar Por Jugar: ASCENDENTE (El próximo a jugarse arriba)
             return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
         }
-        
-        // Filtro "Todos": ASCENDENTE (Orden cronológico normal del torneo desde el partido 1)
         return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-
     }, [matches, matchFilter, adminResults]);
-    // --- SENSOR DE ESTADO DE GRUPOS (Para evitar cálculos prematuros) ---
+
     const groupStatus = useMemo(() => {
         const status = {};
         let allFinished = true;
-
         Object.keys(matchesByGroup).forEach(g => {
             const groupMatches = matchesByGroup[g];
             const isGroupFinished = groupMatches.every(m => {
@@ -250,12 +215,11 @@ const WorldCupMyReport = ({ currentUser }) => {
             status[g] = isGroupFinished;
             if (!isGroupFinished) allFinished = false;
         });
-
         return { groups: status, allFinished }; 
     }, [matchesByGroup, adminResults]);
 
-    // Motor Matemático Flexibilizado para Tablas
-    const calculateStandings = (groupName, predsToUse, tiesToUse) => {
+    // --- ALGORITMO CORREGIDO IDÉNTICO AL DE PREDICCIONES ---
+    const calculateStandings = useCallback((groupName, predsToUse, tiesToUse) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
@@ -285,14 +249,15 @@ const WorldCupMyReport = ({ currentUser }) => {
             if (b.pts !== a.pts) return b.pts - a.pts;
             if (b.dg !== a.dg) return b.dg - a.dg;
             if (b.gf !== a.gf) return b.gf - a.gf;
-            const tieA = tiesToUse?.[groupName]?.[a.name] || 0;
-            const tieB = tiesToUse?.[groupName]?.[b.name] || 0;
+            
+            const tieA = tiesToUse?.[groupName]?.[a.name] || 99;
+            const tieB = tiesToUse?.[groupName]?.[b.name] || 99;
             if (tieA !== tieB) return tieA - tieB; 
+            
             return translateTeam(a.name).localeCompare(translateTeam(b.name));
         });
-    };
+    }, [matchesByGroup]);
 
-    // Clasificados del Usuario
     const qualifiedRoundOf32 = useMemo(() => {
         let top2 = [];
         let thirds = [];
@@ -304,9 +269,8 @@ const WorldCupMyReport = ({ currentUser }) => {
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, predictions, manualTiebreakers]);
+    }, [matchesByGroup, predictions, manualTiebreakers, calculateStandings]);
 
-    // Clasificados Oficiales (Admin)
     const adminQualifiedRoundOf32 = useMemo(() => {
         if (!adminResults?.predictions) return { all32: [] };
         let top2 = [];
@@ -319,11 +283,10 @@ const WorldCupMyReport = ({ currentUser }) => {
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, adminResults]);
+    }, [matchesByGroup, adminResults, calculateStandings]);
 
     const calculateMatchPoints = (hasOfficialResult, userPred, realHome, realAway) => {
         if (!hasOfficialResult || !userPred || userPred.home === '' || userPred.away === '') return null;
-        
         const pHome = parseInt(userPred.home, 10);
         const pAway = parseInt(userPred.away, 10);
         const rHome = parseInt(realHome, 10);
@@ -354,13 +317,9 @@ const WorldCupMyReport = ({ currentUser }) => {
         return true;
     };
 
-    // ==========================================
-    // CÁLCULO DE PUNTOS TOTALES
-    // ==========================================
     const totalPoints = useMemo(() => {
         let total = 0;
 
-        // 1. Partidos
         matches.forEach(match => {
             const pred = predictions[match.id];
             const adminPred = adminResults?.predictions?.[match.id];
@@ -372,7 +331,6 @@ const WorldCupMyReport = ({ currentUser }) => {
             if (pts) total += pts;
         });
 
-        // 2. Plenos de Grupo (8 pts) - SOLO SI EL GRUPO ESTÁ FINALIZADO
         Object.keys(matchesByGroup).forEach(groupName => {
             if (groupStatus.groups[groupName]) {
                 const userTable = calculateStandings(groupName, predictions, manualTiebreakers).map(t => t.name);
@@ -386,7 +344,6 @@ const WorldCupMyReport = ({ currentUser }) => {
             }
         });
 
-        // 3. Rondas - 16vos SOLO SI TODA LA FASE DE GRUPOS FINALIZÓ
         roundTabs.forEach(round => {
             if (round.id === 'dieciseisavos' && !groupStatus.allFinished) return;
 
@@ -402,7 +359,23 @@ const WorldCupMyReport = ({ currentUser }) => {
             }
         });
 
-        // 4. Cuadro de Honor
+        // NUEVO: Aciertos de llegar a la Gran Final (6 pts c/u) y 3er Puesto (4 pts c/u)
+        const uFinalists = [...(knockoutPicks?.campeon || []), ...(knockoutPicks?.subcampeon || [])];
+        const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
+        if (aFinalists.length > 0) {
+            uFinalists.forEach(ut => {
+                if (ut && aFinalists.some(at => at && at.name === ut.name)) total += 6;
+            });
+        }
+
+        const uThirds = [...(knockoutPicks?.tercero || []), ...(knockoutPicks?.cuarto || [])];
+        const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+        if (aThirds.length > 0) {
+            uThirds.forEach(ut => {
+                if (ut && aThirds.some(at => at && at.name === ut.name)) total += 4;
+            });
+        }
+
         const honorSlots = [
             { id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 },
             { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }
@@ -413,10 +386,8 @@ const WorldCupMyReport = ({ currentUser }) => {
             if (uTeam && aTeam && uTeam === aTeam) total += slot.pts;
         });
 
-        // 5. Súper Bono Top 4
         if (checkSuperBonoTop4()) total += 10;
 
-        // 6. Extras (6 pts c/u) con validación Smart Match para los manuales
         extraQuestions.forEach(q => {
             const answer = extraPicks?.[q.id];
             const officialAnswer = adminResults?.extraPicks?.[q.id];
@@ -430,7 +401,6 @@ const WorldCupMyReport = ({ currentUser }) => {
             }
         });
 
-        // 7. Eventos (SÍ: 5 pts, NO: 2 pts)
         specialEvents.forEach(e => {
             const answer = eventPicks?.[e.id];
             const officialAnswer = adminResults?.eventPicks?.[e.id];
@@ -440,7 +410,7 @@ const WorldCupMyReport = ({ currentUser }) => {
         });
 
         return total;
-    }, [matches, predictions, matchesByGroup, manualTiebreakers, knockoutPicks, extraPicks, eventPicks, adminResults, qualifiedRoundOf32, adminQualifiedRoundOf32, groupStatus]);
+    }, [matches, predictions, matchesByGroup, manualTiebreakers, knockoutPicks, extraPicks, eventPicks, adminResults, qualifiedRoundOf32, adminQualifiedRoundOf32, groupStatus, calculateStandings]);
 
     if (loading) {
         return (
@@ -489,7 +459,7 @@ const WorldCupMyReport = ({ currentUser }) => {
                 ))}
             </div>
 
-            {/* TAB 1: PARTIDOS (DISEÑO VERTICAL) */}
+            {/* TAB 1: PARTIDOS */}
             {reportTab === 'partidos' && (
                 <div className="animate-fade-in">
                     <div className="flex justify-center gap-2 mb-8">
@@ -626,7 +596,34 @@ const WorldCupMyReport = ({ currentUser }) => {
                             ].map(podio => {
                                 const userTeam = knockoutPicks[podio.id]?.[0];
                                 const officialTeam = adminResults?.knockoutPicks?.[podio.id]?.[0];
-                                const isHit = officialTeam && userTeam && officialTeam.name === userTeam.name;
+                                const isExactHit = officialTeam && userTeam && officialTeam.name === userTeam.name;
+
+                                // Logica para puntos por solo llegar a la Final / 3er Puesto
+                                const isFinalistSlot = podio.id === 'campeon' || podio.id === 'subcampeon';
+                                const isThirdMatchSlot = podio.id === 'tercero' || podio.id === 'cuarto';
+                                
+                                let reachedPoints = 0;
+                                let reachedLabel = '';
+                                let isReachedHit = false;
+                                let isPendingReached = false;
+
+                                if (isFinalistSlot) {
+                                    const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
+                                    isPendingReached = aFinalists.length === 0;
+                                    if (userTeam && aFinalists.some(t => t.name === userTeam.name)) {
+                                        isReachedHit = true;
+                                        reachedPoints = 6;
+                                        reachedLabel = 'Finalista';
+                                    }
+                                } else if (isThirdMatchSlot) {
+                                    const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+                                    isPendingReached = aThirds.length === 0;
+                                    if (userTeam && aThirds.some(t => t.name === userTeam.name)) {
+                                        isReachedHit = true;
+                                        reachedPoints = 4;
+                                        reachedLabel = '3er/4to';
+                                    }
+                                }
 
                                 return (
                                     <div key={podio.id} className={`bg-gradient-to-br ${podio.bg} p-1 rounded-2xl shadow-lg transform hover:-translate-y-1 transition-transform relative`}>
@@ -636,21 +633,35 @@ const WorldCupMyReport = ({ currentUser }) => {
                                             
                                             {userTeam ? (
                                                 <>
-                                                    <div className="w-12 h-8 bg-background rounded-[4px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0"><img src={userTeam.crest} className="w-full h-full object-cover" alt="" /></div>
-                                                    <span className="font-bold text-sm text-foreground leading-tight mb-2">{translateTeam(userTeam.name)}</span>
+                                                    <div className={`w-12 h-8 bg-background rounded-[4px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0 ${(!isPendingReached && !isReachedHit) ? 'grayscale opacity-50' : ''}`}>
+                                                        <img src={userTeam.crest} className="w-full h-full object-cover" alt="" />
+                                                    </div>
+                                                    <span className={`font-bold text-sm leading-tight mb-2 ${(!isPendingReached && !isReachedHit) ? 'text-foreground-muted line-through' : 'text-foreground'}`}>
+                                                        {translateTeam(userTeam.name)}
+                                                    </span>
                                                     
-                                                    {officialTeam && (
-                                                        <div className="w-full mt-auto pt-2 border-t border-border/50">
-                                                            {isHit ? (
-                                                                <span className="text-xs font-black text-green-500">✅ +{podio.pts} pts</span>
-                                                            ) : (
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="text-[9px] text-foreground-muted uppercase tracking-widest mb-1">Real:</span>
-                                                                    <span className="text-xs font-bold text-red-500 truncate w-full">{translateTeam(officialTeam.name)}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    <div className="w-full mt-auto pt-2 border-t border-border/50 min-h-[46px] flex flex-col items-center justify-center gap-1">
+                                                        {isPendingReached ? (
+                                                            <span className="text-[10px] font-bold text-amber-500 italic">En Juego...</span>
+                                                        ) : (
+                                                            <>
+                                                                {isReachedHit ? (
+                                                                    <span className="text-[9px] font-bold text-blue-500">Pasa a {reachedLabel} (+{reachedPoints} pts)</span>
+                                                                ) : (
+                                                                    <span className="text-[9px] font-bold text-red-500/70 line-through">Pasa a {reachedLabel}</span>
+                                                                )}
+
+                                                                {isExactHit ? (
+                                                                    <span className="text-[10px] font-black text-green-500 uppercase">Puesto Exacto (+{podio.pts} pts)</span>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1 justify-center w-full mt-0.5 bg-red-500/10 px-1 py-0.5 rounded">
+                                                                        <span className="text-[8px] text-red-500 uppercase font-black">Real:</span>
+                                                                        <span className="text-[9px] font-bold text-red-500 truncate">{officialTeam ? translateTeam(officialTeam.name) : '-'}</span>
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </>
                                             ) : (<span className="text-xs text-foreground-muted italic">Sin Selección</span>)}
                                         </div>
@@ -668,28 +679,43 @@ const WorldCupMyReport = ({ currentUser }) => {
                             {Object.keys(matchesByGroup).sort().map(groupName => {
                                 const isGroupFinished = groupStatus.groups[groupName]; 
 
-                                const userTable = calculateStandings(groupName, predictions, manualTiebreakers).map(t => t.name);
-                                const adminTable = calculateStandings(groupName, adminResults?.predictions, adminResults?.manualTiebreakers).map(t => t.name);
+                                const userTableData = calculateStandings(groupName, predictions, manualTiebreakers);
+                                const userTableNames = userTableData.map(t => t.name);
                                 
-                                const isPleno = adminTable.length >= 4 && userTable.length >= 4 && 
-                                                userTable[0] === adminTable[0] && userTable[1] === adminTable[1] &&
-                                                userTable[2] === adminTable[2] && userTable[3] === adminTable[3];
+                                const adminTableNames = calculateStandings(groupName, adminResults?.predictions, adminResults?.manualTiebreakers).map(t => t.name);
+                                
+                                const isPleno = isGroupFinished && adminTableNames.length >= 4 && userTableNames.length >= 4 && 
+                                                userTableNames[0] === adminTableNames[0] && userTableNames[1] === adminTableNames[1] &&
+                                                userTableNames[2] === adminTableNames[2] && userTableNames[3] === adminTableNames[3];
                                 
                                 return (
-                                    <div key={groupName} className={`bg-card border ${isGroupFinished && isPleno ? 'border-primary shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'border-card-border'} p-4 rounded-xl text-center relative flex flex-col justify-between`}>
+                                    <div key={groupName} className={`bg-card border ${isGroupFinished && isPleno ? 'border-primary shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'border-card-border'} p-4 rounded-xl relative flex flex-col justify-between`}>
                                         {isGroupFinished && isPleno && <div className="absolute -top-3 -right-2 bg-primary text-background font-black text-[10px] px-2 py-1 rounded shadow-md">+8 PTS</div>}
                                         
-                                        <h4 className="font-bold text-sm text-foreground-muted uppercase tracking-widest mb-3">{groupName}</h4>
+                                        <h4 className="font-bold text-sm text-foreground-muted uppercase tracking-widest mb-3 text-center">{groupName}</h4>
                                         
-                                        {isGroupFinished ? (
-                                            isPleno ? (
-                                                <span className="text-2xl font-black text-primary uppercase">¡Pleno! 🎯</span>
+                                        <div className="space-y-1.5 mb-3 flex-grow">
+                                            {userTableData.slice(0, 4).map((team, idx) => (
+                                                <div key={idx} className="flex items-center gap-2">
+                                                    <span className={`text-[10px] font-bold w-3 text-center ${idx < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{idx + 1}</span>
+                                                    <img src={team.crest} className="w-4 h-3 object-cover rounded-sm border border-border/50 shrink-0" alt="" />
+                                                    <span className="text-xs font-semibold text-foreground truncate">{translateTeam(team.name)}</span>
+                                                </div>
+                                            ))}
+                                            {userTableData.length === 0 && <span className="text-xs text-foreground-muted italic block text-center">Sin pronósticos</span>}
+                                        </div>
+
+                                        <div className="text-center pt-2 border-t border-border/50 mt-auto">
+                                            {isGroupFinished ? (
+                                                isPleno ? (
+                                                    <span className="text-xs font-black text-green-500 uppercase tracking-widest">¡Pleno! 🎯</span>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">❌ Fallado</span>
+                                                )
                                             ) : (
-                                                <span className="text-xs font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded">Fallado</span>
-                                            )
-                                        ) : (
-                                            <span className="text-xs text-foreground-muted italic">En juego...</span>
-                                        )}
+                                                <span className="text-[10px] text-amber-500 font-bold italic">⏳ En juego...</span>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -706,7 +732,7 @@ const WorldCupMyReport = ({ currentUser }) => {
                                 const officialRoundTeams = round.id === 'dieciseisavos' ? adminQualifiedRoundOf32.all32 : (adminResults?.knockoutPicks?.[round.id] || []);
                                 const roundPoints = round.pts;
                                 
-                                const showOfficialData = round.id === 'dieciseisavos' ? groupStatus.allFinished : officialRoundTeams.length > 0;
+                                const hasOfficialData = round.id === 'dieciseisavos' ? groupStatus.allFinished : officialRoundTeams.length > 0;
 
                                 return (
                                     <div key={round.id} className="bg-background-offset border border-border rounded-3xl p-5 sm:p-8 shadow-sm">
@@ -722,16 +748,26 @@ const WorldCupMyReport = ({ currentUser }) => {
                                                     const isHit = officialRoundTeams.some(ot => ot.name === team.name);
 
                                                     return (
-                                                        <div key={idx} className={`bg-card border ${showOfficialData && isHit ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'border-card-border'} p-3 rounded-xl flex flex-col items-center text-center shadow-sm relative h-full`}>
-                                                            {showOfficialData && isHit && (
+                                                        <div key={idx} className={`bg-card border ${hasOfficialData && isHit ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'border-card-border'} p-3 rounded-xl flex flex-col items-center text-center shadow-sm relative h-full`}>
+                                                            
+                                                            {hasOfficialData && isHit && (
                                                                 <div className="absolute -top-2 -right-2 bg-green-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md z-10">+{roundPoints}</div>
                                                             )}
-                                                            {showOfficialData && !isHit && (
+                                                            {hasOfficialData && !isHit && (
                                                                 <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md z-10">❌</div>
                                                             )}
                                                             
-                                                            <div className={`w-10 h-6 sm:w-12 sm:h-8 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0 ${showOfficialData && !isHit ? 'grayscale opacity-50' : ''}`}><img src={team.crest} className="w-full h-full object-cover" alt="" /></div>
-                                                            <span className={`font-bold text-[10px] sm:text-xs leading-tight flex-grow flex items-center justify-center ${showOfficialData && !isHit ? 'text-foreground-muted line-through' : 'text-foreground'}`}>{translateTeam(team.name)}</span>
+                                                            <div className={`w-10 h-6 sm:w-12 sm:h-8 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0 ${hasOfficialData && !isHit ? 'grayscale opacity-50' : ''}`}>
+                                                                <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                                                            </div>
+                                                            
+                                                            <span className={`font-bold text-[10px] sm:text-xs leading-tight flex-grow flex items-center justify-center ${hasOfficialData && !isHit ? 'text-foreground-muted line-through' : 'text-foreground'}`}>
+                                                                {translateTeam(team.name)}
+                                                            </span>
+
+                                                            {!hasOfficialData && (
+                                                                <span className="mt-2 text-[8px] sm:text-[9px] font-bold text-amber-500 italic">En Juego</span>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -757,7 +793,6 @@ const WorldCupMyReport = ({ currentUser }) => {
                                 const answer = extraPicks[q.id];
                                 const officialAnswer = adminResults?.extraPicks?.[q.id];
                                 
-                                // USA EL SMART MATCH PARA LOS MANUALES
                                 const isHit = officialAnswer && answer && (q.manual ? isSmartMatch(answer, officialAnswer) : answer.toLowerCase() === officialAnswer.toLowerCase());
 
                                 return (
@@ -773,6 +808,11 @@ const WorldCupMyReport = ({ currentUser }) => {
                                             <div className="mt-auto pt-2 border-t border-border/50">
                                                 <span className="text-[9px] text-foreground-muted uppercase tracking-widest block mb-0.5">Real:</span>
                                                 <span className="text-sm font-bold text-foreground">{translateTeam(officialAnswer)}</span>
+                                            </div>
+                                        )}
+                                        {!officialAnswer && (
+                                            <div className="mt-auto pt-2 border-t border-border/50">
+                                                <span className="text-[9px] text-amber-500 italic block mb-0.5">En Juego...</span>
                                             </div>
                                         )}
                                     </div>
@@ -803,13 +843,17 @@ const WorldCupMyReport = ({ currentUser }) => {
                                                 </span>
                                             ) : (<span className="text-xs text-red-500 font-semibold italic">Vacío</span>)}
                                             
-                                            {officialAnswer && (
+                                            {officialAnswer ? (
                                                 <div className="mt-2 text-right w-full">
                                                     {isHit ? (
                                                         <span className="text-xs font-black text-green-500 block">✅ +{pts} pts</span>
                                                     ) : (
                                                         <span className="text-[10px] font-black uppercase text-red-500 block bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">REAL: {officialAnswer}</span>
                                                     )}
+                                                </div>
+                                            ) : (
+                                                <div className="mt-2 text-right w-full">
+                                                    <span className="text-[10px] text-amber-500 italic block">En Juego...</span>
                                                 </div>
                                             )}
                                         </div>

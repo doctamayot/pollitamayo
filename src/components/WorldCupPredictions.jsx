@@ -199,17 +199,39 @@ const WorldCupPredictions = ({ currentUser }) => {
         }));
     };
 
-    // --- MOTOR DE DESEMPATE REACTIVO ---
-    const handleManualTiebreaker = (group, teamName, direction) => {
+    const handleManualTiebreaker = (group, teamName, positionValue, tiedTeamNames, tieOptions) => {
         setManualTiebreakers(prev => {
-            const groupTies = prev[group] || {};
-            const currentVal = groupTies[teamName] || 0;
+            const groupTies = { ...(prev[group] || {}) };
+            const newVal = positionValue === '' ? 0 : parseInt(positionValue, 10);
+            
+            if (newVal === 0) {
+                groupTies[teamName] = 0;
+                return { ...prev, [group]: groupTies };
+            }
+
+            const previousTeamWithVal = tiedTeamNames.find(t => t !== teamName && groupTies[t] === newVal);
+            const oldVal = groupTies[teamName];
+            
+            groupTies[teamName] = newVal;
+
+            if (previousTeamWithVal && oldVal && tieOptions.includes(oldVal)) {
+                groupTies[previousTeamWithVal] = oldVal;
+            } else if (previousTeamWithVal) {
+                groupTies[previousTeamWithVal] = 0; 
+            }
+
+            const assignedValues = tiedTeamNames.map(t => groupTies[t]).filter(v => tieOptions.includes(v));
+            if (assignedValues.length === tieOptions.length - 1) {
+                const missingOption = tieOptions.find(opt => !assignedValues.includes(opt));
+                const missingTeam = tiedTeamNames.find(t => !tieOptions.includes(groupTies[t]));
+                if (missingOption && missingTeam) {
+                    groupTies[missingTeam] = missingOption;
+                }
+            }
+
             return {
                 ...prev,
-                [group]: {
-                    ...groupTies,
-                    [teamName]: currentVal + direction 
-                }
+                [group]: groupTies
             };
         });
     };
@@ -314,7 +336,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     };
 
-    // --- CÁLCULO DE TABLAS MEMOIZADO (A prueba de balas) ---
     const calculateStandings = useCallback((groupName) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const matches = matchesByGroup[groupName];
@@ -323,8 +344,8 @@ const WorldCupPredictions = ({ currentUser }) => {
         matches.forEach(m => {
             const home = m.homeTeam?.name || 'Por definir';
             const away = m.awayTeam?.name || 'Por definir';
-            if (!teams[home]) teams[home] = { name: home, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false };
-            if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false };
+            if (!teams[home]) teams[home] = { name: home, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
+            if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
         });
 
         matches.forEach(m => {
@@ -352,39 +373,56 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
 
         const teamsArray = Object.values(teams);
-        const statsCount = {};
+        
+        const groupedByStats = {};
         teamsArray.forEach(t => {
             const key = `${t.pts}_${t.dg}_${t.gf}`;
-            statsCount[key] = (statsCount[key] || 0) + 1;
+            if (!groupedByStats[key]) groupedByStats[key] = [];
+            groupedByStats[key].push(t);
         });
 
-        teamsArray.forEach(t => {
-            const key = `${t.pts}_${t.dg}_${t.gf}`;
-            if (statsCount[key] > 1) {
-                t.isTied = true;
+        const sortedKeys = Object.keys(groupedByStats).sort((a, b) => {
+            const [ptsA, dgA, gfA] = a.split('_').map(Number);
+            const [ptsB, dgB, gfB] = b.split('_').map(Number);
+            if (ptsB !== ptsA) return ptsB - ptsA;
+            if (dgB !== dgA) return dgB - dgA;
+            return gfB - gfA;
+        });
+
+        let currentRank = 1;
+        sortedKeys.forEach(key => {
+            const groupTeams = groupedByStats[key];
+            const numTeams = groupTeams.length;
+            const availablePositions = [];
+            
+            for (let i = 0; i < numTeams; i++) {
+                availablePositions.push(currentRank + i);
             }
+            
+            const tiedTeamNames = groupTeams.map(t => t.name);
+
+            groupTeams.forEach(t => {
+                t.isTied = numTeams > 1;
+                t.tieOptions = numTeams > 1 ? availablePositions : [];
+                t.tiedTeamNames = numTeams > 1 ? tiedTeamNames : [];
+            });
+            
+            currentRank += numTeams;
         });
 
         return teamsArray.sort((a, b) => {
-            // 1. Puntos
             if (b.pts !== a.pts) return b.pts - a.pts;
-            // 2. Diferencia de Goles
             if (b.dg !== a.dg) return b.dg - a.dg;
-            // 3. Goles a Favor
             if (b.gf !== a.gf) return b.gf - a.gf;
             
-            // 4. Desempate Manual (Reactivo)
-            const tieA = manualTiebreakers[groupName]?.[a.name] || 0;
-            const tieB = manualTiebreakers[groupName]?.[b.name] || 0;
-            
+            const tieA = manualTiebreakers[groupName]?.[a.name] || 99; 
+            const tieB = manualTiebreakers[groupName]?.[b.name] || 99;
             if (tieA !== tieB) return tieA - tieB; 
 
-            // 5. Alfabeto si no se ha desempatado manualmente
             return translateTeam(a.name).localeCompare(translateTeam(b.name));
         });
     }, [matchesByGroup, predictions, manualTiebreakers]);
 
-    // Tabla del grupo seleccionado generada en tiempo real
     const currentGroupStandings = useMemo(() => {
         return calculateStandings(selectedGroup);
     }, [calculateStandings, selectedGroup]);
@@ -668,67 +706,72 @@ const WorldCupPredictions = ({ currentUser }) => {
                                         <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-4 flex items-start gap-2 animate-fade-in mx-2 sm:mx-0">
                                             <span className="text-amber-500 text-lg">⚖️</span>
                                             <p className="text-[11px] sm:text-xs text-amber-500 font-bold leading-tight">
-                                                Hay un empate total en puntos y goles. Usa las flechas (▲/▼) en la tabla para decidir el desempate por <strong className="text-amber-400">Fair Play</strong> o sorteo FIFA.
+                                                Hay un empate total en puntos y goles. Elige explícitamente en el menú <strong className="text-amber-400">"Puesto"</strong> la posición de cada equipo (1º, 2º...) para romper el empate.
                                             </p>
                                         </div>
                                     )}
 
-                                    {/* --- TABLA BLINDADA CON TABLE-FIXED Y PORCENTAJES MATEMÁTICOS --- */}
+                                    {/* --- TABLA BLINDADA CON ALTURAS FIJAS --- */}
                                     <div className="overflow-x-auto px-2 sm:px-0">
                                         <table className="w-full text-sm table-fixed">
                                             <thead>
                                                 <tr className="border-b border-border text-foreground-muted text-[10px] sm:text-[11px]">
-                                                    <th className="pb-2 text-left w-[42%] sm:w-[45%]">País</th>
+                                                    <th className="pb-2 text-left w-[40%] sm:w-[42%]">País</th>
                                                     <th className="pb-2 text-center w-[10%]" title="Partidos Jugados">PJ</th>
                                                     <th className="pb-2 text-center w-[10%]" title="Goles a Favor">GF</th>
                                                     <th className="pb-2 text-center w-[10%]" title="Diferencia de Goles">DG</th>
                                                     <th className="pb-2 text-center font-black text-primary w-[10%]">PTS</th>
-                                                    
-                                                    {/* Columna Permanente de Desempate (El % restante: 18% a 15%) */}
-                                                    <th className="pb-2 text-center text-[9px] sm:text-[10px] uppercase text-amber-500 w-[18%] sm:w-[15%]">
-                                                        {hasTiesInGroup ? 'Play' : ''}
+                                                    <th className="pb-2 text-center text-[9px] sm:text-[10px] uppercase text-amber-500 w-[20%] sm:w-[18%]">
+                                                        {hasTiesInGroup ? 'Puesto' : ''}
                                                     </th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {currentGroupStandings.map((team, index) => (
-                                                    <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
-                                                        <td className="py-3 align-middle pr-1 overflow-hidden">
-                                                            <div className="flex items-center gap-1.5 sm:gap-2">
-                                                                <span className={`w-3 sm:w-4 text-[10px] sm:text-xs font-bold shrink-0 ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
-                                                                <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0 relative">
-                                                                    <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-sm z-10 pointer-events-none"></div>
-                                                                    <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                                                {currentGroupStandings.map((team, index) => {
+                                                    const explicitPosition = manualTiebreakers[selectedGroup]?.[team.name] || '';
+                                                    return (
+                                                        <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
+                                                            <td className="py-3 align-middle pr-1 overflow-hidden">
+                                                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                                                    <span className={`w-3 sm:w-4 text-[10px] sm:text-xs font-bold shrink-0 ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
+                                                                    <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0 relative">
+                                                                        <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-sm z-10 pointer-events-none"></div>
+                                                                        <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                                                                    </div>
+                                                                    <span className="font-semibold text-[10px] sm:text-[13px] truncate leading-tight" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
                                                                 </div>
-                                                                <span className="font-semibold text-[10px] sm:text-[13px] truncate leading-tight" title={translateTeam(team.name)}>{translateTeam(team.name)}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.pj}</td>
-                                                        <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted font-medium">{team.gf}</td>
-                                                        <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
-                                                        <td className="py-3 text-center text-[11px] sm:text-[14px] font-black text-primary">{team.pts}</td>
-                                                        
-                                                        {/* Celda Permanente para Botones / Fantasma */}
-                                                        <td className="py-3 text-center">
-                                                            {team.isTied ? (
-                                                                <div className="flex flex-col items-center justify-center bg-background rounded-lg border border-border w-5 sm:w-8 mx-auto shadow-sm">
-                                                                    <button 
-                                                                        type="button"
-                                                                        onClick={(e) => { e.preventDefault(); handleManualTiebreaker(selectedGroup, team.name, -1); }} 
-                                                                        className="text-[9px] sm:text-xs text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-t-lg py-0.5 active:bg-amber-500/20 transition-colors leading-none"
-                                                                    >▲</button>
-                                                                    <button 
-                                                                        type="button"
-                                                                        onClick={(e) => { e.preventDefault(); handleManualTiebreaker(selectedGroup, team.name, 1); }} 
-                                                                        className="text-[9px] sm:text-xs text-amber-500 hover:text-amber-400 hover:bg-background-offset w-full rounded-b-lg py-0.5 active:bg-amber-500/20 transition-colors leading-none"
-                                                                    >▼</button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-5 sm:w-8 mx-auto"></div>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                            </td>
+                                                            <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.pj}</td>
+                                                            <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted font-medium">{team.gf}</td>
+                                                            <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
+                                                            <td className="py-3 text-center text-[11px] sm:text-[14px] font-black text-primary">{team.pts}</td>
+                                                            
+                                                            {/* CONTROL CON ALTURA EXACTA h-7 / h-8 */}
+                                                            <td className="py-3 text-center">
+                                                                {team.isTied ? (
+                                                                    <div className="w-14 sm:w-20 h-7 sm:h-8 mx-auto animate-fade-in relative">
+                                                                        <select 
+                                                                            value={explicitPosition}
+                                                                            onChange={(e) => handleManualTiebreaker(selectedGroup, team.name, e.target.value, team.tiedTeamNames, team.tieOptions)}
+                                                                            className="w-full h-full appearance-none bg-background-offset border border-amber-500/50 rounded-lg px-2 text-[10px] sm:text-xs font-black text-amber-500 hover:border-amber-400 focus:outline-none cursor-pointer shadow-sm transition-colors text-center-last"
+                                                                            style={{ textAlignLast: 'center' }}
+                                                                            title="Asignar posición de desempate"
+                                                                        >
+                                                                            <option value="" className="text-foreground-muted">-</option>
+                                                                            {team.tieOptions && team.tieOptions.map(opt => (
+                                                                                <option key={opt} value={opt} className="bg-card text-foreground">{opt}º</option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <span className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 pointer-events-none text-amber-500/70 text-[8px] sm:text-[10px]">▼</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    /* Celda Fantasma CON LA MISMA ALTURA EXACTA */
+                                                                    <div className="w-14 sm:w-20 h-7 sm:h-8 mx-auto"></div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>

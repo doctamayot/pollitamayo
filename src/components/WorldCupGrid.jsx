@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
@@ -93,7 +93,38 @@ const WorldCupGrid = () => {
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, []);
 
-    // --- LÓGICA DE TABLAS PARA EL MOTOR DE PUNTOS ---
+    const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
+        const teams = {};
+        groupMatches.forEach(m => {
+            const h = m.homeTeam.name; const v = m.awayTeam.name;
+            if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
+            if (!teams[v]) teams[v] = { name: v, pts: 0, dg: 0, gf: 0 };
+        });
+
+        groupMatches.forEach(m => {
+            const pr = preds?.[m.id];
+            if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '' && pr.away !== undefined) {
+                const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
+                teams[m.homeTeam.name].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
+                teams[m.awayTeam.name].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
+                teams[m.homeTeam.name].dg += (gh - ga); teams[m.awayTeam.name].dg += (ga - gh);
+                teams[m.homeTeam.name].gf += gh; teams[m.awayTeam.name].gf += ga;
+            }
+        });
+
+        return Object.values(teams).sort((a, b) => {
+            if (b.pts !== a.pts) return b.pts - a.pts;
+            if (b.dg !== a.dg) return b.dg - a.dg;
+            if (b.gf !== a.gf) return b.gf - a.gf;
+            
+            const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
+            const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
+            if (tieA !== tieB) return tieA - tieB; 
+
+            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+        });
+    }, []);
+
     const groupMatchesMap = useMemo(() => {
         return matches.reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
@@ -105,39 +136,21 @@ const WorldCupGrid = () => {
         if (matches.length === 0) return false;
         return matches.every(m => {
             const apiFinished = m.status === 'FINISHED';
-            const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '';
+            const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
             return apiFinished || adminFinished;
         });
     }, [matches, adminResults]);
-
-    const getStandings = (groupMatches, preds, ties) => {
-        const teams = {};
-        groupMatches.forEach(m => {
-            const h = m.homeTeam.name; const v = m.awayTeam.name;
-            if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
-            if (!teams[v]) teams[v] = { name: v, pts: 0, dg: 0, gf: 0 };
-            const pr = preds?.[m.id];
-            if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '') {
-                const gh = parseInt(pr.home); const ga = parseInt(pr.away);
-                teams[h].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
-                teams[v].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
-                teams[h].dg += (gh - ga); teams[v].dg += (ga - gh);
-                teams[h].gf += gh; teams[v].gf += ga;
-            }
-        });
-        return Object.values(teams).sort((a,b) => (b.pts - a.pts) || (b.dg - a.dg) || (b.gf - a.gf) || ((ties?.[a.name] || 0) - (ties?.[b.name] || 0)));
-    };
 
     const adminQualified32 = useMemo(() => {
         if (!adminResults?.predictions) return [];
         let top2 = []; let thirds = [];
         Object.keys(groupMatchesMap).forEach(g => {
-            const st = getStandings(groupMatchesMap[g], adminResults.predictions, adminResults.manualTiebreakers?.[g]);
+            const st = getStandings(groupMatchesMap[g], adminResults.predictions, g, adminResults.manualTiebreakers);
             if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return [...top2, ...thirds.slice(0, 8)];
-    }, [groupMatchesMap, adminResults]);
+    }, [groupMatchesMap, adminResults, getStandings]);
 
     // --- MOTOR DE PUNTOS TOTAL (Sincronizado con Ranking Oficial) ---
     const liveRanking = useMemo(() => {
@@ -150,8 +163,8 @@ const WorldCupGrid = () => {
 
             matches.forEach(m => {
                 const p = userData.predictions?.[m.id]; const a = adminResults?.predictions?.[m.id];
-                const rH = (a && a.home !== '') ? a.home : m.score?.fullTime?.home;
-                const rA = (a && a.away !== '') ? a.away : m.score?.fullTime?.away;
+                const rH = a?.home !== undefined && a?.home !== '' ? a.home : m.score?.fullTime?.home;
+                const rA = a?.away !== undefined && a?.away !== '' ? a.away : m.score?.fullTime?.away;
                 const hasO = (a && a.home !== '' && a.away !== '') || m.status === 'FINISHED' || m.status.includes('PLAY');
                 if (hasO && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
@@ -167,13 +180,20 @@ const WorldCupGrid = () => {
 
             let userTop2 = []; let userThirds = [];
             Object.keys(groupMatchesMap).forEach(g => {
-                const groupIsOver = groupMatchesMap[g].every(m => (adminResults?.predictions?.[m.id] && adminResults?.predictions?.[m.id].home !== '') || m.status === 'FINISHED');
-                const uT = getStandings(groupMatchesMap[g], userData.predictions, userData.manualTiebreakers?.[g]);
+                const groupIsOver = groupMatchesMap[g].every(m => {
+                    const apiFinished = m.status === 'FINISHED';
+                    const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
+                    return apiFinished || adminFinished;
+                });
+
+                const uT = getStandings(groupMatchesMap[g], userData.predictions, g, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
 
                 if (groupIsOver) {
-                    const aT = getStandings(groupMatchesMap[g], adminResults?.predictions, adminResults?.manualTiebreakers?.[g]);
-                    if (uT.length >= 4 && aT.length >= 4 && uT.slice(0,4).map(t=>t.name).every((v,i) => v === aT[i].name)) total += 8;
+                    const aT = getStandings(groupMatchesMap[g], adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                    if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
+                        total += 8;
+                    }
                 }
             });
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
@@ -189,6 +209,23 @@ const WorldCupGrid = () => {
                 }
             });
 
+            // NUEVO: Aciertos de llegar a la Gran Final (6 pts c/u) y 3er Puesto (4 pts c/u)
+            const uFinalists = [...(userData.knockoutPicks?.campeon || []), ...(userData.knockoutPicks?.subcampeon || [])];
+            const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
+            if (aFinalists.length > 0) {
+                uFinalists.forEach(ut => {
+                    if (ut && aFinalists.some(at => at && at.name === ut.name)) total += 6;
+                });
+            }
+
+            const uThirds = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
+            const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+            if (aThirds.length > 0) {
+                uThirds.forEach(ut => {
+                    if (ut && aThirds.some(at => at && at.name === ut.name)) total += 4;
+                });
+            }
+
             extraQuestions.forEach(q => {
                 const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
                 if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) total += 6;
@@ -203,7 +240,12 @@ const WorldCupGrid = () => {
             honorSlots.forEach(s => {
                 if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; honorHits++; }
             });
-            if (honorHits === 4) total += 10;
+            
+            let isSuperBono = false;
+            if (adminResults?.knockoutPicks) {
+                isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
+            }
+            if (isSuperBono) total += 10;
 
             ranks.push({
                 uid,
@@ -213,7 +255,6 @@ const WorldCupGrid = () => {
             });
         });
 
-        // Posiciones globales para las coronas
         ranks.sort((a, b) => b.totalPoints - a.totalPoints);
         let currentRank = 1;
         ranks.forEach((r, i) => {
@@ -222,9 +263,8 @@ const WorldCupGrid = () => {
         });
 
         return ranks;
-    }, [allPredictions, matches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32]);
+    }, [allPredictions, matches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings]);
 
-    // --- AGRUPACIÓN DE FECHAS ---
     const matchesByDate = useMemo(() => {
         const grouped = {};
         matches.forEach(m => {
@@ -236,13 +276,13 @@ const WorldCupGrid = () => {
     }, [matches]);
 
     const sortedDates = useMemo(() => {
-        return Object.keys(matchesByDate).sort((a, b) => {
+        const dates = Object.keys(matchesByDate).sort((a, b) => {
             const [d1, m1, y1] = a.split('/'); const [d2, m2, y2] = b.split('/');
             return new Date(`${y1}-${m1}-${d1}`) - new Date(`${y2}-${m2}-${d2}`);
         });
+        return dates;
     }, [matchesByDate]);
 
-    // --- LÓGICA DE APARICIÓN INTELIGENTE ---
     useEffect(() => {
         if (sortedDates.length > 0 && !selectedDate) {
             const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -276,14 +316,13 @@ const WorldCupGrid = () => {
         <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
             <img src={logocopa} className="w-20 h-20 mb-6 animate-pulse opacity-50" alt="Cargando" />
             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-foreground-muted font-bold tracking-widest uppercase text-xs text-center">Sincronizando Grilla Live...</p>
+            <p className="text-foreground-muted font-bold tracking-widest uppercase text-xs text-center">Sincronizando Puntos Globales...</p>
         </div>
     );
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
             
-            {/* BANNER PRINCIPAL PREMIUM */}
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] p-6 sm:p-10 mb-8 text-center border border-border shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
                 <div className="absolute top-0 left-0 w-full h-full bg-primary/5 z-0 pointer-events-none"></div>
                 <img src={logocopa} className="hidden sm:block w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] z-10" alt="" />
@@ -298,7 +337,6 @@ const WorldCupGrid = () => {
                 <img src={logocopa} className="sm:hidden w-16 h-16 object-contain opacity-80 z-10" alt="" />
             </div>
 
-            {/* SELECTOR FECHAS */}
             <div className="flex overflow-x-auto gap-2 mb-6 pb-2 hide-scrollbar">
                 {sortedDates.map(d => (
                     <button key={d} onClick={() => setSelectedDate(d)} className={`shrink-0 px-4 py-2 sm:px-6 sm:py-3.5 rounded-xl text-[10px] sm:text-xs font-black transition-all shadow-sm ${selectedDate === d ? 'bg-primary text-white scale-105' : 'bg-card text-foreground-muted border border-border hover:bg-background-offset'}`}>
@@ -307,16 +345,14 @@ const WorldCupGrid = () => {
                 ))}
             </div>
 
-            {/* PARTIDOS */}
             <div className="space-y-6 sm:space-y-10">
                 {sortedMatchesOfDay.map(match => {
                     const a = adminResults?.predictions?.[match.id];
-                    const rH = (a && a.home !== '') ? a.home : match.score?.fullTime?.home;
-                    const rA = (a && a.away !== '') ? a.away : match.score?.fullTime?.away;
+                    const rH = a?.home !== undefined && a?.home !== '' ? a.home : match.score?.fullTime?.home;
+                    const rA = a?.away !== undefined && a?.away !== '' ? a.away : match.score?.fullTime?.away;
                     const hasO = (a && a.home !== '' && a.away !== '') || match.status === 'FINISHED' || match.status.includes('PLAY');
                     const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
 
-                    // --- ORDENAMIENTO EN CALIENTE POR PARTIDO EN CASCADA (5, 3, 2, 1, 0) ---
                     const matchSpecificRanking = liveRanking.map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
                         let pts = null;
@@ -333,28 +369,21 @@ const WorldCupGrid = () => {
                         }
                         return { ...user, uP, pts };
                     }).sort((userA, userB) => {
-                        // 1. Líderes del torneo (Globales) siempre arriba
                         const isLeaderA = userA.position === 1;
                         const isLeaderB = userB.position === 1;
                         if (isLeaderA && !isLeaderB) return -1;
                         if (!isLeaderA && isLeaderB) return 1;
 
-                        // 2. Orden en cascada por puntos del partido (5, 3, 2, 1, 0, null)
                         const ptsA = userA.pts !== null ? userA.pts : -1; 
                         const ptsB = userB.pts !== null ? userB.pts : -1;
-                        
-                        if (ptsA !== ptsB) {
-                            return ptsB - ptsA; // De mayor a menor
-                        }
+                        if (ptsA !== ptsB) return ptsB - ptsA;
 
-                        // 3. Desempate: Se mantiene el orden del Ranking Global
                         return userB.totalPoints - userA.totalPoints;
                     });
 
                     return (
                         <div key={match.id} className={`bg-card border ${isLive ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
-                            {/* SCOREBOARD PARTIDO - DISTRIBUCIÓN MATEMÁTICA 40% - 20% - 40% */}
                             <div className={`${isLive ? 'bg-green-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
                                 <div className="flex justify-between items-center mb-3 sm:mb-5">
                                     <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
@@ -366,13 +395,11 @@ const WorldCupGrid = () => {
                                 </div>
                                 
                                 <div className="flex items-center justify-between w-full">
-                                    {/* Izquierda: Equipo 40% */}
                                     <div className="w-[40%] flex flex-col items-center justify-center">
                                         <img src={match.homeTeam.crest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" />
                                         <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(match.homeTeam.name)}</p>
                                     </div>
                                     
-                                    {/* Centro: Marcador 20% */}
                                     <div className="w-[20%] flex flex-col items-center justify-center shrink-0">
                                         <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest mb-1.5 sm:mb-2 px-2 py-0.5 rounded ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse' : match.status === 'FINISHED' ? 'text-red-500 bg-red-500/10' : 'text-foreground-muted bg-background/50'}`}>
                                             {isLive ? '• EN VIVO' : matchStatusTranslations[match.status] || match.status}
@@ -384,7 +411,6 @@ const WorldCupGrid = () => {
                                         </div>
                                     </div>
                                     
-                                    {/* Derecha: Equipo 40% */}
                                     <div className="w-[40%] flex flex-col items-center justify-center">
                                         <img src={match.awayTeam.crest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" />
                                         <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(match.awayTeam.name)}</p>
@@ -392,13 +418,10 @@ const WorldCupGrid = () => {
                                 </div>
                             </div>
 
-                            {/* TABLA JUGADORES */}
                             <div className="w-full relative z-10 overflow-hidden bg-background-offset/10 min-h-[150px] flex-grow">
                                 
-                                {/* Marca de agua Logocopa Centrada SOLO EN LA ZONA DE JUGADORES */}
                                 <img src={logocopa} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-80 sm:h-80 object-contain opacity-[0.03] dark:opacity-[0.05] pointer-events-none z-0" alt="" />
 
-                                {/* TABLA - DISTRIBUCIÓN MATEMÁTICA 40% - 20% - 20% - 20% */}
                                 <table className="w-full text-left table-fixed relative z-10">
                                     <thead>
                                         <tr className="bg-background/80 backdrop-blur-md text-[8px] sm:text-xs uppercase font-black border-b border-border text-foreground-muted">
@@ -409,7 +432,6 @@ const WorldCupGrid = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="text-[10px] sm:text-sm">
-                                        {/* AHORA MAPEAMOS EL ARRAY ORDENADO EN CASCADA */}
                                         {matchSpecificRanking.map((user) => {
                                             return (
                                                 <tr key={user.uid} className={`border-b border-border/10 hover:bg-background/50 transition-colors ${user.position === 1 ? 'bg-yellow-500/5' : ''}`}>
@@ -417,14 +439,12 @@ const WorldCupGrid = () => {
                                                         <div className="flex items-center gap-1.5 sm:gap-4 min-w-0">
                                                             <div className="relative shrink-0">
                                                                 <img src={user.photoURL} className={`w-6 h-6 sm:w-12 sm:h-12 rounded-full border object-cover ${user.position === 1 ? 'border-yellow-400 shadow-sm' : 'border-border'}`} alt="" />
-                                                                {/* CORONA PARA TODOS LOS QUE ESTÉN EMPATADOS EN EL 1ER LUGAR DEL TORNEO */}
                                                                 {user.position === 1 && <span className="absolute -top-1.5 -left-1.5 text-[8px] sm:text-sm drop-shadow-md">👑</span>}
                                                             </div>
                                                             <span className={`font-bold truncate text-[9px] sm:text-lg ${user.position === 1 ? 'text-yellow-500' : 'text-foreground'}`}>{formatShortName(user.name)}</span>
                                                         </div>
                                                     </td>
                                                     
-                                                    {/* CELDA APUESTA CENTRADA ESTRICTA */}
                                                     <td className="py-3 sm:py-5 text-center border-r border-border/10">
                                                         <div className="flex justify-center w-full">
                                                             {user.uP ? (
@@ -435,7 +455,6 @@ const WorldCupGrid = () => {
                                                         </div>
                                                     </td>
                                                     
-                                                    {/* CELDA PUNTOS PARTIDO CENTRADA ESTRICTA */}
                                                     <td className="py-3 sm:py-5 text-center border-r border-border/10">
                                                         <div className="flex justify-center w-full">
                                                             {user.pts !== null && (
@@ -446,7 +465,6 @@ const WorldCupGrid = () => {
                                                         </div>
                                                     </td>
 
-                                                    {/* CELDA PUNTOS GLOBALES */}
                                                     <td className="py-3 sm:py-5 text-center pr-3 sm:pr-8">
                                                         <div className="flex justify-center w-full">
                                                             <span className="font-black text-primary text-xs sm:text-3xl tabular-nums">
