@@ -258,7 +258,7 @@ function App() {
     );
 
     const renderSidebar = () => (
-        <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-background dark:bg-background-offset border-r border-border flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed inset-y-0 left-0 z-70 w-72 bg-background dark:bg-background-offset border-r border-border flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-6 flex-grow flex flex-col overflow-y-auto hide-scrollbar">
                 <div className="mb-8 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -369,7 +369,7 @@ function App() {
                         </button>
                     )}
 
-                    <div className="flex items-center justify-center gap-4 bg-background-offset/80 p-2 rounded-full border border-border shadow-inner">
+                    <div className="hidden lg:flex  items-center justify-center gap-4 bg-background-offset/80 p-2 rounded-full border border-border shadow-inner">
                         <button onClick={() => setTheme('light')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'light' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Claro">☀️</button>
                         <div className="w-px h-6 bg-border"></div>
                         <button onClick={() => setTheme('dark')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'dark' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Oscuro">🌙</button>
@@ -450,24 +450,58 @@ function App() {
     return (
         <div className="min-h-screen bg-background flex flex-col lg:flex-row text-foreground relative">
             
-            <header className="lg:hidden fixed top-0 w-full bg-background-offset dark:bg-card border-b border-border z-40 h-16 flex items-center justify-between px-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <div className="w-12 h-12 flex items-center justify-center drop-shadow-sm shrink-0">
-                        <img src={logoGeneral} alt="PolliTamayo" className="w-full h-full object-contain" />
-                    </div>
-                    <h1 className="text-lg font-extrabold tracking-tighter">PolliTamayo</h1>
+            <header className="lg:hidden fixed top-0 w-full bg-background-offset/90 dark:bg-card/90 backdrop-blur-md border-b border-border z-40 h-16 flex items-center justify-between px-4 shadow-sm">
+    <div className="flex items-center gap-2">
+        <div className="w-12 h-12 flex items-center justify-center drop-shadow-sm shrink-0">
+            <img src={logoGeneral} alt="PolliTamayo" className="w-full h-full object-contain" />
+        </div>
+        <h1 className="text-lg font-extrabold tracking-tighter">PolliTamayo</h1>
+    </div>
+    
+    {/* Contenedor Derecho: Botón de Tema + Menú */}
+    <div className="flex items-center gap-3">
+        {/* Botón Switch Premium (Animado) */}
+        {/* Botón Switch Premium (Estilo Píldora con Texto) */}
+        {/* Botón Switch Premium (Muestra Modo Actual con animación "Slot Machine") */}
+        <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="flex items-center gap-1.5 px-3 h-9 rounded-full border border-primary/40 bg-gradient-to-tr from-primary/10 to-transparent transition-all duration-500 hover:scale-105 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+            aria-label="Cambiar tema"
+        >
+            {/* Contenedor del texto animado */}
+            <div className="relative overflow-hidden h-4 w-[29px] flex items-center justify-center">
+                <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+                    Oscuro
+                </span>
+                <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'light' ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+                    Claro
+                </span>
+            </div>
+
+            {/* Contenedor del icono animado */}
+            <div className="relative w-4 h-4 overflow-hidden flex items-center justify-center">
+                <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100 rotate-0' : '-translate-y-full opacity-0 rotate-90'}`}>
+                    <span className="text-[13px] drop-shadow-md leading-none">🌙</span>
                 </div>
-                <button 
-                    onClick={() => setIsMobileMenuOpen(true)}
-                    className="p-2 text-foreground-muted hover:text-foreground focus:outline-none"
-                >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                </button>
-            </header>
+                <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 ${theme === 'light' ? 'translate-y-0 opacity-100 rotate-0' : 'translate-y-full opacity-0 -rotate-90'}`}>
+                    <span className="text-[13px] drop-shadow-md leading-none">☀️</span>
+                </div>
+            </div>
+        </button>
+
+        {/* Menú Hamburguesa */}
+        <button 
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-1.5 text-foreground-muted hover:text-foreground focus:outline-none transition-colors"
+        >
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
+    </div>
+</header>
 
             {isMobileMenuOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
+                    className="fixed inset-0 bg-black/50 z-60 lg:hidden backdrop-blur-sm"
                     onClick={() => setIsMobileMenuOpen(false)}
                 ></div>
             )}
