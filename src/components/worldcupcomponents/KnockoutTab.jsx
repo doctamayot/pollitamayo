@@ -46,8 +46,9 @@ const KnockoutTab = ({
                 </button>
             </div>
             
-            {/* --- AVISO INFORMATIVO --- */}
-            <div className="mb-6 px-4">
+            {/* --- PANEL DE AVISOS INFORMATIVOS --- */}
+            <div className="mb-6 px-4 flex flex-col gap-4">
+                {/* Aviso Principal */}
                 <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center gap-4 shadow-sm animate-fade-in">
                     <div className="text-2xl shrink-0">
                         {activeRoundTab === 'dieciseisavos' ? '📋' : '🏆'}
@@ -72,8 +73,26 @@ const KnockoutTab = ({
                         </p>
                     </div>
                 </div>
+
+                {/* Nota Reglamentaria: Mejores Terceros (Solo visible en 16vos) */}
+                {activeRoundTab === 'dieciseisavos' && (
+                    <div className="flex items-start gap-3 sm:gap-4 bg-blue-500/10 border border-blue-500/20 p-4 sm:p-5 rounded-2xl shadow-sm animate-fade-in">
+                        <div className="text-2xl shrink-0 drop-shadow-md">⚖️</div>
+                        <div>
+                            <h4 className="text-xs sm:text-sm font-black text-blue-500 uppercase tracking-widest mb-1">
+                                Criterio de Desempate: Mejores Terceros
+                            </h4>
+                            <p className="text-[10px] sm:text-xs text-foreground-muted leading-relaxed">
+                                Según el reglamento de la FIFA (Art. 13), el desempate para los mejores terceros se define por: <strong className="text-foreground">1. Puntos, 2. Diferencia de Goles y 3. Goles a Favor</strong>. 
+                                <br className="hidden sm:block" />
+                                Si la igualdad persiste, la FIFA utiliza los puntos por <em>Juego Limpio (Tarjetas)</em>. Al ser imposible predecir este  factor, esta plataforma utilizará el <strong>orden alfabético</strong> como criterio final y definitivo luego de presentarse empates en puntos y goles.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
+            {/* --- GRILLA DE EQUIPOS --- */}
             <div className="bg-background-offset border border-border p-6 sm:p-10 rounded-3xl shadow-sm">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                     {activeRoundTab === 'dieciseisavos' ? (
