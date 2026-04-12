@@ -14,7 +14,7 @@ import {
     specialEvents, 
     knockoutSubTabs 
 } from './Worldcup/Constants';
-import AdminPanel from './WorldCup/AdminPanel';
+import AdminPanel from './WorldCup/AdminPanel.jsx';
 import StandingsTable from './WorldCup/StandingsTable';
 import ExtrasTab from './WorldCup/ExtrasTab';
 import EventsTab from './WorldCup/EventsTab';
