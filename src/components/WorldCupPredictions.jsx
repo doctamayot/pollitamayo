@@ -13,14 +13,14 @@ import {
     extraQuestions, 
     specialEvents, 
     knockoutSubTabs 
-} from './Worldcup/Constants';
-import AdminPanel from './WorldCup/AdminPanel.jsx';
-import StandingsTable from './WorldCup/StandingsTable';
-import ExtrasTab from './WorldCup/ExtrasTab';
-import EventsTab from './WorldCup/EventsTab';
-import KnockoutTab from './WorldCup/KnockoutTab';
-import MatchCard from './WorldCup/MatchCard';
-import StatusWarnings from './WorldCup/StatusWarnings';
+} from './worldcup/Constants';
+import AdminPanel from './worldcup/AdminPanel';
+import StandingsTable from './worldcup/StandingsTable';
+import ExtrasTab from './worldcup/ExtrasTab';
+import EventsTab from './worldcup/EventsTab';
+import KnockoutTab from './worldcup/KnockoutTab';
+import MatchCard from './worldcup/MatchCard';
+import StatusWarnings from './worldcup/StatusWarnings';
 
 const WorldCupPredictions = ({ currentUser }) => {
     const isAdmin = currentUser.email === 'doctamayot@gmail.com';
