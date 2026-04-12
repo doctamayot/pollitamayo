@@ -1,5 +1,5 @@
 import React from 'react';
-import { specialEvents } from './constants';
+import { specialEvents } from './constantes';
 
 const EventsTab = ({ eventPicks, handleEventChange, isCurrentMainTabLocked }) => {
     return (
