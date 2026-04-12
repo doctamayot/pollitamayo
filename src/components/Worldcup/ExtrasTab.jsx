@@ -1,5 +1,5 @@
 import React from 'react';
-import { extraQuestions, translateTeam } from './constantes';
+import { extraQuestions, translateTeam } from '../tempFolder/constantes';
 
 const ExtrasTab = ({ extraPicks, handleExtraChange, isCurrentMainTabLocked, allTeams, matchesByGroup }) => {
     return (

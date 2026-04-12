@@ -13,7 +13,7 @@ import {
     extraQuestions, 
     specialEvents, 
     knockoutSubTabs 
-} from './worldcup/constantes';
+} from './tempFolder/constantes';
 import AdminPanel from './worldcup/AdminPanel';
 import StandingsTable from './worldcup/StandingsTable';
 import ExtrasTab from './worldcup/ExtrasTab';
