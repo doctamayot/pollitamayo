@@ -469,7 +469,7 @@ function App() {
             aria-label="Cambiar tema"
         >
             {/* Contenedor del texto animado */}
-            <div className="relative overflow-hidden h-4 w-[29px] flex items-center justify-center">
+            <div className="relative overflow-hidden h-4 w-[35px] flex items-center justify-center">
                 <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
                     Oscuro
                 </span>
