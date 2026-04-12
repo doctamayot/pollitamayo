@@ -8,7 +8,7 @@ import StatsBanner from './StatsBanner';
 
 // --- IMPORTACIONES MODULARES ---
 import { 
-    stageTranslations, 
+    
     translateTeam, 
     extraQuestions, 
     specialEvents, 
