@@ -1,5 +1,5 @@
 import React from 'react';
-import { roundTabs, translateTeam } from './constantes';
+import { roundTabs, translateTeam } from './constants';
 
 const KnockoutTab = ({
     activeRoundTab,

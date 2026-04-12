@@ -1,5 +1,5 @@
 import React from 'react';
-import { TOURNAMENT_PHASES } from './constantes';
+import { TOURNAMENT_PHASES } from './constants';
 
 const AdminPanel = ({ activePhase, handleAdminSetPhase, handleClearData, handleSimulateData }) => {
     return (
