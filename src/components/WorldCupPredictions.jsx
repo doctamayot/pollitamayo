@@ -990,7 +990,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                         <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-4 flex items-start gap-2 animate-fade-in mx-2 sm:mx-0">
                                             <span className="text-amber-500 text-lg">⚖️</span>
                                             <p className="text-[11px] sm:text-xs text-amber-500 font-bold leading-tight">
-                                                Hay un empate total en puntos y goles. Elige explícitamente en el menú <strong className="text-amber-400">"Puesto"</strong> la posición de cada equipo (1º, 2º...) para romper el empate.
+                                                Hay un empate total en puntos y goles. Elige explícitamente en el  <strong className="text-amber-400">selector de desempate</strong> la posición de cada equipo (1º, 2º...) para romper el empate.
                                             </p>
                                         </div>
                                     )}
