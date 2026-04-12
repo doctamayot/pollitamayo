@@ -996,46 +996,50 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     )}
 
                                     <div className="overflow-x-auto px-2 sm:px-0">
-                                        <table className="w-full text-sm table-fixed">
-                                            <thead>
-                                                <tr className="border-b border-border text-foreground-muted text-[10px] sm:text-[11px]">
-                                                    <th className="pb-2 text-left w-[40%] sm:w-[42%]">País</th>
-                                                    <th className="pb-2 text-center w-[10%]">PJ</th><th className="pb-2 text-center w-[10%]">GF</th><th className="pb-2 text-center w-[10%]">DG</th><th className="pb-2 text-center font-black text-primary w-[10%]">PTS</th>
-                                                    <th className="pb-2 text-center text-[9px] sm:text-[10px] uppercase text-amber-500 w-[20%] sm:w-[18%]">Puesto</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {currentGroupStandings.map((team, index) => {
-                                                    const explicitPosition = manualTiebreakers[selectedSubTab]?.[team.name] || '';
-                                                    return (
-                                                        <tr key={team.name} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
-                                                            <td className="py-3 align-middle pr-1 overflow-hidden">
-                                                                <div className="flex items-center gap-1.5 sm:gap-2">
-                                                                    <span className={`w-3 sm:w-4 text-[10px] sm:text-xs font-bold shrink-0 ${index < 2 ? 'text-green-500' : 'text-foreground-muted'}`}>{index+1}</span>
-                                                                    <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden shadow-sm border border-border/50 shrink-0"><img src={team.crest} className="w-full h-full object-cover" alt="" /></div>
-                                                                    <span className="font-semibold text-[10px] sm:text-[13px] truncate leading-tight">{translateTeam(team.name)}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.pj}</td>
-                                                            <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted font-medium">{team.gf}</td>
-                                                            <td className="py-3 text-center text-[10px] sm:text-[13px] text-foreground-muted">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
-                                                            <td className="py-3 text-center text-[11px] sm:text-[14px] font-black text-primary">{team.pts}</td>
-                                                            <td className="py-3 text-center">
-                                                                {team.isTied ? (
-                                                                    <div className="w-14 sm:w-20 h-7 sm:h-8 mx-auto relative animate-fade-in">
-                                                                        <select value={explicitPosition} onChange={(e) => handleManualTiebreaker(selectedSubTab, team.name, e.target.value, team.tiedTeamNames, team.tieOptions)} disabled={isSubTabLocked(selectedSubTab)} className="w-full h-full appearance-none bg-background-offset border border-amber-500/50 rounded-lg px-2 text-[10px] sm:text-xs font-black text-amber-500 hover:border-amber-400 focus:outline-none cursor-pointer shadow-sm text-center-last disabled:opacity-50" style={{ textAlignLast: 'center' }}>
-                                                                            <option value="" className="text-foreground-muted">-</option>
-                                                                            {team.tieOptions && team.tieOptions.map(opt => <option key={opt} value={opt} className="bg-card text-foreground">{opt}º</option>)}
-                                                                        </select>
-                                                                        <span className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 pointer-events-none text-amber-500/70 text-[8px] sm:text-[10px]">▼</span>
-                                                                    </div>
-                                                                ) : (<div className="w-14 sm:w-20 h-7 sm:h-8 mx-auto"></div>)}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
+                                        <table className="w-full text-sm">
+    <thead>
+        <tr className="border-b border-border text-foreground-muted text-[10px]">
+            <th className="pb-2 text-left">Equipo</th>
+            <th className="pb-2 text-center">PJ</th>
+            <th className="pb-2 text-center">GF</th>
+            <th className="pb-2 text-center">DG</th>
+            <th className="pb-2 text-center font-black text-primary">PTS</th>
+            {/* Columna sin nombre para ganar espacio para el selector de desempate */}
+            <th className="pb-2 text-center w-8 sm:w-12"></th> 
+        </tr>
+    </thead>
+    <tbody>
+        {currentGroupStandings.map((team, idx) => (
+            <tr key={team.name} className="border-b border-border/50 last:border-0 h-12">
+                <td className="flex items-center gap-1.5 sm:gap-2 h-12 overflow-hidden pr-1">
+                    <div className="w-5 h-3.5 sm:w-6 sm:h-4 bg-background rounded-sm overflow-hidden border border-border/50 shrink-0">
+                        <img src={team.crest} className="w-full h-full object-cover" alt="" />
+                    </div>
+                    <span className="font-bold truncate text-[11px] sm:text-sm">{translateTeam(team.name)}</span>
+                </td>
+                <td className="text-center font-medium text-foreground-muted text-xs">{team.pj}</td>
+                <td className="text-center font-medium text-foreground-muted text-xs">{team.gf}</td>
+                <td className="text-center font-medium text-foreground-muted text-xs">{team.dg > 0 ? `+${team.dg}` : team.dg}</td>
+                <td className="text-center font-black text-primary text-xs sm:text-sm">{team.pts}</td>
+                
+                <td className="text-center">
+                    {team.isTied ? (
+                        <select 
+                            value={manualTiebreakers[selectedSubTab]?.[team.name] || ''} 
+                            onChange={(e) => handleManualTiebreaker(selectedSubTab, team.name, e.target.value, team.tiedTeamNames, team.tieOptions)} 
+                            className="bg-background-offset border border-amber-500/50 rounded-md px-1 py-0.5 text-[9px] sm:text-[10px] font-black text-amber-500 shadow-sm"
+                        >
+                            <option value="">-</option>
+                            {team.tieOptions.map(o => <option key={o} value={o}>{o}º</option>)}
+                        </select>
+                    ) : (
+                        <span className="font-bold text-foreground-muted opacity-30 text-[9px] sm:text-[10px]">{idx + 1}º</span>
+                    )}
+                </td>
+            </tr>
+        ))}
+    </tbody>
+</table>
                                     </div>
                                 </div>
                             </div>
