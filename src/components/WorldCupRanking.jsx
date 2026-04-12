@@ -308,8 +308,8 @@ const WorldCupRanking = () => {
         } else if (n1 === 2) {
             p1Total = bolsa1 + bolsa2;
             p1Ind = p1Total / 2;
-            p3Total = bolsa3;
-            p3Ind = bolsa3 / n2; 
+            p2Total = bolsa3;      // <--- ¡CORREGIDO! Antes decía p3Total
+            p2Ind = bolsa3 / n2;   // <--- ¡CORREGIDO! Antes decía p3Ind
         } else {
             p1Total = bolsa1;
             p1Ind = bolsa1;
