@@ -1,5 +1,5 @@
 import React from 'react';
-import { translateTeam } from './constants';
+import { translateTeam } from './Constants';
 
 const StandingsTable = ({ currentGroupStandings, hasTiesInGroup, manualTiebreakers, selectedSubTab, handleManualTiebreaker }) => {
     return (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { stageTranslations, translateTeam } from './constants';
+import { stageTranslations, translateTeam } from './Constants';
 import logocopa from '../../assets/logocopa.png'; // Ajustamos la ruta de la imagen
 
 const MatchCard = ({ 
