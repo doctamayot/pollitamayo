@@ -1094,6 +1094,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     <span className="text-[10px] font-black uppercase">{rt.label}</span>
                     <span className={`text-[9px] font-bold mt-1 px-2 py-0.5 rounded-full ${currentPicks === rt.limit ? 'bg-green-500/20 text-green-500' : 'bg-black/20 text-white/50'}`}>{currentPicks}/{rt.limit}</span>
                 </button>
+                
             );
         })}
     </div>
@@ -1103,8 +1104,41 @@ const WorldCupPredictions = ({ currentUser }) => {
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
     </button>
 </div>
+{/* --- AVISO INFORMATIVO DINÁMICO DE RONDAS (REFINADO) --- */}
+<div className="mb-6 px-4">
+    <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center gap-4 shadow-sm animate-fade-in">
+        <div className="text-2xl shrink-0">
+            {activeRoundTab === 'dieciseisavos' ? '📋' : '🏆'}
+        </div>
+        <div>
+            <h4 className="text-primary font-black text-xs uppercase tracking-widest mb-0.5">
+                {activeRoundTab === 'dieciseisavos' ? 'Información' : 'Predicción de Podio'}
+            </h4>
+            <p className="text-foreground-muted text-[11px] sm:text-xs leading-tight font-medium">
+                {(() => {
+                    switch (activeRoundTab) {
+                        case 'dieciseisavos':
+                            return 'Estos son tus 32 clasificados automáticos según los marcadores que pusiste en la Fase de Grupos.';
+                        case 'campeon':
+                            return '¡El momento de la verdad! Selecciona al equipo que se coronará Campeón del Mundo.';
+                        case 'subcampeon':
+                            return 'Selecciona al equipo que crees que perderá la final y quedará en segundo lugar.';
+                        case 'tercero':
+                            return 'Selecciona al equipo que ganará el partido por el tercer puesto.';
+                        case 'cuarto':
+                            return 'Selecciona al equipo que perderá el partido por el tercer puesto.';
+                        default:
+                            const limit = roundTabs.find(r => r.id === activeRoundTab)?.limit;
+                            return `Selecciona a los ${limit} equipos que crees que avanzarán a la ronda de ${activeRoundTab}.`;
+                    }
+                })()}
+            </p>
+        </div>
+    </div>
+</div>
 
                     <div className="bg-background-offset border border-border p-6 sm:p-10 rounded-3xl shadow-sm">
+                        
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                             {activeRoundTab === 'dieciseisavos' ? (
                                 qualifiedRoundOf32.all32.map((team, idx) => (
@@ -1128,6 +1162,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                             )}
                         </div>
                     </div>
+                    
                 </div>
             )}
 
