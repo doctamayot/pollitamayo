@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import SearchBar from './SearchBar'; // Asegúrate de que la ruta sea correcta
 
 const WorldCupAdmin = () => {
     const [participants, setParticipants] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [liveMenuMode, setLiveMenuMode] = useState(false); // Estado para el botón
+    const [liveMenuMode, setLiveMenuMode] = useState(false);
+    const [searchTerm, setSearchTerm] = useState(''); // <-- Estado para la barra de búsqueda
 
     useEffect(() => {
         // Escuchamos en tiempo real la colección donde se guardan las predicciones del mundial
@@ -31,6 +33,18 @@ const WorldCupAdmin = () => {
             unsubSettings();
         };
     }, []);
+
+    // <-- MEMO: Filtrar participantes por nombre o email en tiempo real -->
+    const filteredParticipants = useMemo(() => {
+        if (!searchTerm) return participants;
+        
+        const lowerTerm = searchTerm.toLowerCase();
+        return participants.filter(p => {
+            const nameMatch = p.displayName?.toLowerCase().includes(lowerTerm);
+            const emailMatch = p.email?.toLowerCase().includes(lowerTerm);
+            return nameMatch || emailMatch; // Permite buscar por nombre o correo
+        });
+    }, [participants, searchTerm]);
 
     const toggleLiveMode = async () => {
         try {
@@ -72,7 +86,7 @@ const WorldCupAdmin = () => {
     }
 
     return (
-        <div className="max-w-6xl mx-auto pb-20 animate-fade-in">
+        <div className="max-w-6xl mx-auto pb-20 animate-fade-in px-2 sm:px-0">
             <div className="mb-8 text-center relative">
                 <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 text-4xl mb-4 mx-auto border border-red-500/20">👑</div>
                 <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tighter mb-2">
@@ -108,6 +122,20 @@ const WorldCupAdmin = () => {
                 </button>
             </div>
 
+            {/* --- LA NUEVA BARRA DE BÚSQUEDA --- */}
+            <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="w-full sm:w-auto flex-1">
+                    <SearchBar 
+                        value={searchTerm} 
+                        onChange={setSearchTerm} 
+                        placeholder="Buscar por nombre o correo..." 
+                    />
+                </div>
+                <div className="shrink-0 bg-background-offset border border-border px-4 py-2.5 rounded-full text-xs font-bold text-foreground-muted mb-8 sm:mb-0">
+                    Total Registrados: <span className="text-primary font-black ml-1">{filteredParticipants.length}</span>
+                </div>
+            </div>
+
             <div className="bg-card border border-card-border rounded-3xl shadow-xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
@@ -120,12 +148,20 @@ const WorldCupAdmin = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {participants.length === 0 ? (
+                            {filteredParticipants.length === 0 ? (
                                 <tr>
-                                    <td colSpan="4" className="p-8 text-center text-foreground-muted">Aún no hay participantes registrados.</td>
+                                    <td colSpan="4" className="p-8 text-center text-foreground-muted">
+                                        {searchTerm ? (
+                                            <div className="flex flex-col items-center justify-center py-6">
+                                                <span className="text-3xl mb-2">🕵️‍♂️</span>
+                                                <p className="font-bold">No se encontraron resultados</p>
+                                                <p className="text-xs mt-1">Intenta buscar con otro nombre o correo electrónico.</p>
+                                            </div>
+                                        ) : 'Aún no hay participantes registrados.'}
+                                    </td>
                                 </tr>
                             ) : (
-                                participants.map((p) => (
+                                filteredParticipants.map((p) => (
                                     <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-background-offset/50 transition-colors">
                                         <td className="p-4 sm:p-6">
                                             <div className="flex items-center gap-3">

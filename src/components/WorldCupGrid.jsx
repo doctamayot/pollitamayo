@@ -66,7 +66,6 @@ const WorldCupGrid = () => {
     const [isApiLoading, setIsApiLoading] = useState(true);
     const [isDbLoading, setIsDbLoading] = useState(true);
 
-    // Ref para el contenedor del carrusel de fechas
     const scrollContainerRef = useRef(null);
 
     useEffect(() => {
@@ -259,6 +258,7 @@ const WorldCupGrid = () => {
                 });
             }
 
+            // Honor y bonos
             const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
             let honorHits = 0;
             honorSlots.forEach(s => {
@@ -270,6 +270,26 @@ const WorldCupGrid = () => {
                 isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
             }
             if (isSuperBono) total += 10;
+
+            // Extras y eventos
+            const extraQuestions = [ { id: 'goleador', manual: true }, { id: 'equipo_goleador' }, { id: 'equipo_menos_goleador' }, { id: 'mas_amarillas' }, { id: 'mas_rojas' }, { id: 'valla_menos_vencida' }, { id: 'valla_mas_vencida' }, { id: 'grupo_mas_goles' }, { id: 'grupo_menos_goles' }, { id: 'maximo_asistidor', manual: true }, { id: 'atajapenales', manual: true } ];
+            const specialEvents = [ { id: 'gol_olimpico' }, { id: 'remontada_epica' }, { id: 'el_festival' }, { id: 'muralla_final' }, { id: 'hat_trick_hero' }, { id: 'roja_banquillo' }, { id: 'portero_goleador' }, { id: 'debut_sin_red' }, { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' } ];
+            
+            const isSmartMatch = (userText, adminText) => {
+                if (!userText || !adminText) return false;
+                const clean = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
+                const u = clean(userText); const a = clean(adminText);
+                return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
+            };
+
+            extraQuestions.forEach(q => {
+                const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
+                if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) total += 6;
+            });
+            specialEvents.forEach(e => {
+                const u = userData.eventPicks?.[e.id]; const a = adminResults?.eventPicks?.[e.id];
+                if (u && a === u) total += (u === 'SI' ? 5 : 2);
+            });
 
             ranks.push({
                 uid,
@@ -289,7 +309,7 @@ const WorldCupGrid = () => {
         return ranks;
     }, [allPredictions, matches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings]);
 
-    // --- REFACTORIZACIÓN DE FECHAS A FORMATO YYYY-MM-DD PARA ORDEN PERFECTO ---
+    // --- REFACTORIZACIÓN DE FECHAS ---
     const matchesByDate = useMemo(() => {
         const grouped = {};
         matches.forEach(m => {
@@ -336,7 +356,6 @@ const WorldCupGrid = () => {
         });
     }, [selectedDate, matchesByDate]); 
 
-    // Función para deslizar el carrusel de fechas
     const handleScroll = (direction) => {
         if (scrollContainerRef.current) {
             const scrollAmount = 250; 
@@ -358,18 +377,17 @@ const WorldCupGrid = () => {
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
             
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] p-6 sm:p-10 mb-8 text-center border border-border shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+            {/* --- HEADER PREMIUM COMPACTO PARA MÓVIL --- */}
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-[2rem] p-3 sm:p-10 mb-6 sm:mb-8 text-center border border-border shadow-xl relative overflow-hidden flex flex-row items-center justify-center gap-3 sm:gap-6">
                 <div className="absolute top-0 left-0 w-full h-full bg-primary/5 z-0 pointer-events-none"></div>
-                <img src={logocopa} className="hidden sm:block w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] z-10" alt="" />
+                <img src={logocopa} className="w-12 h-12 sm:w-20 sm:h-20 object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] z-10" alt="" />
                 
-                <div className="relative z-10">
-                    <h2 className="text-2xl sm:text-4xl font-black text-white mb-1 sm:mb-2 tracking-tighter">📡 GRILLA LIVE</h2>
-                    <p className="text-primary font-black uppercase text-[9px] sm:text-xs tracking-widest bg-primary/10 px-4 py-1.5 rounded-full border border-primary/20 inline-block">
-                        Puntos Globales en Tiempo Real
+                <div className="relative z-10 flex flex-col items-start sm:items-center text-left sm:text-center">
+                    <h2 className="text-xl sm:text-4xl font-black text-white mb-0.5 sm:mb-2 tracking-tighter drop-shadow-md">📡 GRILLA LIVE</h2>
+                    <p className="text-primary font-black uppercase text-[8px] sm:text-xs tracking-widest bg-primary/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full border border-primary/20 inline-block shadow-sm">
+                        Puntos Globales
                     </p>
                 </div>
-                
-                <img src={logocopa} className="sm:hidden w-16 h-16 object-contain opacity-80 z-10" alt="" />
             </div>
 
             {/* --- SELECTOR DE FECHAS ESTILO PREMIUM CON FLECHAS --- */}
@@ -377,7 +395,6 @@ const WorldCupGrid = () => {
                 <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none"></div>
                 <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none"></div>
                 
-                {/* Flecha Izquierda (Solo PC) */}
                 <button 
                     onClick={() => handleScroll('left')} 
                     className="absolute left-0 z-20 bg-card border border-border text-foreground p-1.5 rounded-full shadow-lg hidden md:flex hover:bg-primary hover:text-white transition-all hover:scale-110 ml-1"
@@ -430,7 +447,6 @@ const WorldCupGrid = () => {
                     })}
                 </div>
 
-                {/* Flecha Derecha (Solo PC) */}
                 <button 
                     onClick={() => handleScroll('right')} 
                     className="absolute right-0 z-20 bg-card border border-border text-foreground p-1.5 rounded-full shadow-lg hidden md:flex hover:bg-primary hover:text-white transition-all hover:scale-110 mr-1"
@@ -450,6 +466,7 @@ const WorldCupGrid = () => {
                     const hasO = (a && a.home !== '' && a.away !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
                     const isLive = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
 
+                    // --- ORDENAMIENTO EXTREMO (Top 3 > Puntos Partido > Puntos Globales) ---
                     const matchSpecificRanking = liveRanking.map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
                         let pts = null;
@@ -466,15 +483,23 @@ const WorldCupGrid = () => {
                         }
                         return { ...user, uP, pts };
                     }).sort((userA, userB) => {
-                        const isLeaderA = userA.position === 1;
-                        const isLeaderB = userB.position === 1;
-                        if (isLeaderA && !isLeaderB) return -1;
-                        if (!isLeaderA && isLeaderB) return 1;
+                        // 1. TOP 3 LÍDERES TIENEN PRIORIDAD ABSOLUTA
+                        const isTop3A = userA.position <= 3;
+                        const isTop3B = userB.position <= 3;
+                        
+                        if (isTop3A && !isTop3B) return -1;
+                        if (!isTop3A && isTop3B) return 1;
+                        
+                        if (isTop3A && isTop3B) {
+                            if (userA.position !== userB.position) return userA.position - userB.position;
+                        }
 
+                        // 2. ORDENAR POR ACIERTOS EN ESTE PARTIDO ESPECÍFICO (5 > 3 > 2 > 1 > 0)
                         const ptsA = userA.pts !== null ? userA.pts : -1; 
                         const ptsB = userB.pts !== null ? userB.pts : -1;
                         if (ptsA !== ptsB) return ptsB - ptsA;
 
+                        // 3. DESEMPATE FINAL POR PUNTOS GLOBALES EN LA POLLA
                         return userB.totalPoints - userA.totalPoints;
                     });
 
@@ -506,70 +531,119 @@ const WorldCupGrid = () => {
                                     </span>
                                 </div>
                                 
-                                <div className="flex items-center justify-between w-full">
-                                    <div className="w-[40%] flex flex-col items-center justify-center">
-                                        {homeCrest ? <img src={homeCrest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
-                                        <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(finalHomeName)}</p>
+                                <div className="flex items-center justify-between w-full gap-1 sm:gap-4 px-1 sm:px-4">
+                                    {/* EQUIPO LOCAL */}
+                                    <div className="flex-1 flex flex-col items-center justify-start min-w-0">
+                                        {homeCrest ? <img src={homeCrest} className="h-8 sm:h-16 mb-2 sm:mb-3 drop-shadow-lg" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
+                                        <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
+                                            {translateTeam(finalHomeName)}
+                                        </p>
                                     </div>
                                     
-                                    <div className="w-[20%] flex flex-col items-center justify-center shrink-0">
-                                        <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest mb-1.5 sm:mb-2 px-2 py-0.5 rounded ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse' : matchStatusTranslations[match.status] || match.status}`}>
+                                    {/* MARCADOR DIGITAL PREMIUM */}
+                                    <div className="flex flex-col items-center justify-center shrink-0 min-w-[90px] sm:min-w-[140px]">
+                                        <span className={`text-[7px] sm:text-[9px] font-black uppercase tracking-widest mb-2 sm:mb-3 px-2 py-0.5 rounded shadow-sm ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse border border-green-500/20' : 'text-foreground-muted bg-background/50 border border-border/50'}`}>
                                             {isLive ? '• EN VIVO' : matchStatusTranslations[match.status] || match.status}
                                         </span>
-                                        <div className={`flex items-center justify-center gap-1.5 sm:gap-4 px-3 py-1.5 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl border font-black text-2xl sm:text-5xl flex-nowrap whitespace-nowrap shadow-md ${hasO ? 'bg-foreground text-background border-foreground scale-105 transition-transform' : 'bg-background text-foreground-muted border-border'}`}>
-                                            <span>{hasO ? (rH ?? 0) : '-'}</span>
-                                            <span className="text-lg sm:text-3xl opacity-20">-</span>
-                                            <span>{hasO ? (rA ?? 0) : '-'}</span>
+                                        
+                                        <div className="flex items-center justify-center gap-1.5 sm:gap-3">
+                                            {/* Caja Número Local */}
+                                            <div className={`flex items-center justify-center w-9 h-11 sm:w-16 sm:h-20 rounded-lg sm:rounded-2xl font-black text-xl sm:text-4xl shadow-inner border transition-all ${hasO ? 'bg-background-offset text-primary border-primary/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-background text-foreground-muted border-border/50 opacity-50'}`}>
+                                                {hasO ? (rH ?? 0) : '-'}
+                                            </div>
+                                            
+                                            {/* Separador (Dos puntitos estilo reloj digital) */}
+                                            <div className="flex flex-col gap-1 sm:gap-2 opacity-50">
+                                                <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-foreground"></span>
+                                                <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-foreground"></span>
+                                            </div>
+                                            
+                                            {/* Caja Número Visitante */}
+                                            <div className={`flex items-center justify-center w-9 h-11 sm:w-16 sm:h-20 rounded-lg sm:rounded-2xl font-black text-xl sm:text-4xl shadow-inner border transition-all ${hasO ? 'bg-background-offset text-primary border-primary/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-background text-foreground-muted border-border/50 opacity-50'}`}>
+                                                {hasO ? (rA ?? 0) : '-'}
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    <div className="w-[40%] flex flex-col items-center justify-center">
-                                        {awayCrest ? <img src={awayCrest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
-                                        <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(finalAwayName)}</p>
+                                    {/* EQUIPO VISITANTE */}
+                                    <div className="flex-1 flex flex-col items-center justify-start min-w-0">
+                                        {awayCrest ? <img src={awayCrest} className="h-8 sm:h-16 mb-2 sm:mb-3 drop-shadow-lg" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
+                                        <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
+                                            {translateTeam(finalAwayName)}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="w-full relative z-10 overflow-hidden bg-background-offset/10 min-h-[150px] flex-grow">
-                                <img src={logocopa} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-80 sm:h-80 object-contain opacity-[0.03] dark:opacity-[0.05] pointer-events-none z-0" alt="" />
+                            <div className="w-full relative z-10 overflow-hidden bg-background min-h-[150px] flex-grow">
+                                <img src={logocopa} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-80 sm:h-80 object-contain opacity-[0.02] dark:opacity-[0.03] pointer-events-none z-0" alt="" />
 
                                 <table className="w-full text-left table-fixed relative z-10">
                                     <thead>
-                                        <tr className="bg-background/80 backdrop-blur-md text-[8px] sm:text-xs uppercase font-black border-b border-border text-foreground-muted">
+                                        <tr className="bg-background-offset/80 backdrop-blur-md text-[8px] sm:text-xs uppercase font-black border-b border-border text-foreground-muted">
                                             <th className="py-2 pl-3 sm:p-5 w-[42%] sm:w-[50%] lg:w-[58%] sm:pl-8">Jugador</th>
-                                            <th className="py-2 w-[22%] sm:w-[18%] lg:w-[14%] text-center">Apuesta</th>
-                                            <th className="py-2 w-[18%] sm:w-[16%] lg:w-[14%] text-center">Pts P.</th>
+                                            <th className="py-2 w-[22%] sm:w-[18%] lg:w-[14%] text-center">Predicción</th>
+                                            <th className="py-2 w-[18%] sm:w-[16%] lg:w-[14%] text-center">Puntos</th>
                                             <th className="py-2 pr-3 sm:p-5 w-[18%] sm:w-[16%] lg:w-[14%] text-center sm:pr-8">Global</th>
                                         </tr>
                                     </thead>
                                     <tbody className="text-[10px] sm:text-sm">
                                         {matchSpecificRanking.map((user) => {
+                                            const is1st = user.position === 1;
+                                            const is2nd = user.position === 2;
+                                            const is3rd = user.position === 3;
+
+                                            // Estilos Premium según el rango (Oro, Plata, Bronce)
+                                            let rowBg = 'hover:bg-background-offset/50';
+                                            if (is1st) rowBg = 'bg-yellow-500/10 hover:bg-yellow-500/20';
+                                            else if (is2nd) rowBg = 'bg-slate-400/10 hover:bg-slate-400/20';
+                                            else if (is3rd) rowBg = 'bg-amber-600/10 hover:bg-amber-600/20';
+
+                                            let avatarBorder = 'border-border';
+                                            if (is1st) avatarBorder = 'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]';
+                                            else if (is2nd) avatarBorder = 'border-slate-300 shadow-[0_0_10px_rgba(203,213,225,0.5)]';
+                                            else if (is3rd) avatarBorder = 'border-amber-600 shadow-[0_0_10px_rgba(217,119,6,0.5)]';
+
+                                            let nameColor = 'text-foreground';
+                                            if (is1st) nameColor = 'text-yellow-500';
+                                            else if (is2nd) nameColor = 'text-slate-300';
+                                            else if (is3rd) nameColor = 'text-amber-500';
+
+                                            let medal = null;
+                                            if (is1st) medal = '👑';
+                                            else if (is2nd) medal = '🥈';
+                                            else if (is3rd) medal = '🥉';
+
                                             return (
-                                                <tr key={user.uid} className={`border-b border-border/10 hover:bg-background/50 transition-colors ${user.position === 1 ? 'bg-yellow-500/5' : ''}`}>
+                                                <tr key={user.uid} className={`border-b border-border/10 transition-colors ${rowBg}`}>
                                                     <td className="py-3 sm:py-5 pl-3 sm:pl-8 border-r border-border/10 overflow-hidden">
-                                                        <div className="flex items-center gap-1.5 sm:gap-4 min-w-0">
+                                                        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                                                             <div className="relative shrink-0">
-                                                                <img src={user.photoURL} className={`w-6 h-6 sm:w-12 sm:h-12 rounded-full border object-cover ${user.position === 1 ? 'border-yellow-400 shadow-sm' : 'border-border'}`} alt="" />
-                                                                {user.position === 1 && <span className="absolute -top-1.5 -left-1.5 text-[8px] sm:text-sm drop-shadow-md">👑</span>}
+                                                                <img src={user.photoURL} className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 object-cover ${avatarBorder}`} alt="" />
+                                                                {medal && <span className="absolute -top-2.5 -left-2.5 text-[14px] sm:text-xl drop-shadow-md z-10">{medal}</span>}
                                                             </div>
-                                                            <span className={`font-bold truncate text-[9px] sm:text-lg ${user.position === 1 ? 'text-yellow-500' : 'text-foreground'}`}>{formatShortName(user.name)}</span>
+                                                            <span className={`font-bold truncate text-[11px] sm:text-lg ${nameColor}`}>{formatShortName(user.name)}</span>
                                                         </div>
                                                     </td>
                                                     
                                                     <td className="py-3 sm:py-5 text-center border-r border-border/10">
                                                         <div className="flex justify-center w-full">
                                                             {user.uP ? (
-                                                                <span className="bg-background-offset/80 px-2 py-1 sm:px-5 sm:py-2.5 rounded-lg border border-border font-black text-[9px] sm:text-xl whitespace-nowrap inline-flex items-center shadow-inner">
-                                                                    {user.uP.home} - {user.uP.away}
+                                                                <span className="bg-background-offset/80 px-2.5 py-1 sm:px-6 sm:py-3 rounded-xl border border-border font-black text-[11px] sm:text-xl whitespace-nowrap inline-flex items-center shadow-inner tracking-widest">
+                                                                    {user.uP.home} <span className="mx-1 sm:mx-2 opacity-30 font-normal">-</span> {user.uP.away}
                                                                 </span>
-                                                            ) : <span className="opacity-30 italic text-[9px] sm:text-base">-</span>}
+                                                            ) : <span className="opacity-30 italic text-[10px] sm:text-base">-</span>}
                                                         </div>
                                                     </td>
                                                     
                                                     <td className="py-3 sm:py-5 text-center border-r border-border/10">
                                                         <div className="flex justify-center w-full">
                                                             {user.pts !== null && (
-                                                                <span className={`inline-flex items-center justify-center font-black px-1.5 py-0.5 sm:px-4 sm:py-2 rounded-md text-[10px] sm:text-xl ${user.pts === 5 ? 'text-green-500 bg-green-500/10 border border-green-500/20 shadow-[0_0_8px_rgba(34,197,94,0.15)]' : user.pts > 0 ? 'text-blue-500 bg-blue-500/10' : 'text-red-500/40'}`}>
+                                                                <span className={`inline-flex items-center justify-center font-black px-2 py-1 sm:px-5 sm:py-2.5 rounded-lg text-[10px] sm:text-xl shadow-sm ${
+                                                                    user.pts === 5 ? 'text-white bg-gradient-to-r from-green-500 to-emerald-600 border border-green-400/50 shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 
+                                                                    user.pts > 0 ? 'text-blue-100 bg-gradient-to-r from-blue-600 to-indigo-600 border border-blue-400/50 shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 
+                                                                    'text-foreground-muted bg-background-offset border border-border/50'
+                                                                }`}>
                                                                     {user.pts > 0 ? `+${user.pts}` : '0'}
                                                                 </span>
                                                             )}
@@ -578,7 +652,7 @@ const WorldCupGrid = () => {
 
                                                     <td className="py-3 sm:py-5 text-center pr-3 sm:pr-8">
                                                         <div className="flex justify-center w-full">
-                                                            <span className="font-black text-primary text-xs sm:text-3xl tabular-nums">
+                                                            <span className="font-black text-primary text-sm sm:text-3xl tabular-nums drop-shadow-sm">
                                                                 {user.totalPoints}
                                                             </span>
                                                         </div>

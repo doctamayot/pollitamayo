@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import html2pdf from 'html2pdf.js';
+import SearchBar from './SearchBar'; // Asegúrate de que la ruta sea correcta
 
 const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
@@ -48,6 +49,7 @@ const WorldCupAllPollas = () => {
     const [participants, setParticipants] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState(''); // Estado para el buscador
     
     const [matchesByGroup, setMatchesByGroup] = useState({});
     const [knockoutMatches, setKnockoutMatches] = useState({
@@ -95,6 +97,14 @@ const WorldCupAllPollas = () => {
 
         return () => unsubscribe();
     }, []);
+
+    // Filtro inteligente en tiempo real
+    const filteredParticipants = useMemo(() => {
+        if (!searchTerm) return participants;
+        return participants.filter(p => 
+            p.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [participants, searchTerm]);
 
     const calculateUserStandings = useCallback((groupMatches, preds, manualTiebreakers, groupName) => {
         if (!groupMatches) return [];
@@ -165,21 +175,24 @@ const WorldCupAllPollas = () => {
     const handleDownloadPDF = () => {
         const element = document.getElementById('pdf-report');
         const opt = {
-            margin: [0.4, 0.4], 
-            filename: `Polla_Mundial_${selectedUser.displayName?.replace(/\s+/g, '_')}.pdf`,
+            margin: [0.5, 0.4], 
+            filename: `Dossier_Predicciones_${selectedUser.displayName?.replace(/\s+/g, '_')}.pdf`,
             image: { type: 'jpeg', quality: 1 },
             html2canvas: { 
                 scale: 2, 
                 useCORS: true, 
-                backgroundColor: '#0f172a',
-                windowWidth: 1024 // Para que en PC y celular se dibuje grande y claro
+                backgroundColor: '#ffffff', 
+                windowWidth: 1024,
+                scrollY: 0,
+                logging: false
             },
-            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         };
         html2pdf().set(opt).from(element).save();
     };
 
-    if (loading) return <div className="text-center py-20 font-black tracking-widest text-primary">CARGANDO POLLAS...</div>;
+    if (loading) return <div className="text-center py-20 font-black tracking-widest text-primary animate-pulse">CARGANDO EXPEDIENTES...</div>;
 
     if (selectedUser) {
         const preds = selectedUser.predictions || {};
@@ -188,144 +201,174 @@ const WorldCupAllPollas = () => {
         return (
             <div className="animate-fade-in">
                 <style dangerouslySetInnerHTML={{ __html: `
-                    .avoid-break { page-break-inside: avoid; }
+                    .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+                    .pdf-table th { border-bottom: 2px solid #e2e8f0; color: #64748b; text-transform: uppercase; font-size: 10px; padding-bottom: 8px; }
+                    .pdf-table td { border-bottom: 1px solid #f1f5f9; padding: 8px 0; color: #0f172a; }
+                    .pdf-table tr:last-child td { border-bottom: none; }
+                    .match-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+                    .match-table td { padding: 8px 4px; vertical-align: middle; border-bottom: 1px dashed #e2e8f0; }
+                    .match-table tr:last-child td { border-bottom: none; }
                 `}} />
 
                 <div className="flex flex-col sm:flex-row justify-between gap-4 mb-6">
                     <button onClick={() => setSelectedUser(null)} className="bg-background-offset text-foreground font-bold px-6 py-3 rounded-full hover:bg-border transition border border-border">⬅️ Volver a la lista</button>
-                    <button onClick={handleDownloadPDF} className="bg-amber-500 hover:bg-amber-400 text-white font-black px-6 py-3 rounded-full shadow-lg transition transform hover:scale-105">📄 Descargar PDF</button>
+                    <button onClick={handleDownloadPDF} className="bg-amber-500 hover:bg-amber-400 text-white font-black px-6 py-3 rounded-full shadow-lg transition transform hover:scale-105">📄 Descargar PDF Oficial</button>
                 </div>
 
-                {/* CONTENEDOR DEL PDF - Eliminadas todas las clases de Tailwind de bordes, sombras y colores de fondo. TODO ES INLINE. */}
-                <div id="pdf-report" className="p-6 sm:p-10 rounded-2xl mx-auto w-full max-w-[1024px]" style={{ backgroundColor: '#0f172a', color: '#f8fafc', border: '1px solid #334155' }}>
+                <div id="pdf-report" className="p-8 sm:p-12 mx-auto w-full max-w-[1024px]" style={{ backgroundColor: '#ffffff', color: '#0f172a', fontFamily: "'Inter', system-ui, sans-serif" }}>
                     
-                    {/* ENCABEZADO RESPONSIVE */}
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start justify-center sm:justify-start gap-4 mb-6 pb-6 text-center sm:text-left" style={{ borderBottom: '1px solid #334155' }}>
-                        <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl shrink-0" style={{ backgroundColor: '#1e293b', border: '3px solid #f59e0b' }}>
-                            👤
-                        </div>
+                    {/* ENCABEZADO DOSSIER */}
+                    <div className="flex items-center gap-6 mb-8 pb-6" style={{ borderBottom: '3px solid #d97706' }}>
+                        {selectedUser.photoURL ? (
+                            <img src={selectedUser.photoURL} alt="Avatar" className="w-20 h-20 rounded-full object-cover shadow-md" style={{ border: '3px solid #d97706' }} />
+                        ) : (
+                            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl shadow-md" style={{ backgroundColor: '#f1f5f9', border: '3px solid #d97706' }}>👤</div>
+                        )}
                         <div>
-                            <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-widest leading-none mb-2" style={{ color: '#f59e0b' }}>
-                                {selectedUser.displayName || 'Jugador'}
+                            <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-none mb-1" style={{ color: '#0f172a' }}>
+                                {selectedUser.displayName || 'Jugador Anónimo'}
                             </h2>
-                            <p className="text-base font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>Reporte Oficial de Predicciones - Mundial 2026</p>
+                            <p className="text-sm font-black uppercase tracking-widest" style={{ color: '#d97706' }}>Dossier Oficial de Predicciones • Mundial 2026</p>
                         </div>
                     </div>
 
                     {/* SECCIÓN 1: FASE DE GRUPOS */}
                     <div className="mb-10">
-                        <h3 className="text-lg sm:text-xl font-black p-3 rounded-xl text-center mb-6" style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}>
-                            Fase de Grupos: Tablas y Marcadores
+                        <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                            1. Fase de Grupos
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {Object.keys(matchesByGroup).sort().map(group => {
                                 const standings = calculateUserStandings(matchesByGroup[group], preds, ties, group);
                                 return (
-                                    <div key={group} className="avoid-break p-4 sm:p-5 rounded-2xl" style={{ backgroundColor: '#020617', border: '1px solid #334155' }}>
-                                        <h4 className="text-sm sm:text-base font-black text-center mb-4 pb-2 uppercase tracking-widest" style={{ color: '#f59e0b', borderBottom: '1px solid #334155' }}>{group}</h4>
+                                    <div key={group} className="avoid-break p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                        <h4 className="text-sm font-black text-center mb-4 uppercase tracking-widest" style={{ color: '#d97706' }}>{group}</h4>
                                         
-                                        <table className="w-full text-xs sm:text-sm mb-5">
+                                        <table className="w-full text-xs pdf-table mb-2">
                                             <thead>
                                                 <tr>
-                                                    <th className="text-left pb-2 font-bold" style={{ color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>Equipo</th>
-                                                    <th className="text-center pb-2 font-bold" style={{ color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>PJ</th>
-                                                    <th className="text-center pb-2 font-bold" style={{ color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>DG</th>
-                                                    <th className="text-center pb-2 font-black" style={{ color: '#f59e0b', borderBottom: '1px solid #1e293b' }}>PTS</th>
+                                                    <th className="text-left font-black">Equipo</th>
+                                                    <th className="text-center font-black">PJ</th>
+                                                    <th className="text-center font-black">DG</th>
+                                                    <th className="text-center font-black" style={{ color: '#d97706' }}>PTS</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {standings.map((t, idx) => (
                                                     <tr key={t.name}>
-                                                        <td className="text-left font-bold py-1.5" style={{ color: idx < 2 ? '#22c55e' : '#f8fafc', borderBottom: '1px solid #1e293b' }}>{translateTeam(t.name).substring(0, 15)}</td>
-                                                        <td className="text-center py-1.5 font-medium" style={{ borderBottom: '1px solid #1e293b' }}>{t.pj}</td>
-                                                        <td className="text-center py-1.5 font-medium" style={{ borderBottom: '1px solid #1e293b' }}>{t.dg > 0 ? `+${t.dg}` : t.dg}</td>
-                                                        <td className="text-center font-black py-1.5 text-base" style={{ color: '#f59e0b', borderBottom: '1px solid #1e293b' }}>{t.pts}</td>
+                                                        <td className="text-left font-bold" style={{ color: idx < 2 ? '#166534' : '#334155' }}>
+                                                            {idx + 1}. {translateTeam(t.name)}
+                                                        </td>
+                                                        <td className="text-center font-medium">{t.pj}</td>
+                                                        <td className="text-center font-medium">{t.dg > 0 ? `+${t.dg}` : t.dg}</td>
+                                                        <td className="text-center font-black text-sm" style={{ color: '#d97706' }}>{t.pts}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
 
-                                        <div className="flex flex-col gap-1.5">
-                                            {matchesByGroup[group].map(m => {
-                                                const hScore = preds[m.id]?.home ?? '-';
-                                                const aScore = preds[m.id]?.away ?? '-';
-                                                return (
-                                                    <div key={m.id} className="flex justify-between items-center text-xs sm:text-sm py-1.5" style={{ borderBottom: '1px dashed #1e293b' }}>
-                                                        <span className="w-[40%] text-right font-bold truncate pr-2" style={{ color: '#f8fafc' }}>{translateTeam(m.homeTeam?.name)}</span>
-                                                        <span className="w-[20%] text-center font-black rounded py-0.5" style={{ color: '#38bdf8', backgroundColor: '#1e293b' }}>{hScore} - {aScore}</span>
-                                                        <span className="w-[40%] text-left font-bold truncate pl-2" style={{ color: '#f8fafc' }}>{translateTeam(m.awayTeam?.name)}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                        <table className="match-table text-xs font-bold" style={{ color: '#475569' }}>
+                                            <tbody>
+                                                {matchesByGroup[group].map(m => {
+                                                    const hScore = preds[m.id]?.home ?? '-';
+                                                    const aScore = preds[m.id]?.away ?? '-';
+                                                    return (
+                                                        <tr key={m.id}>
+                                                            <td className="w-[40%] text-right pr-2 leading-tight" style={{ wordBreak: 'break-word' }}>
+                                                                {translateTeam(m.homeTeam?.name)}
+                                                            </td>
+                                                            <td className="w-[20%] text-center">
+                                                                <span className="inline-block px-1.5 py-1 rounded" style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: '900', whiteSpace: 'nowrap' }}>
+                                                                    {hScore} - {aScore}
+                                                                </span>
+                                                            </td>
+                                                            <td className="w-[40%] text-left pl-2 leading-tight" style={{ wordBreak: 'break-word' }}>
+                                                                {translateTeam(m.awayTeam?.name)}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* SECCIÓN 2: LOS 32 CLASIFICADOS A 16VOS */}
+                    {/* SECCIÓN 2: LOS 32 CLASIFICADOS */}
                     <div className="avoid-break mb-10">
-                        <h3 className="text-lg sm:text-xl font-black p-3 rounded-xl text-center mb-6" style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}>
-                            Los 32 Clasificados (Cálculo Automático)
+                        <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                            2. Clasificados a 16vos
                         </h3>
-                        <div className="flex flex-wrap justify-center gap-3 p-5 rounded-2xl" style={{ backgroundColor: '#020617', border: '1px solid #334155' }}>
+                        <div className="flex flex-wrap gap-3 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                             {qualifiedRoundOf32.map((t, idx) => (
-                                <div key={idx} className="px-3 py-1.5 rounded flex items-center gap-2" style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}>
-                                    <span className="text-xs sm:text-sm font-bold" style={{ color: '#fff' }}>{translateTeam(t.name)}</span>
-                                    <span className="text-[9px] sm:text-[10px] font-black uppercase px-1.5 rounded" style={{ color: '#f59e0b', backgroundColor: '#0f172a' }}>{t.qualReason} {t.group.replace('Grupo ', '')}</span>
+                                <div key={idx} className="px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}>
+                                    <span className="text-xs font-bold" style={{ color: '#0f172a' }}>{translateTeam(t.name)}</span>
+                                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded" style={{ color: '#b45309', backgroundColor: '#fef3c7' }}>{t.qualReason} {t.group.replace('Grupo ', '')}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* SECCIÓN 3: FASE ELIMINATORIA (MARCADORES) */}
+                    {/* SECCIÓN 3: FASE ELIMINATORIA */}
                     <div className="mb-10">
-                        <h3 className="text-lg sm:text-xl font-black p-3 rounded-xl text-center mb-6" style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}>
-                            Fase Eliminatoria: Marcadores
+                        <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                            3. Fase Eliminatoria
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINALS'].map(stage => {
                                 if (!knockoutMatches[stage] || knockoutMatches[stage].length === 0) return null;
                                 return (
-                                    <div key={stage} className="avoid-break p-4 sm:p-5 rounded-2xl" style={{ backgroundColor: '#020617', border: '1px solid #334155' }}>
-                                        <h4 className="text-sm sm:text-base font-black text-center mb-4 pb-2 uppercase tracking-widest" style={{ color: '#f59e0b', borderBottom: '1px solid #334155' }}>{roundTranslations[stage]}</h4>
-                                        <div className="flex flex-col gap-1.5">
-                                            {knockoutMatches[stage].map(m => {
-                                                const hTeam = getTeamName(m, 'home', preds);
-                                                const aTeam = getTeamName(m, 'away', preds);
-                                                const hScore = preds[m.id]?.home ?? '-';
-                                                const aScore = preds[m.id]?.away ?? '-';
-                                                return (
-                                                    <div key={m.id} className="flex justify-between items-center text-xs sm:text-sm py-2" style={{ borderBottom: '1px dashed #1e293b' }}>
-                                                        <span className="w-[40%] text-right font-bold truncate pr-2" style={{ color: '#f8fafc' }}>{translateTeam(hTeam)}</span>
-                                                        <span className="w-[20%] text-center font-black rounded py-0.5" style={{ color: '#fbbf24', backgroundColor: '#1e293b' }}>{hScore} - {aScore}</span>
-                                                        <span className="w-[40%] text-left font-bold truncate pl-2" style={{ color: '#f8fafc' }}>{translateTeam(aTeam)}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                    <div key={stage} className="avoid-break p-5 rounded-2xl" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <h4 className="text-sm font-black text-center mb-4 uppercase tracking-widest" style={{ color: '#d97706' }}>{roundTranslations[stage]}</h4>
+                                        
+                                        <table className="match-table text-xs font-bold" style={{ color: '#334155' }}>
+                                            <tbody>
+                                                {knockoutMatches[stage].map(m => {
+                                                    const hTeam = getTeamName(m, 'home', preds);
+                                                    const aTeam = getTeamName(m, 'away', preds);
+                                                    const hScore = preds[m.id]?.home ?? '-';
+                                                    const aScore = preds[m.id]?.away ?? '-';
+                                                    return (
+                                                        <tr key={m.id}>
+                                                            <td className="w-[40%] text-right pr-2 leading-tight" style={{ wordBreak: 'break-word' }}>
+                                                                {translateTeam(hTeam)}
+                                                            </td>
+                                                            <td className="w-[20%] text-center">
+                                                                <span className="inline-block px-1.5 py-1 rounded" style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: '900', whiteSpace: 'nowrap' }}>
+                                                                    {hScore} - {aScore}
+                                                                </span>
+                                                            </td>
+                                                            <td className="w-[40%] text-left pl-2 leading-tight" style={{ wordBreak: 'break-word' }}>
+                                                                {translateTeam(aTeam)}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* SECCIÓN 4: EQUIPOS SELECCIONADOS POR EL USUARIO */}
+                    {/* SECCIÓN 4: PODIO Y AVANCES */}
                     <div className="mb-10">
-                        <h3 className="text-lg sm:text-xl font-black p-3 rounded-xl text-center mb-6" style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}>
-                            Equipos Seleccionados & Podio Final
+                        <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                            4. Predicción de Podio & Avances
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {['octavos', 'cuartos', 'semis', 'campeon', 'subcampeon', 'tercero', 'cuarto'].map(round => {
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {['campeon', 'subcampeon', 'tercero', 'cuarto', 'semis', 'cuartos', 'octavos'].map(round => {
                                 const teams = selectedUser.knockoutPicks?.[round];
                                 if (!teams || teams.length === 0) return null;
                                 return (
-                                    <div key={round} className="avoid-break p-4 sm:p-5 rounded-2xl" style={{ backgroundColor: '#020617', border: '1px solid #334155' }}>
-                                        <h4 className="text-sm font-black uppercase mb-3 text-center" style={{ color: '#38bdf8' }}>{roundTranslations[round]}</h4>
+                                    <div key={round} className="avoid-break p-4 rounded-xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                        <h4 className="text-xs font-black uppercase mb-3 text-center" style={{ color: '#475569' }}>{roundTranslations[round]}</h4>
                                         <div className="flex flex-wrap justify-center gap-2">
                                             {teams.map(t => (
-                                                <span key={t.name} className="px-3 py-1.5 rounded text-xs font-bold" style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }}>
+                                                <span key={t.name} className="px-2.5 py-1 rounded text-[11px] font-bold shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a' }}>
                                                     {translateTeam(t.name)}
                                                 </span>
                                             ))}
@@ -338,34 +381,40 @@ const WorldCupAllPollas = () => {
 
                     {/* SECCIÓN 5: EXTRAS Y EVENTOS */}
                     <div className="avoid-break grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="p-5 rounded-2xl" style={{ backgroundColor: '#020617', border: '1px solid #334155' }}>
-                            <h3 className="text-sm sm:text-base font-black mb-4 pb-2 uppercase tracking-widest text-center" style={{ color: '#f59e0b', borderBottom: '1px solid #334155' }}>Preguntas Extras</h3>
-                            <div className="flex flex-col gap-3">
+                        <div>
+                            <h3 className="text-lg font-black uppercase tracking-widest mb-4" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                                5. Extras
+                            </h3>
+                            <div className="flex flex-col gap-2 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                 {Object.entries(selectedUser.extraPicks || {}).map(([key, val]) => (
-                                    <div key={key} className="flex justify-between items-center text-xs sm:text-sm p-2 rounded" style={{ backgroundColor: '#1e293b' }}>
-                                        <span className="font-bold uppercase" style={{ color: '#94a3b8' }}>{key.replace(/_/g, ' ')}</span>
-                                        <span className="font-black text-right" style={{ color: '#fff' }}>{translateTeam(val) || '-'}</span>
+                                    <div key={key} className="flex justify-between items-center text-xs pb-2" style={{ borderBottom: '1px dashed #e2e8f0' }}>
+                                        <span className="font-bold uppercase" style={{ color: '#64748b' }}>{key.replace(/_/g, ' ')}</span>
+                                        <span className="font-black text-right" style={{ color: '#0f172a' }}>{translateTeam(val) || '-'}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        <div className="p-5 rounded-2xl" style={{ backgroundColor: '#020617', border: '1px solid #334155' }}>
-                            <h3 className="text-sm sm:text-base font-black mb-4 pb-2 uppercase tracking-widest text-center" style={{ color: '#f59e0b', borderBottom: '1px solid #334155' }}>Eventos Especiales</h3>
-                            <div className="flex flex-col gap-3">
+                        <div>
+                            <h3 className="text-lg font-black uppercase tracking-widest mb-4" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                                6. Eventos Especiales
+                            </h3>
+                            <div className="flex flex-col gap-2 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                 {Object.entries(selectedUser.eventPicks || {}).map(([key, val]) => (
-                                    <div key={key} className="flex justify-between items-center text-xs sm:text-sm p-2 rounded" style={{ backgroundColor: '#1e293b' }}>
-                                        <span className="font-bold uppercase" style={{ color: '#94a3b8' }}>{key.replace(/_/g, ' ')}</span>
-                                        <span className="font-black px-2 py-0.5 rounded" style={{ backgroundColor: val === 'SI' ? '#166534' : '#991b1b', color: '#fff' }}>{val || '-'}</span>
+                                    <div key={key} className="flex justify-between items-center text-xs pb-2" style={{ borderBottom: '1px dashed #e2e8f0' }}>
+                                        <span className="font-bold uppercase" style={{ color: '#64748b' }}>{key.replace(/_/g, ' ')}</span>
+                                        <span className="font-black px-2 py-0.5 rounded shadow-sm text-[10px]" style={{ backgroundColor: val === 'SI' ? '#dcfce7' : '#fee2e2', color: val === 'SI' ? '#166534' : '#991b1b', border: val === 'SI' ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>
+                                            {val || '-'}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* PIE DE PÁGINA DEL PDF */}
-                    <div className="mt-10 text-center pt-6" style={{ borderTop: '1px solid #334155' }}>
-                        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#64748b' }}>Generado por PolliTamayo Premium Edition - 2026</p>
+                    {/* PIE DE PÁGINA */}
+                    <div className="mt-12 text-center pt-6" style={{ borderTop: '2px solid #e2e8f0' }}>
+                        <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>Generado por PolliTamayo Premium Edition</p>
                     </div>
 
                 </div>
@@ -380,26 +429,42 @@ const WorldCupAllPollas = () => {
                 <p className="text-foreground-muted text-sm">El administrador ha habilitado la vista pública. Revisa y descarga los pronósticos de tus rivales.</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {participants.map(p => (
-                    <div key={p.id} className="bg-card border border-card-border p-5 rounded-3xl shadow-sm flex flex-col items-center text-center group hover:border-primary/50 transition-all">
-                        <div className="w-16 h-16 rounded-full bg-background-offset border-2 border-border flex items-center justify-center text-2xl mb-3 group-hover:border-primary transition-colors">
-                            👤
+            {/* AQUÍ INYECTAMOS EL BUSCADOR INTELIGENTE */}
+            <SearchBar 
+                value={searchTerm} 
+                onChange={setSearchTerm} 
+                placeholder="Buscar por nombre de jugador..." 
+            />
+
+            {/* MOSTRAMOS MENSAJE SI NO HAY RESULTADOS */}
+            {filteredParticipants.length === 0 && searchTerm !== '' ? (
+                <div className="text-center py-10 bg-background-offset border border-border rounded-3xl shadow-inner mt-4">
+                    <span className="text-4xl block mb-3">👻</span>
+                    <h3 className="font-bold text-foreground">No encontramos a nadie</h3>
+                    <p className="text-foreground-muted text-sm">Nadie coincide con "{searchTerm}"</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {filteredParticipants.map(p => (
+                        <div key={p.id} className="bg-card border border-card-border p-5 rounded-3xl shadow-sm flex flex-col items-center text-center group hover:border-primary/50 transition-all">
+                            <div className="w-16 h-16 rounded-full bg-background-offset border-2 border-border flex items-center justify-center text-2xl mb-3 group-hover:border-primary transition-colors overflow-hidden">
+                                {p.photoURL ? <img src={p.photoURL} alt="" className="w-full h-full object-cover" /> : '👤'}
+                            </div>
+                            <h3 className="font-bold text-foreground text-sm truncate w-full">{p.displayName || 'Jugador'}</h3>
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full mt-2 mb-4 ${p.hasPaid ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                                {p.hasPaid ? 'Habilitado' : 'Pendiente'}
+                            </span>
+                            
+                            <button 
+                                onClick={() => setSelectedUser(p)}
+                                className="w-full bg-background-offset text-primary border border-primary/20 hover:bg-primary/10 font-bold py-2 rounded-xl text-xs transition-colors"
+                            >
+                                Ver Expediente 📂
+                            </button>
                         </div>
-                        <h3 className="font-bold text-foreground text-sm truncate w-full">{p.displayName || 'Jugador'}</h3>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full mt-2 mb-4 ${p.hasPaid ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                            {p.hasPaid ? 'Habilitado' : 'Pendiente'}
-                        </span>
-                        
-                        <button 
-                            onClick={() => setSelectedUser(p)}
-                            className="w-full bg-background-offset text-primary border border-primary/20 hover:bg-primary/10 font-bold py-2 rounded-xl text-xs transition-colors"
-                        >
-                            Ver Expediente 📂
-                        </button>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
