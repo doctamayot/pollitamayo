@@ -27,6 +27,7 @@ import WorldCupAdmin from './components/WorldCupAdmin';
 import WorldCupPot from './components/WorldCupPot'; 
 import WorldCupGrid from './components/WorldCupGrid';
 import WorldCupRanking from './components/WorldCupRanking';
+import WorldCupAllPollas from './components/WorldCupAllPollas';
 
 // Config
 import { ADMIN_EMAIL, USERS_COLLECTION } from './config';
@@ -134,13 +135,13 @@ function App() {
                 const isLive = !!docSnap.data().liveMenuMode;
                 setLiveMenuMode(isLive);
                 
-                // Si el modo live se apaga y el usuario está en la grilla, lo devolvemos a predicciones (EXCEPTO AL ADMIN)
-                if (!isLive && mainView === 'worldCup_grid' && user?.email !== 'doctamayot@gmail.com') {
+                // Si el modo live se apaga y el usuario está en vistas bloqueadas, lo devolvemos a predicciones (EXCEPTO AL ADMIN)
+                if (!isLive && (mainView === 'worldCup_grid' || mainView === 'worldCup_allPollas') && user?.email !== 'doctamayot@gmail.com') {
                     setMainView('worldCup_predictions');
                 }
             } else {
                 setLiveMenuMode(false);
-                if (mainView === 'worldCup_grid' && user?.email !== 'doctamayot@gmail.com') setMainView('worldCup_predictions');
+                if ((mainView === 'worldCup_grid' || mainView === 'worldCup_allPollas') && user?.email !== 'doctamayot@gmail.com') setMainView('worldCup_predictions');
             }
         });
         return () => unsubscribeSettings();
@@ -320,6 +321,9 @@ function App() {
                         <button onClick={() => navigateTo('worldCup_myReport')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_myReport' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                             <span className="text-xl">👁️</span> Mi Polla
                         </button>
+
+                        {/* --- BOTÓN VER POLLAS PÚBLICAS --- */}
+                        
                         
                         <button onClick={() => navigateTo('worldCup_ranking')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_ranking' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                             <span className="text-xl">🏆</span> Ranking Oficial
@@ -332,6 +336,11 @@ function App() {
                         <button onClick={() => navigateTo('worldCup_pot')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_pot' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                             <span className="text-xl">💰</span> Pot
                         </button>
+                        {(liveMenuMode || user.email === 'doctamayot@gmail.com') && (
+                            <button onClick={() => navigateTo('worldCup_allPollas')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_allPollas' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
+                                <span className="text-xl">📂</span> Ver Pollas
+                            </button>
+                        )}
 
                         {/* BOTÓN EXCLUSIVO DEL ADMINISTRADOR MUNDIALISTA */}
                         {user.email === 'doctamayot@gmail.com' && (
@@ -381,12 +390,13 @@ function App() {
         let navItems = [];
 
         if (isWorldCupView) {
+            // ELIMINAMOS "Ver Pollas" DEL MENÚ INFERIOR PARA MANTENERLO LIMPIO
             if (liveMenuMode) {
                 navItems = [
-                    { id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' },
-                    { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Resultados' : 'Predicciones', icon: '🎯' },
+                    { id: 'worldCup_grid', label: 'Grilla', icon: '📡' },
+                    { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Ajustes' : 'Predicción', icon: '🎯' },
                     { id: 'worldCup_ranking', label: 'Ranking', icon: '🏆' },
-                    { id: 'worldCup_rules', label: 'Reglamento', icon: '📜' },
+                    { id: 'worldCup_rules', label: 'Reglas', icon: '📜' },
                 ];
             } else {
                 navItems = [
@@ -395,7 +405,7 @@ function App() {
                     { id: 'worldCup_rules', label: 'Reglamento', icon: '📜' },
                     { id: 'worldCup_pot', label: 'Pot', icon: '💰' },
                 ];
-                // Si es el admin y está en pre-mundial, le inyectamos la grilla para que pueda probar (5 iconos en la barra)
+                // Admin inyección grilla en pre-mundial
                 if (user.email === 'doctamayot@gmail.com') {
                     navItems.unshift({ id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' });
                 }
@@ -410,7 +420,7 @@ function App() {
         }
 
         return (
-            <nav className="lg:hidden fixed bottom-0 left-0 w-full bg-card border-t border-card-border z-50 flex justify-around items-center h-16 px-2 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+            <nav className="lg:hidden fixed bottom-0 left-0 w-full bg-card border-t border-card-border z-50 flex justify-around items-center h-16 px-1 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
                 {navItems.map(item => {
                     const isActive = mainView === item.id || 
                                      (item.id === 'worldCup_predictions' && mainView === 'worldCup') ||
@@ -424,10 +434,10 @@ function App() {
                                 isActive ? 'text-foreground' : 'text-foreground-muted hover:text-foreground/80'
                             }`}
                         >
-                            <div className={`px-4 py-1 rounded-full text-xl transition-colors ${isActive ? 'bg-primary/20 text-primary' : ''}`}>
+                            <div className={`px-3 py-1 rounded-full text-lg sm:text-xl transition-colors ${isActive ? 'bg-primary/20 text-primary' : ''}`}>
                                 {item.icon}
                             </div>
-                            <span className={`text-[10px] font-semibold ${isActive ? 'font-bold text-primary' : ''}`}>
+                            <span className={`text-[9px] sm:text-[10px] font-semibold tracking-tighter ${isActive ? 'font-bold text-primary' : ''}`}>
                                 {item.label}
                             </span>
                         </button>
@@ -527,6 +537,13 @@ function App() {
                     {mainView === 'worldCup_myReport' && (
                         <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
                             <WorldCupMyReport currentUser={user} />
+                        </div>
+                    )}
+
+                    {/* --- NUEVA VISTA DE POLLAS PÚBLICAS --- */}
+                    {mainView === 'worldCup_allPollas' && (
+                        <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
+                            <WorldCupAllPollas />
                         </div>
                     )}
 

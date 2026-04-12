@@ -852,7 +852,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             
 
             {/* --- NUEVOS TABS PRINCIPALES PROFESIONALES --- */}
-            <div className="mb-8 w-full flex justify-center sticky top-16 sm:top-20 z-[90] animate-fade-in px-1 sm:px-4">
+            <div className="mb-8 w-full flex justify-center sticky top-16 sm:top-20 z-[30] animate-fade-in px-1 sm:px-4">
                 <div className="bg-card border border-card-border p-1.5 sm:p-2 rounded-[2rem] sm:rounded-full shadow-xl flex w-full max-w-3xl items-center justify-between gap-1 backdrop-blur-sm relative overflow-hidden group">
                     <div className="absolute left-0 top-0 w-32 h-32 bg-primary/10 rounded-full filter blur-3xl -translate-x-16 -translate-y-16 pointer-events-none opacity-50"></div>
                     <div className="absolute right-0 bottom-0 w-32 h-32 bg-primary/10 rounded-full filter blur-3xl translate-x-16 translate-y-16 pointer-events-none opacity-50"></div>
@@ -1209,7 +1209,7 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             {/* BOTÓN FLOTANTE GUARDAR */}
             {!(activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) && (
-                <div className="fixed bottom-28 md:bottom-10 right-4 sm:right-10 z-[100] flex flex-col gap-3 items-end animate-slide-up">
+                <div className="fixed bottom-28 md:bottom-10 right-4 sm:right-10 z-[30] flex flex-col gap-3 items-end animate-slide-up">
                     <button onClick={handleSavePredictions} disabled={saving} className="bg-primary text-primary-foreground font-black py-3 px-5 sm:py-4 sm:px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-2 sm:gap-3 disabled:opacity-50 uppercase tracking-tighter text-xs sm:text-base">
                         {saving ? (
                             <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>...</span></>
