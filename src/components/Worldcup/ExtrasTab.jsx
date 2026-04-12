@@ -1,5 +1,5 @@
 import React from 'react';
-import { extraQuestions, translateTeam } from './Constants';
+import { extraQuestions, translateTeam } from './constants';
 
 const ExtrasTab = ({ extraPicks, handleExtraChange, isCurrentMainTabLocked, allTeams, matchesByGroup }) => {
     return (
