@@ -18,7 +18,7 @@ const teamTranslations = {
     "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Japan": "Japón", 
     "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", "Peru": "Perú", 
     "Portugal": "Portugal", "Senegal": "Senegal", "South Korea": "Corea del Sur", "Spain": "España", 
-    "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir"
+    "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir", "TBD": "Por definir"
 };
 
 const translateTeam = (name) => teamTranslations[name] || name;
@@ -70,7 +70,7 @@ const WorldCupRanking = () => {
         const fetchMatches = async () => {
             try {
                 const data = await getWorldCupMatches();
-                if (data && data.matches) setMatches(data.matches.filter(m => m.stage === 'GROUP_STAGE'));
+                if (data && data.matches) setMatches(data.matches);
             } catch (err) { console.error(err); }
         };
         fetchMatches();
@@ -123,19 +123,21 @@ const WorldCupRanking = () => {
         });
     }, []);
 
+    const groupStageMatches = useMemo(() => matches.filter(m => m.stage === 'GROUP_STAGE'), [matches]);
+
     const isGroupStageFinished = useMemo(() => {
-        if (matches.length === 0) return false;
-        return matches.every(m => {
+        if (groupStageMatches.length === 0) return false;
+        return groupStageMatches.every(m => {
             const apiFinished = m.status === 'FINISHED';
             const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
             return apiFinished || adminFinished;
         });
-    }, [matches, adminResults]);
+    }, [groupStageMatches, adminResults]);
 
     const adminQualified32 = useMemo(() => {
         if (!adminResults?.predictions) return [];
         let top2 = []; let thirds = [];
-        const byGroup = matches.reduce((acc, m) => {
+        const byGroup = groupStageMatches.reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
             if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
         }, {});
@@ -146,12 +148,11 @@ const WorldCupRanking = () => {
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return [...top2, ...thirds.slice(0, 8)];
-    }, [matches, adminResults, getStandings]);
-
+    }, [groupStageMatches, adminResults, getStandings]);
 
     const ranking = useMemo(() => {
         const ranks = [];
-        const byGroup = matches.reduce((acc, m) => {
+        const byGroup = groupStageMatches.reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
             if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
         }, {});
@@ -180,27 +181,43 @@ const WorldCupRanking = () => {
             });
 
             let userTop2 = []; let userThirds = [];
+            
             Object.keys(byGroup).forEach(g => {
-                const isGroupFinished = byGroup[g].every(m => {
+                const groupMatches = byGroup[g];
+                
+                // 🛑 SEGURO CONTRA PUNTOS FANTASMA: Contar cuántos partidos de este grupo predijo el usuario
+                let predictedCount = 0;
+                groupMatches.forEach(m => {
+                    const p = userData.predictions?.[m.id];
+                    if (p && p.home !== '' && p.home !== undefined && p.away !== '' && p.away !== undefined) {
+                        predictedCount++;
+                    }
+                });
+
+                // Si no predijo NINGÚN partido, se ignora el grupo (Evita que clasifique equipos alfabéticamente)
+                if (predictedCount === 0) return;
+
+                const isGroupFinished = groupMatches.every(m => {
                     const apiFinished = m.status === 'FINISHED';
                     const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
                     return apiFinished || adminFinished;
                 });
                 
-                const uT = getStandings(byGroup[g], userData.predictions, g, userData.manualTiebreakers);
+                const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
                 
-                if (isGroupFinished) {
-                    const aT = getStandings(byGroup[g], adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                // Solo gana el PLENO si predijo el grupo completo (los 6 partidos)
+                if (isGroupFinished && predictedCount === groupMatches.length) {
+                    const aT = getStandings(groupMatches, adminResults?.predictions, g, adminResults?.manualTiebreakers);
                     if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
                         stats.ptsHonorYBonos += 8;
                     }
                 }
             });
+            
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            // Rondas Clásicas (16vos a Semis)
             roundTabs.forEach(r => {
                 const is16 = r.id === 'dieciseisavos';
                 if (is16 && !isGroupStageFinished) return;
@@ -211,7 +228,6 @@ const WorldCupRanking = () => {
                 }
             });
 
-            // NUEVO: Aciertos de llegar a la Gran Final (6 pts c/u) y 3er Puesto (4 pts c/u)
             const uFinalists = [...(userData.knockoutPicks?.campeon || []), ...(userData.knockoutPicks?.subcampeon || [])];
             const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
             if (aFinalists.length > 0) {
@@ -243,7 +259,6 @@ const WorldCupRanking = () => {
                 if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { stats.ptsHonorYBonos += s.pts; honorHits++; }
             });
             
-            // Evaluamos si atinó el orden exacto del Top 4 (Super Bono)
             let isSuperBono = false;
             if (adminResults?.knockoutPicks) {
                 isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
@@ -261,7 +276,7 @@ const WorldCupRanking = () => {
             r.position = currentRank;
         });
         return ranks;
-    }, [allPredictions, matches, adminResults, usersInfo, isGroupStageFinished, adminQualified32, getStandings]);
+    }, [allPredictions, matches, groupStageMatches, adminResults, usersInfo, isGroupStageFinished, adminQualified32, getStandings]);
 
     const premiosRepartidos = useMemo(() => {
         if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, r1: 1, r2: 0, r3: 0 };

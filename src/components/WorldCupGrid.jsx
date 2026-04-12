@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
@@ -15,7 +15,7 @@ const teamTranslations = {
     "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Japan": "Japón", 
     "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", "Peru": "Perú", 
     "Portugal": "Portugal", "Senegal": "Senegal", "South Korea": "Corea del Sur", "Spain": "España", 
-    "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir"
+    "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir", "TBD": "Por definir"
 };
 
 const matchStatusTranslations = {
@@ -23,18 +23,16 @@ const matchStatusTranslations = {
     FINISHED: 'Finalizado', SUSPENDED: 'Suspendido', POSTPONED: 'Pospuesto', CANCELLED: 'Cancelado'
 };
 
-const extraQuestions = [
-    { id: 'goleador', manual: true }, { id: 'equipo_goleador' }, { id: 'equipo_menos_goleador' },
-    { id: 'mas_amarillas' }, { id: 'mas_rojas' }, { id: 'valla_menos_vencida' },
-    { id: 'valla_mas_vencida' }, { id: 'grupo_mas_goles' }, { id: 'grupo_menos_goles' },
-    { id: 'maximo_asistidor', manual: true }, { id: 'atajapenales', manual: true }
-];
-
-const specialEvents = [
-    { id: 'gol_olimpico' }, { id: 'remontada_epica' }, { id: 'el_festival' }, { id: 'muralla_final' },
-    { id: 'hat_trick_hero' }, { id: 'roja_banquillo' }, { id: 'portero_goleador' }, { id: 'debut_sin_red' },
-    { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' }
-];
+const stageTranslations = {
+    'GROUP_STAGE': 'Fase de Grupos',
+    'LAST_32': '16vos de Final',
+    'ROUND_OF_32': '16vos de Final',
+    'LAST_16': 'Octavos de Final',
+    'QUARTER_FINALS': 'Cuartos de Final',
+    'SEMI_FINALS': 'Semifinales',
+    'FINAL': 'Gran Final',
+    'THIRD_PLACE': 'Tercer Puesto'
+};
 
 const roundTabs = [
     { id: 'dieciseisavos', pts: 2 }, { id: 'octavos', pts: 3 }, { id: 'cuartos', pts: 4 }, { id: 'semis', pts: 5 }
@@ -49,11 +47,14 @@ const formatShortName = (fullName) => {
     return `${parts[0]} ${parts[1].charAt(0)}.`;
 };
 
-const isSmartMatch = (userText, adminText) => {
-    if (!userText || !adminText) return false;
-    const clean = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
-    const u = clean(userText); const a = clean(adminText);
-    return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
+// Formateador de fechas elegante para los Tabs
+const formatDateObj = (dateStr) => {
+    const [y, m, d] = dateStr.split('-');
+    const date = new Date(y, m - 1, d);
+    const dayName = date.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace('.', '');
+    const dayNum = date.getDate();
+    const monthName = date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+    return { dayName, dayNum, monthName };
 };
 
 const WorldCupGrid = () => {
@@ -65,11 +66,14 @@ const WorldCupGrid = () => {
     const [isApiLoading, setIsApiLoading] = useState(true);
     const [isDbLoading, setIsDbLoading] = useState(true);
 
+    // Ref para el contenedor del carrusel de fechas
+    const scrollContainerRef = useRef(null);
+
     useEffect(() => {
         const fetchMatches = async () => {
             try {
                 const data = await getWorldCupMatches();
-                if (data && data.matches) setMatches(data.matches.filter(m => m.stage === 'GROUP_STAGE'));
+                if (data && data.matches) setMatches(data.matches);
             } catch (err) { console.error(err); }
             finally { setIsApiLoading(false); }
         };
@@ -92,6 +96,21 @@ const WorldCupGrid = () => {
 
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, []);
+
+    const allTeams = useMemo(() => {
+        const teamsMap = new Map();
+        matches.forEach(m => {
+            const hName = m.homeTeam?.name || '';
+            const aName = m.awayTeam?.name || '';
+            if (hName && !hName.includes('Winner') && !hName.includes('Loser') && hName !== 'TBD') {
+                teamsMap.set(hName, m.homeTeam);
+            }
+            if (aName && !aName.includes('Winner') && !aName.includes('Loser') && aName !== 'TBD') {
+                teamsMap.set(aName, m.awayTeam);
+            }
+        });
+        return Array.from(teamsMap.values());
+    }, [matches]);
 
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
@@ -125,21 +144,23 @@ const WorldCupGrid = () => {
         });
     }, []);
 
+    const groupStageMatches = useMemo(() => matches.filter(m => m.stage === 'GROUP_STAGE'), [matches]);
+
     const groupMatchesMap = useMemo(() => {
-        return matches.reduce((acc, m) => {
+        return groupStageMatches.reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
             if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
         }, {});
-    }, [matches]);
+    }, [groupStageMatches]);
 
     const isGroupStageFinished = useMemo(() => {
-        if (matches.length === 0) return false;
-        return matches.every(m => {
+        if (groupStageMatches.length === 0) return false;
+        return groupStageMatches.every(m => {
             const apiFinished = m.status === 'FINISHED';
             const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
             return apiFinished || adminFinished;
         });
-    }, [matches, adminResults]);
+    }, [groupStageMatches, adminResults]);
 
     const adminQualified32 = useMemo(() => {
         if (!adminResults?.predictions) return [];
@@ -152,7 +173,6 @@ const WorldCupGrid = () => {
         return [...top2, ...thirds.slice(0, 8)];
     }, [groupMatchesMap, adminResults, getStandings]);
 
-    // --- MOTOR DE PUNTOS TOTAL (Sincronizado con Ranking Oficial) ---
     const liveRanking = useMemo(() => {
         const ranks = [];
         Object.keys(allPredictions).forEach(uid => {
@@ -165,7 +185,9 @@ const WorldCupGrid = () => {
                 const p = userData.predictions?.[m.id]; const a = adminResults?.predictions?.[m.id];
                 const rH = a?.home !== undefined && a?.home !== '' ? a.home : m.score?.fullTime?.home;
                 const rA = a?.away !== undefined && a?.away !== '' ? a.away : m.score?.fullTime?.away;
-                const hasO = (a && a.home !== '' && a.away !== '') || m.status === 'FINISHED' || m.status.includes('PLAY');
+                const matchStatus = m.status || '';
+                const hasO = (a && a.home !== '' && a.away !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                
                 if (hasO && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
                     if (pH == rH && pA == rA) total += 5;
@@ -180,17 +202,29 @@ const WorldCupGrid = () => {
 
             let userTop2 = []; let userThirds = [];
             Object.keys(groupMatchesMap).forEach(g => {
-                const groupIsOver = groupMatchesMap[g].every(m => {
+                const groupMatches = groupMatchesMap[g];
+                
+                let predictedCount = 0;
+                groupMatches.forEach(m => {
+                    const p = userData.predictions?.[m.id];
+                    if (p && p.home !== '' && p.home !== undefined && p.away !== '' && p.away !== undefined) {
+                        predictedCount++;
+                    }
+                });
+
+                if (predictedCount === 0) return;
+
+                const groupIsOver = groupMatches.every(m => {
                     const apiFinished = m.status === 'FINISHED';
                     const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
                     return apiFinished || adminFinished;
                 });
 
-                const uT = getStandings(groupMatchesMap[g], userData.predictions, g, userData.manualTiebreakers);
+                const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
 
-                if (groupIsOver) {
-                    const aT = getStandings(groupMatchesMap[g], adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                if (groupIsOver && predictedCount === groupMatches.length) {
+                    const aT = getStandings(groupMatches, adminResults?.predictions, g, adminResults?.manualTiebreakers);
                     if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
                         total += 8;
                     }
@@ -209,7 +243,6 @@ const WorldCupGrid = () => {
                 }
             });
 
-            // NUEVO: Aciertos de llegar a la Gran Final (6 pts c/u) y 3er Puesto (4 pts c/u)
             const uFinalists = [...(userData.knockoutPicks?.campeon || []), ...(userData.knockoutPicks?.subcampeon || [])];
             const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
             if (aFinalists.length > 0) {
@@ -225,15 +258,6 @@ const WorldCupGrid = () => {
                     if (ut && aThirds.some(at => at && at.name === ut.name)) total += 4;
                 });
             }
-
-            extraQuestions.forEach(q => {
-                const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
-                if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) total += 6;
-            });
-            specialEvents.forEach(e => {
-                const u = userData.eventPicks?.[e.id]; const a = adminResults?.eventPicks?.[e.id];
-                if (u && a === u) total += (u === 'SI' ? 5 : 2);
-            });
 
             const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
             let honorHits = 0;
@@ -265,10 +289,12 @@ const WorldCupGrid = () => {
         return ranks;
     }, [allPredictions, matches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings]);
 
+    // --- REFACTORIZACIÓN DE FECHAS A FORMATO YYYY-MM-DD PARA ORDEN PERFECTO ---
     const matchesByDate = useMemo(() => {
         const grouped = {};
         matches.forEach(m => {
-            const dateStr = new Date(m.utcDate).toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const d = new Date(m.utcDate);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             if (!grouped[dateStr]) grouped[dateStr] = [];
             grouped[dateStr].push(m);
         });
@@ -276,23 +302,21 @@ const WorldCupGrid = () => {
     }, [matches]);
 
     const sortedDates = useMemo(() => {
-        const dates = Object.keys(matchesByDate).sort((a, b) => {
-            const [d1, m1, y1] = a.split('/'); const [d2, m2, y2] = b.split('/');
-            return new Date(`${y1}-${m1}-${d1}`) - new Date(`${y2}-${m2}-${d2}`);
-        });
-        return dates;
+        return Object.keys(matchesByDate).sort(); 
     }, [matchesByDate]);
 
     useEffect(() => {
         if (sortedDates.length > 0 && !selectedDate) {
-            const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const d = new Date();
+            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            
             if (sortedDates.includes(today)) {
                 setSelectedDate(today);
             } else {
                 const nextActiveDate = sortedDates.find(date => {
                     return matchesByDate[date]?.some(m => m.status !== 'FINISHED');
                 });
-                setSelectedDate(nextActiveDate || sortedDates[0]);
+                setSelectedDate(nextActiveDate || sortedDates[sortedDates.length - 1]);
             }
         }
     }, [sortedDates, selectedDate, matchesByDate]);
@@ -311,6 +335,17 @@ const WorldCupGrid = () => {
             return new Date(a.utcDate) - new Date(b.utcDate);
         });
     }, [selectedDate, matchesByDate]); 
+
+    // Función para deslizar el carrusel de fechas
+    const handleScroll = (direction) => {
+        if (scrollContainerRef.current) {
+            const scrollAmount = 250; 
+            scrollContainerRef.current.scrollBy({
+                left: direction === 'left' ? -scrollAmount : scrollAmount,
+                behavior: 'smooth'
+            });
+        }
+    };
 
     if (isApiLoading || isDbLoading) return (
         <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
@@ -337,12 +372,73 @@ const WorldCupGrid = () => {
                 <img src={logocopa} className="sm:hidden w-16 h-16 object-contain opacity-80 z-10" alt="" />
             </div>
 
-            <div className="flex overflow-x-auto gap-2 mb-6 pb-2 hide-scrollbar">
-                {sortedDates.map(d => (
-                    <button key={d} onClick={() => setSelectedDate(d)} className={`shrink-0 px-4 py-2 sm:px-6 sm:py-3.5 rounded-xl text-[10px] sm:text-xs font-black transition-all shadow-sm ${selectedDate === d ? 'bg-primary text-white scale-105' : 'bg-card text-foreground-muted border border-border hover:bg-background-offset'}`}>
-                        {d}
-                    </button>
-                ))}
+            {/* --- SELECTOR DE FECHAS ESTILO PREMIUM CON FLECHAS --- */}
+            <div className="relative w-full mb-8 flex items-center group">
+                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none"></div>
+                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none"></div>
+                
+                {/* Flecha Izquierda (Solo PC) */}
+                <button 
+                    onClick={() => handleScroll('left')} 
+                    className="absolute left-0 z-20 bg-card border border-border text-foreground p-1.5 rounded-full shadow-lg hidden md:flex hover:bg-primary hover:text-white transition-all hover:scale-110 ml-1"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                </button>
+
+                <div ref={scrollContainerRef} className="flex overflow-x-auto gap-3 pb-4 pt-2 px-3 sm:px-12 hide-scrollbar snap-x items-center w-full scroll-smooth">
+                    {sortedDates.map(d => {
+                        const isSelected = selectedDate === d;
+                        const { dayName, dayNum, monthName } = formatDateObj(d);
+                        
+                        const hasLive = matchesByDate[d].some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+                        const allFinished = matchesByDate[d].every(m => m.status === 'FINISHED');
+
+                        return (
+                            <button 
+                                key={d} 
+                                onClick={() => setSelectedDate(d)} 
+                                className={`snap-center shrink-0 flex flex-col items-center justify-center w-16 h-20 sm:w-20 sm:h-[5.5rem] rounded-2xl transition-all duration-300 relative border ${
+                                    isSelected 
+                                    ? 'bg-gradient-to-b from-primary to-amber-600 text-white shadow-[0_8px_20px_-6px_rgba(245,158,11,0.6)] border-transparent scale-105 z-10' 
+                                    : 'bg-card text-foreground-muted border-border hover:bg-background-offset hover:border-primary/50'
+                                }`}
+                            >
+                                {hasLive && (
+                                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border border-background shadow-sm"></span>
+                                    </span>
+                                )}
+                                
+                                <span className={`text-[8px] sm:text-[9px] font-black tracking-widest uppercase mb-0.5 ${isSelected ? 'text-white/80' : 'opacity-50'}`}>
+                                    {dayName}
+                                </span>
+                                <span className="text-xl sm:text-2xl font-black leading-none mb-0.5 tracking-tighter">
+                                    {dayNum}
+                                </span>
+                                <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest ${isSelected ? 'text-white' : 'text-primary'}`}>
+                                    {monthName}
+                                </span>
+                                
+                                <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-1 rounded-t-full transition-all duration-300 ${
+                                    isSelected ? 'w-8 bg-white/40' : (allFinished ? 'w-4 bg-border/50' : 'w-4 bg-primary/30')
+                                }`}></div>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Flecha Derecha (Solo PC) */}
+                <button 
+                    onClick={() => handleScroll('right')} 
+                    className="absolute right-0 z-20 bg-card border border-border text-foreground p-1.5 rounded-full shadow-lg hidden md:flex hover:bg-primary hover:text-white transition-all hover:scale-110 mr-1"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </button>
             </div>
 
             <div className="space-y-6 sm:space-y-10">
@@ -350,8 +446,9 @@ const WorldCupGrid = () => {
                     const a = adminResults?.predictions?.[match.id];
                     const rH = a?.home !== undefined && a?.home !== '' ? a.home : match.score?.fullTime?.home;
                     const rA = a?.away !== undefined && a?.away !== '' ? a.away : match.score?.fullTime?.away;
-                    const hasO = (a && a.home !== '' && a.away !== '') || match.status === 'FINISHED' || match.status.includes('PLAY');
-                    const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+                    const matchStatus = match.status || '';
+                    const hasO = (a && a.home !== '' && a.away !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                    const isLive = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
 
                     const matchSpecificRanking = liveRanking.map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
@@ -381,13 +478,28 @@ const WorldCupGrid = () => {
                         return userB.totalPoints - userA.totalPoints;
                     });
 
+                    const homeOriginal = match.homeTeam?.name || '';
+                    const awayOriginal = match.awayTeam?.name || '';
+                    
+                    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+
+                    const customHome = a?.customHomeTeam || '';
+                    const customAway = a?.customAwayTeam || '';
+
+                    const finalHomeName = isUnknownHome ? (customHome || 'Por Definir') : homeOriginal;
+                    const finalAwayName = isUnknownAway ? (customAway || 'Por Definir') : awayOriginal;
+
+                    const homeCrest = isUnknownHome && customHome ? allTeams.find(t => t.name === customHome)?.crest : match.homeTeam?.crest;
+                    const awayCrest = isUnknownAway && customAway ? allTeams.find(t => t.name === customAway)?.crest : match.awayTeam?.crest;
+
                     return (
                         <div key={match.id} className={`bg-card border ${isLive ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
                             <div className={`${isLive ? 'bg-green-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
                                 <div className="flex justify-between items-center mb-3 sm:mb-5">
                                     <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
-                                        {match.group?.replace('GROUP_', 'Grupo ') || 'Fase'}
+                                        {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
                                     </span>
                                     <span className="text-[10px] sm:text-xs font-bold text-foreground-muted uppercase tracking-widest bg-background/50 px-2 py-1 rounded border border-border/50">
                                         {new Date(match.utcDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -396,12 +508,12 @@ const WorldCupGrid = () => {
                                 
                                 <div className="flex items-center justify-between w-full">
                                     <div className="w-[40%] flex flex-col items-center justify-center">
-                                        <img src={match.homeTeam.crest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" />
-                                        <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(match.homeTeam.name)}</p>
+                                        {homeCrest ? <img src={homeCrest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
+                                        <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(finalHomeName)}</p>
                                     </div>
                                     
                                     <div className="w-[20%] flex flex-col items-center justify-center shrink-0">
-                                        <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest mb-1.5 sm:mb-2 px-2 py-0.5 rounded ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse' : match.status === 'FINISHED' ? 'text-red-500 bg-red-500/10' : 'text-foreground-muted bg-background/50'}`}>
+                                        <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest mb-1.5 sm:mb-2 px-2 py-0.5 rounded ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse' : matchStatusTranslations[match.status] || match.status}`}>
                                             {isLive ? '• EN VIVO' : matchStatusTranslations[match.status] || match.status}
                                         </span>
                                         <div className={`flex items-center justify-center gap-1.5 sm:gap-4 px-3 py-1.5 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl border font-black text-2xl sm:text-5xl flex-nowrap whitespace-nowrap shadow-md ${hasO ? 'bg-foreground text-background border-foreground scale-105 transition-transform' : 'bg-background text-foreground-muted border-border'}`}>
@@ -412,14 +524,13 @@ const WorldCupGrid = () => {
                                     </div>
                                     
                                     <div className="w-[40%] flex flex-col items-center justify-center">
-                                        <img src={match.awayTeam.crest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" />
-                                        <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(match.awayTeam.name)}</p>
+                                        {awayCrest ? <img src={awayCrest} className="h-6 sm:h-14 mb-1.5 sm:mb-3 drop-shadow-md" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
+                                        <p className="font-black text-[11px] sm:text-xl truncate px-1 text-center w-full">{translateTeam(finalAwayName)}</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="w-full relative z-10 overflow-hidden bg-background-offset/10 min-h-[150px] flex-grow">
-                                
                                 <img src={logocopa} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-80 sm:h-80 object-contain opacity-[0.03] dark:opacity-[0.05] pointer-events-none z-0" alt="" />
 
                                 <table className="w-full text-left table-fixed relative z-10">

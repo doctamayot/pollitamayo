@@ -1,0 +1,223 @@
+{
+  "mundial_2026": {
+    "formato": "48 selecciones, 12 grupos de 4",
+    "grupos": [
+      {
+        "grupo": "A",
+        "paises": ["México", "Sudáfrica", "Corea del Sur", "Chequia"],
+        "datos": [
+          "México es el primer país en albergar 3 Mundiales (1970, 1986, 2026).",
+          "Sudáfrica y México repiten el partido inaugural como en 2010.",
+          "Corea del Sur ostenta el récord asiático de 11 participaciones seguidas.",
+          "Chequia vuelve a la cita mundialista tras 20 años de ausencia.",
+          "El Estadio Azteca será la sede del primer partido el 11 de junio.",
+          "Son Heung-min fue el máximo asistente de la eliminatoria en Asia.",
+          "Sudáfrica promedió 1.8 goles por partido en la fase de grupos de CAF.",
+          "Chequia clasificó vía Nations League / Play-off de la UEFA.",
+          "México nunca ha perdido un partido inaugural siendo anfitrión.",
+          "Corea del Sur ha llegado a octavos en 2 de los últimos 4 mundiales.",
+          "La altitud de CDMX (2,240m) es un factor estadístico clave para el Grupo A.",
+          "Sudáfrica busca superar la fase de grupos por primera vez desde 2002."
+        ]
+      },
+      {
+        "grupo": "B",
+        "paises": ["Canadá", "Bosnia y Herzegovina", "Catar", "Suiza"],
+        "datos": [
+          "Canadá jugará sus partidos de local en Toronto y Vancouver.",
+          "Suiza ha clasificado a la fase de eliminación en 4 de los últimos 5 Mundiales.",
+          "Catar es el actual bicampeón de la Copa Asiática (2019, 2023).",
+          "Bosnia regresa al Mundial por primera vez desde su debut en 2014.",
+          "Alphonso Davies es el jugador con más regates completados en la eliminatoria CONCACAF.",
+          "Suiza solo recibió 4 goles en 8 partidos de su eliminatoria europea.",
+          "Catar terminó invicto su fase de grupos clasificatoria en Asia.",
+          "Bosnia cuenta con Edin Dzeko como su máximo goleador histórico activo.",
+          "Este es el único grupo sin un campeón del mundo previo.",
+          "Canadá busca su primera victoria en la historia de los Mundiales.",
+          "Suiza eliminó a Francia e Italia en torneos oficiales recientes.",
+          "La selección de Catar ha invertido más de 10 años en su actual base de jugadores."
+        ]
+      },
+      {
+        "grupo": "C",
+        "paises": ["Brasil", "Marruecos", "Haití", "Escocia"],
+        "datos": [
+          "Brasil es la única selección presente en todos los Mundiales (23).",
+          "Marruecos fue la primera selección africana en semis de un Mundial (2022).",
+          "Haití clasifica tras 52 años de ausencia (su única vez fue 1974).",
+          "Escocia ha participado en 8 mundiales y siempre cayó en fase de grupos.",
+          "Brasil terminó líder de las eliminatorias CONMEBOL con +22 en diferencia de goles.",
+          "Marruecos mantuvo su portería en cero en 6 de sus últimos 9 partidos oficiales.",
+          "Escocia clasificó directamente dejando a Noruega fuera de los cupos directos.",
+          "Vinícius Jr. llega como el jugador con mayor valor de mercado del grupo.",
+          "Haití clasificó tras un repechaje intercontinental histórico.",
+          "Brasil ha ganado sus 4 enfrentamientos previos contra Escocia en Mundiales.",
+          "Achraf Hakimi es el defensa con más pases clave en la eliminatoria africana.",
+          "Marruecos ocupa actualmente el puesto más alto de una selección africana en el Ranking FIFA."
+        ]
+      },
+      {
+        "grupo": "D",
+        "paises": ["Estados Unidos", "Paraguay", "Australia", "Turquía"],
+        "datos": [
+          "EE. UU. jugará sus 3 partidos de fase de grupos en suelo estadounidense.",
+          "Paraguay regresa al Mundial tras perderse las ediciones de 2014, 2018 y 2022.",
+          "Australia ha clasificado a 6 mundiales consecutivos desde 2006.",
+          "Turquía vuelve tras 24 años (su última vez fue el 3er puesto en 2002).",
+          "Christian Pulisic es el capitán más joven en la historia de EE. UU. en mundiales.",
+          "Paraguay tuvo la defensa más sólida de CONMEBOL en las primeras 6 fechas.",
+          "Australia clasificó ganando el repechaje asiático por tercera vez consecutiva.",
+          "Turquía fue la selección revelación en la última Eurocopa antes del mundial.",
+          "EE. UU. tiene el promedio de edad más bajo entre los cabezas de serie.",
+          "Australia es el único equipo que ha clasificado vía OFC y AFC históricamente.",
+          "Hakan Çalhanoğlu es el máximo asistente activo de la selección turca.",
+          "Paraguay posee un récord positivo de duelos aéreos ganados en Sudamérica."
+        ]
+      },
+      {
+        "grupo": "E",
+        "paises": ["Alemania", "Curazao", "Costa de Marfil", "Ecuador"],
+        "datos": [
+          "Alemania busca redimirse tras dos eliminaciones consecutivas en fase de grupos.",
+          "Curazao hace su debut absoluto en una Copa del Mundo de la FIFA.",
+          "Costa de Marfil regresa tras ausentarse en 2018 y 2022.",
+          "Ecuador clasificó con una de las plantillas más jóvenes de CONMEBOL.",
+          "Alemania ha ganado 4 títulos mundiales, el último en 2014.",
+          "Curazao clasificó gracias a una generación de jugadores en ligas europeas.",
+          "Sébastien Haller es el referente ofensivo de los 'Elefantes' marfileños.",
+          "Ecuador tiene en Moisés Caicedo al jugador con más recuperaciones de balón.",
+          "Costa de Marfil es el vigente campeón de la Copa África de Naciones.",
+          "Alemania anotó más de 30 goles en su proceso clasificatorio europeo.",
+          "Curazao es el país con menor población en este mundial (aprox. 150k hab).",
+          "Ecuador jugará el partido inaugural de su grupo en una sede costera de EE. UU."
+        ]
+      },
+      {
+        "grupo": "F",
+        "paises": ["Países Bajos", "Japón", "Suecia", "Túnez"],
+        "datos": [
+          "Países Bajos ha sido 3 veces subcampeón mundial sin ganar el título.",
+          "Japón busca superar los octavos de final por primera vez en su historia.",
+          "Suecia regresa tras quedar fuera de Catar 2022.",
+          "Túnez participa en su segundo mundial consecutivo por segunda vez.",
+          "Japón venció a Alemania y España en la edición de 2022.",
+          "Virgil van Dijk lidera la estadística de duelos ganados en la defensa neerlandesa.",
+          "Suecia clasificó superando a una potencia en el repechaje de la UEFA.",
+          "Túnez tiene un historial de pocos goles en contra en fases de grupos.",
+          "Cody Gakpo fue el máximo anotador de Países Bajos en la eliminatoria.",
+          "Japón es la selección con mayor precisión de pases de Asia.",
+          "Alexander Isak es la principal amenaza ofensiva de Suecia.",
+          "Este grupo es considerado por analistas como uno de los más equilibrados."
+        ]
+      },
+      {
+        "grupo": "G",
+        "paises": ["Bélgica", "Egipto", "Irán", "Nueva Zelanda"],
+        "datos": [
+          "Bélgica inicia un nuevo ciclo generacional tras la 'Generación de Oro'.",
+          "Mohamed Salah lidera a Egipto en su regreso a la máxima cita.",
+          "Irán ha clasificado a 4 mundiales consecutivos (2014-2026).",
+          "Nueva Zelanda regresa tras 16 años (su última fue Sudáfrica 2010).",
+          "Kevin De Bruyne sigue siendo el máximo creador de oportunidades en Europa.",
+          "Egipto clasificó como líder invicto de su grupo en África.",
+          "Irán fue la primera selección asiática en asegurar su cupo para 2026.",
+          "Nueva Zelanda no perdió ningún partido en 2010 (3 empates) pese a quedar fuera.",
+          "Romelu Lukaku es el máximo goleador histórico de Bélgica.",
+          "Egipto busca su primera victoria en la historia de los Mundiales.",
+          "Irán cuenta con Mehdi Taremi como su estrella en la delantera.",
+          "Nueva Zelanda domina la confederación de Oceanía con un 90% de victorias."
+        ]
+      },
+      {
+        "grupo": "H",
+        "paises": ["España", "Cabo Verde", "Arabia Saudí", "Uruguay"],
+        "datos": [
+          "España ostenta el récord de más pases en un solo partido de Mundial.",
+          "Cabo Verde es debutante absoluto en la Copa del Mundo.",
+          "Uruguay es el primer campeón de la historia (1930) y busca su 3er título.",
+          "Arabia Saudí venció a Argentina (campeón) en el debut de 2022.",
+          "Lamine Yamal se convertirá en uno de los jugadores más jóvenes en debutar con España.",
+          "Uruguay terminó 2° en las eliminatorias CONMEBOL bajo el mando de Bielsa.",
+          "Cabo Verde clasificó tras eliminar a una potencia africana en la fase final.",
+          "Arabia Saudí jugará 'casi de local' por la gran cantidad de fans que viajarán.",
+          "Darwin Núñez promedió 0.7 goles por partido en la eliminatoria sudamericana.",
+          "España ha ganado la posesión en el 95% de sus partidos oficiales desde 2020.",
+          "Federico Valverde es el jugador con más kilómetros recorridos en Uruguay.",
+          "Este grupo reúne a dos campeones del mundo (España y Uruguay)."
+        ]
+      },
+      {
+        "grupo": "I",
+        "paises": ["Francia", "Senegal", "Irak", "Noruega"],
+        "datos": [
+          "Francia ha llegado a la final en 3 de los últimos 7 mundiales.",
+          "Kylian Mbappé busca el récord de máximo goleador histórico de los mundiales.",
+          "Senegal es el actual referente del fútbol africano con Sadio Mané.",
+          "Noruega regresa a un Mundial tras 28 años (última vez Francia 1998).",
+          "Erling Haaland debutará en un Mundial tras su racha goleadora en Europa.",
+          "Irak regresa tras 40 años (su única participación fue en 1986).",
+          "Francia clasificó invicta en la zona europea.",
+          "Senegal eliminó a un gigante africano en la tanda de penales para clasificar.",
+          "Martin Ødegaard es el capitán y motor creativo de Noruega.",
+          "Irak clasificó como una de las mejores defensas de la zona asiática.",
+          "Francia posee la plantilla con el valor de mercado más alto del torneo.",
+          "Senegal ha superado la fase de grupos en el 50% de sus participaciones."
+        ]
+      },
+      {
+        "grupo": "J",
+        "paises": ["Argentina", "Argelia", "Austria", "Jordania"],
+        "datos": [
+          "Argentina llega como la campeona defensora tras ganar en Catar 2022.",
+          "Lionel Messi busca jugar su 6° mundial (récord histórico compartido).",
+          "Argelia regresa tras 12 años (su última fue Brasil 2014).",
+          "Jordania es debutante absoluto en la Copa del Mundo.",
+          "Austria vuelve al mundial tras su última participación en 1998.",
+          "Argentina lideró el Ranking FIFA durante casi todo el proceso eliminatorio.",
+          "Argelia cuenta con Riyad Mahrez como su líder y capitán.",
+          "Austria clasificó con un sistema de presión alta muy efectivo en la UEFA.",
+          "Jordania fue la finalista sorpresa de la última Copa Asiática.",
+          "Emiliano Martínez mantiene un promedio de 50% de arcos en cero con Argentina.",
+          "Julián Álvarez es el segundo máximo goleador del ciclo de Scaloni.",
+          "Argentina nunca ha perdido contra un equipo asiático en fase de grupos."
+        ]
+      },
+      {
+        "grupo": "K",
+        "paises": ["Portugal", "RD Congo", "Uzbekistán", "Colombia"],
+        "datos": [
+          "Cristiano Ronaldo busca ser el primer jugador en anotar en 6 mundiales.",
+          "Colombia regresa tras el fracaso de no clasificar a 2022.",
+          "Uzbekistán es debutante absoluto en mundiales.",
+          "RD Congo (antes Zaire) regresa tras 52 años (1974).",
+          "Luis Díaz es el máximo goleador de Colombia en la era de Néstor Lorenzo.",
+          "Portugal anotó más de 35 goles en su fase clasificatoria europea.",
+          "Uzbekistán clasificó gracias a un sólido proyecto de ligas juveniles.",
+          "Colombia mantuvo un invicto de más de 20 partidos antes del mundial.",
+          "Bruno Fernandes fue el máximo asistente de las eliminatorias UEFA.",
+          "RD Congo clasificó tras un play-off africano de infarto.",
+          "James Rodríguez busca aumentar su cuenta de 6 goles en mundiales.",
+          "Portugal ha superado la fase de grupos en sus últimas 5 participaciones."
+        ]
+      },
+      {
+        "grupo": "L",
+        "paises": ["Inglaterra", "Croacia", "Ghana", "Panamá"],
+        "datos": [
+          "Inglaterra tiene la liga más poderosa del mundo proveyendo jugadores.",
+          "Croacia ha sido podio en los últimos dos mundiales (2018 y 2022).",
+          "Ghana busca vengar su eliminación histórica ante equipos de jerarquía.",
+          "Panamá participa en su segundo mundial (debutó en 2018).",
+          "Harry Kane es el máximo goleador histórico de la selección inglesa.",
+          "Luka Modrić jugará su último mundial con 40 años.",
+          "Panamá clasificó directamente siendo la mejor defensa de Centroamérica.",
+          "Ghana cuenta con Mohammed Kudus como su principal figura joven.",
+          "Croacia ha ganado todas sus tandas de penaltis en la historia de los mundiales.",
+          "Inglaterra fue la selección con menos tarjetas amarillas en la eliminatoria.",
+          "Panamá logró su clasificación ganando en sedes difíciles como México o EE. UU.",
+          "Este grupo cierra la fase de grupos en las sedes de la Costa Oeste."
+        ]
+      }
+    ]
+  }
+}
