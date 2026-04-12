@@ -554,7 +554,7 @@ const WorldCupPredictions = ({ currentUser }) => {
     );
 
     return (
-        <div className="max-w-6xl mx-auto pb-24">
+        <div className="max-w-full mx-auto pb-24 px-4 xl:px-8">
             
             {isAdmin && (
                 <AdminPanel activePhase={activePhase} handleAdminSetPhase={handleAdminSetPhase} handleClearData={handleClearData} handleSimulateData={handleSimulateData} />
