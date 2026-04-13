@@ -12,13 +12,25 @@ const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
 
 const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
-    "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Brazil": "Brasil", 
-    "Cameroon": "Camerún", "Canada": "Canadá", "Chile": "Chile", "Colombia": "Colombia", 
-    "Costa Rica": "Costa Rica", "Croatia": "Croacia", "Denmark": "Dinamarca", "Ecuador": "Ecuador", 
-    "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Japan": "Japón", 
-    "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", "Peru": "Perú", 
-    "Portugal": "Portugal", "Senegal": "Senegal", "South Korea": "Corea del Sur", "Spain": "España", 
-    "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir", "TBD": "Por definir"
+    "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Bosnia and Herzegovina": "Bosnia y Herzegovina",
+    "Brazil": "Brasil", "Bulgaria": "Bulgaria", "Cameroon": "Camerún", "Canada": "Canadá", 
+    "Chile": "Chile", "China": "China", "Colombia": "Colombia", "Costa Rica": "Costa Rica", 
+    "Croatia": "Croacia", "Czechia": "República Checa", "Czech Republic": "República Checa", 
+    "Denmark": "Dinamarca", "Ecuador": "Ecuador", "Egypt": "Egipto", "El Salvador": "El Salvador", 
+    "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Ghana": "Ghana", 
+    "Greece": "Grecia", "Guatemala": "Guatemala", "Honduras": "Honduras", "Hungary": "Hungría", 
+    "Iceland": "Islandia", "Iran": "Irán", "Ireland": "Irlanda", "Italy": "Italia", 
+    "Ivory Coast": "Costa de Marfil", "Cote d'Ivoire": "Costa de Marfil", "Jamaica": "Jamaica", 
+    "Japan": "Japón", "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", 
+    "New Zealand": "Nueva Zelanda", "Nigeria": "Nigeria", "North Korea": "Corea del Norte", 
+    "Norway": "Noruega", "Panama": "Panamá", "Paraguay": "Paraguay", "Peru": "Perú", 
+    "Poland": "Polonia", "Portugal": "Portugal", "Qatar": "Catar", "Republic of Ireland": "República de Irlanda", 
+    "Romania": "Rumania", "Russia": "Rusia", "Saudi Arabia": "Arabia Saudita", "Scotland": "Escocia", 
+    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovaquia", 
+    "South Africa": "Sudáfrica", "South Korea": "Corea del Sur", "Spain": "España", "Sweden": "Suecia", 
+    "Switzerland": "Suiza", "Tunisia": "Túnez", "Turkey": "Turquía", "Ukraine": "Ucrania", 
+    "United Arab Emirates": "Emiratos Árabes Unidos", "United States": "Estados Unidos", 
+    "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Wales": "Gales", "Por definir": "Por definir", "TBD": "Por definir"
 };
 
 const translateTeam = (name) => teamTranslations[name] || name;
@@ -34,10 +46,6 @@ const specialEvents = [
     { id: 'gol_olimpico' }, { id: 'remontada_epica' }, { id: 'el_festival' }, { id: 'muralla_final' },
     { id: 'hat_trick_hero' }, { id: 'roja_banquillo' }, { id: 'portero_goleador' }, { id: 'debut_sin_red' },
     { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' }
-];
-
-const roundTabs = [
-    { id: 'dieciseisavos', pts: 2 }, { id: 'octavos', pts: 3 }, { id: 'cuartos', pts: 4 }, { id: 'semis', pts: 5 }
 ];
 
 const formatShortName = (fullName) => {
@@ -194,7 +202,7 @@ const WorldCupRanking = () => {
                     }
                 });
 
-                // Si no predijo NINGÚN partido, se ignora el grupo (Evita que clasifique equipos alfabéticamente)
+                // Si no predijo NINGÚN partido, se ignora el grupo
                 if (predictedCount === 0) return;
 
                 const isGroupFinished = groupMatches.every(m => {
@@ -218,31 +226,42 @@ const WorldCupRanking = () => {
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            roundTabs.forEach(r => {
-                const is16 = r.id === 'dieciseisavos';
-                if (is16 && !isGroupStageFinished) return;
-                const uTeams = is16 ? userQualified32 : (userData.knockoutPicks?.[r.id] || []);
-                const aTeams = is16 ? adminQualified32 : (adminResults?.knockoutPicks?.[r.id] || []);
+            // --- INICIO DE PUNTOS EXACTOS DE RONDAS ---
+            
+            // 1. PUNTOS POR CLASIFICAR A 16VOS (32 equipos): 2 pts c/u
+            if (isGroupStageFinished && adminQualified32.length > 0) {
+                userQualified32.forEach(ut => {
+                    if (adminQualified32.some(at => at.name === ut.name)) stats.ptsRondas += 2;
+                });
+            }
+
+            // 2. PUNTOS POR AVANZAR EN EL BRACKET
+            const koRounds = [
+                { id: 'dieciseisavos', pts: 3 }, // Los 16 que ganan 16vos y pasan a Octavos
+                { id: 'octavos', pts: 4 },       // Los 8 que ganan Octavos y pasan a Cuartos
+                { id: 'cuartos', pts: 5 },       // Los 4 que ganan Cuartos y pasan a Semis
+                { id: 'semis', pts: 6 }          // Los 2 que ganan Semis y pasan a la Final
+            ];
+
+            koRounds.forEach(r => {
+                const uTeams = userData.knockoutPicks?.[r.id] || [];
+                const aTeams = adminResults?.knockoutPicks?.[r.id] || [];
                 if (aTeams.length > 0) {
-                    uTeams.forEach(ut => { if (aTeams.some(at => at.name === ut.name)) stats.ptsRondas += r.pts; });
+                    uTeams.forEach(ut => {
+                        if (aTeams.some(at => at.name === ut.name)) stats.ptsRondas += r.pts;
+                    });
                 }
             });
 
-            const uFinalists = [...(userData.knockoutPicks?.campeon || []), ...(userData.knockoutPicks?.subcampeon || [])];
-            const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
-            if (aFinalists.length > 0) {
-                uFinalists.forEach(ut => {
-                    if (ut && aFinalists.some(at => at && at.name === ut.name)) stats.ptsRondas += 6;
+            // 3. PUNTOS POR PASAR A 3ER PUESTO (Los 2 que pierden Semis): 4 pts c/u
+            const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
+            const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+            if (aThirdsList.length > 0) {
+                uThirdsList.forEach(ut => {
+                    if (ut && aThirdsList.some(at => at && at.name === ut.name)) stats.ptsRondas += 4;
                 });
             }
-
-            const uThirds = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
-            const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
-            if (aThirds.length > 0) {
-                uThirds.forEach(ut => {
-                    if (ut && aThirds.some(at => at && at.name === ut.name)) stats.ptsRondas += 4;
-                });
-            }
+            // --- FIN DE PUNTOS EXACTOS DE RONDAS ---
 
             extraQuestions.forEach(q => {
                 const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
@@ -308,8 +327,8 @@ const WorldCupRanking = () => {
         } else if (n1 === 2) {
             p1Total = bolsa1 + bolsa2;
             p1Ind = p1Total / 2;
-            p2Total = bolsa3;      // <--- ¡CORREGIDO! Antes decía p3Total
-            p2Ind = bolsa3 / n2;   // <--- ¡CORREGIDO! Antes decía p3Ind
+            p2Total = bolsa3;      
+            p2Ind = bolsa3 / n2;   
         } else {
             p1Total = bolsa1;
             p1Ind = bolsa1;

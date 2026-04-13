@@ -248,6 +248,7 @@ const WorldCupMyReport = ({ currentUser }) => {
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
 
+        // 1. Inicializar
         groupMatches.forEach(m => {
             const home = m.homeTeam?.name || 'Por definir';
             const away = m.awayTeam?.name || 'Por definir';
@@ -255,31 +256,132 @@ const WorldCupMyReport = ({ currentUser }) => {
             if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
         });
 
+        // 2. Calcular Puntos, Goles, etc.
         groupMatches.forEach(m => {
             const pred = predsToUse?.[m.id];
             if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
                 const homeGoals = parseInt(pred.home, 10);
                 const awayGoals = parseInt(pred.away, 10);
-                teams[m.homeTeam.name].pts += homeGoals > awayGoals ? 3 : homeGoals === awayGoals ? 1 : 0;
-                teams[m.awayTeam.name].pts += awayGoals > homeGoals ? 3 : homeGoals === awayGoals ? 1 : 0;
-                teams[m.homeTeam.name].dg += (homeGoals - awayGoals);
-                teams[m.awayTeam.name].dg += (awayGoals - homeGoals);
-                teams[m.homeTeam.name].gf += homeGoals;
-                teams[m.awayTeam.name].gf += awayGoals;
+
+                teams[m.homeTeam.name].gf += homeGoals; teams[m.awayTeam.name].gf += awayGoals;
+                teams[m.homeTeam.name].gc += awayGoals; teams[m.awayTeam.name].gc += homeGoals;
+                teams[m.homeTeam.name].dg = teams[m.homeTeam.name].gf - teams[m.homeTeam.name].gc;
+                teams[m.awayTeam.name].dg = teams[m.awayTeam.name].gf - teams[m.awayTeam.name].gc;
+
+                if (homeGoals > awayGoals) teams[m.homeTeam.name].pts += 3;
+                else if (homeGoals < awayGoals) teams[m.awayTeam.name].pts += 3;
+                else { teams[m.homeTeam.name].pts += 1; teams[m.awayTeam.name].pts += 1; }
             }
         });
 
-        return Object.values(teams).sort((a, b) => {
-            if (b.pts !== a.pts) return b.pts - a.pts;
-            if (b.dg !== a.dg) return b.dg - a.dg;
-            if (b.gf !== a.gf) return b.gf - a.gf;
-            
-            const tieA = tiesToUse?.[groupName]?.[a.name] || 99;
-            const tieB = tiesToUse?.[groupName]?.[b.name] || 99;
-            if (tieA !== tieB) return tieA - tieB; 
-            
-            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+        const teamsArray = Object.values(teams);
+
+        // 3. Agrupar por puntos para desempate
+        const groupedByPts = {};
+        teamsArray.forEach(t => {
+            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
+            groupedByPts[t.pts].push(t);
         });
+
+        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+
+        // 4. Función H2H
+        const resolveTie = (tiedTeams) => {
+            if (tiedTeams.length <= 1) return [tiedTeams];
+
+            const h2hStats = {};
+            tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
+            const tiedNames = tiedTeams.map(t => t.name);
+
+            groupMatches.forEach(m => {
+                if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
+                    const pred = predsToUse?.[m.id];
+                    if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
+                        const hG = parseInt(pred.home, 10);
+                        const aG = parseInt(pred.away, 10);
+                        const home = m.homeTeam.name;
+                        const away = m.awayTeam.name;
+
+                        h2hStats[home].gf += hG; h2hStats[away].gf += aG;
+                        h2hStats[home].dg += (hG - aG); h2hStats[away].dg += (aG - hG);
+
+                        if (hG > aG) h2hStats[home].pts += 3;
+                        else if (hG < aG) h2hStats[away].pts += 3;
+                        else { h2hStats[home].pts += 1; h2hStats[away].pts += 1; }
+                    }
+                }
+            });
+
+            const sortedByH2H = [...tiedTeams].sort((a, b) => {
+                const sA = h2hStats[a.name];
+                const sB = h2hStats[b.name];
+                if (sB.pts !== sA.pts) return sB.pts - sA.pts;
+                if (sB.dg !== sA.dg) return sB.dg - sA.dg;
+                return sB.gf - sA.gf;
+            });
+
+            const subGroups = [];
+            let currGroup = [sortedByH2H[0]];
+            for (let i = 1; i < sortedByH2H.length; i++) {
+                const prev = h2hStats[sortedByH2H[i-1].name];
+                const curr = h2hStats[sortedByH2H[i].name];
+                if (prev.pts === curr.pts && prev.dg === curr.dg && prev.gf === curr.gf) {
+                    currGroup.push(sortedByH2H[i]);
+                } else {
+                    subGroups.push(currGroup); 
+                    currGroup = [sortedByH2H[i]];
+                }
+            }
+            subGroups.push(currGroup);
+
+            if (subGroups.length === 1) {
+                const sortedByOverall = [...tiedTeams].sort((a, b) => {
+                    if (b.dg !== a.dg) return b.dg - a.dg;
+                    return b.gf - a.gf;
+                });
+                
+                const overallGroups = [];
+                let currOverallGroup = [sortedByOverall[0]];
+                for (let i = 1; i < sortedByOverall.length; i++) {
+                    const prev = sortedByOverall[i-1];
+                    const curr = sortedByOverall[i];
+                    if (prev.dg === curr.dg && prev.gf === curr.gf) {
+                        currOverallGroup.push(sortedByOverall[i]);
+                    } else {
+                        overallGroups.push(currOverallGroup);
+                        currOverallGroup = [sortedByOverall[i]];
+                    }
+                }
+                overallGroups.push(currOverallGroup);
+                return overallGroups; 
+            }
+
+            let finalGroups = [];
+            for (const sg of subGroups) {
+                finalGroups.push(...resolveTie(sg));
+            }
+            return finalGroups;
+        };
+
+        let finalRankedGroups = [];
+        sortedPtsKeys.forEach(pts => {
+            const groupTeams = groupedByPts[pts];
+            finalRankedGroups.push(...resolveTie(groupTeams)); 
+        });
+
+        let finalFlattenedStandings = [];
+        finalRankedGroups.forEach(groupTeams => {
+            const sortedGroup = [...groupTeams].sort((a, b) => {
+                const tieA = tiesToUse?.[groupName]?.[a.name] || 99;
+                const tieB = tiesToUse?.[groupName]?.[b.name] || 99;
+                if (tieA !== tieB) return tieA - tieB; 
+                return translateTeam(a.name).localeCompare(translateTeam(b.name));
+            });
+            finalFlattenedStandings.push(...sortedGroup);
+        });
+
+        return finalFlattenedStandings;
+
     }, [matchesByGroup]);
 
     const qualifiedRoundOf32 = useMemo(() => {
@@ -355,6 +457,7 @@ const WorldCupMyReport = ({ currentUser }) => {
     const totalPoints = useMemo(() => {
         let total = 0;
 
+        // --- 1. PUNTOS POR PARTIDOS DE GRUPOS ---
         matches.forEach(match => {
             const pred = predictions[match.id];
             const adminPred = adminResults?.predictions?.[match.id];
@@ -366,6 +469,7 @@ const WorldCupMyReport = ({ currentUser }) => {
             if (pts) total += pts;
         });
 
+        // --- 2. PUNTOS POR PLENOS DE GRUPO (+8 PTS) ---
         Object.keys(matchesByGroup).forEach(groupName => {
             if (groupStatus.groups[groupName]) {
                 const groupMatches = matchesByGroup[groupName];
@@ -384,29 +488,36 @@ const WorldCupMyReport = ({ currentUser }) => {
             }
         });
 
-        roundTabs.forEach(round => {
-            if (round.id === 'dieciseisavos' && !groupStatus.allFinished) return;
-
-            const roundTeams = round.id === 'dieciseisavos' ? qualifiedRoundOf32.all32 : (knockoutPicks?.[round.id] || []);
-            const officialRoundTeams = round.id === 'dieciseisavos' ? adminQualifiedRoundOf32.all32 : (adminResults?.knockoutPicks?.[round.id] || []);
-            
-            if (officialRoundTeams.length > 0) {
-                roundTeams.forEach(team => {
-                    if (officialRoundTeams.some(ot => ot.name === team.name)) {
-                        total += round.pts;
-                    }
-                });
-            }
-        });
-
-        const uFinalists = [...(knockoutPicks?.campeon || []), ...(knockoutPicks?.subcampeon || [])];
-        const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
-        if (aFinalists.length > 0) {
-            uFinalists.forEach(ut => {
-                if (ut && aFinalists.some(at => at && at.name === ut.name)) total += 6;
+        // --- 3. PUNTOS POR AVANZAR EN EL BRACKET (Nuevo Formato) ---
+        
+        // A. Clasificados a 16vos (32 equipos): 2 pts c/u
+        if (groupStatus.allFinished && adminQualifiedRoundOf32.all32.length > 0) {
+            qualifiedRoundOf32.all32.forEach(ut => {
+                if (adminQualifiedRoundOf32.all32.some(at => at.name === ut.name)) total += 2;
             });
         }
 
+        // B. Pasan a Octavos (Ganaron en 16vos): 3 pts c/u
+        knockoutPicks?.dieciseisavos?.forEach(ut => {
+            if (adminResults?.knockoutPicks?.dieciseisavos?.some(at => at.name === ut.name)) total += 3;
+        });
+
+        // C. Pasan a Cuartos (Ganaron en Octavos): 4 pts c/u
+        knockoutPicks?.octavos?.forEach(ut => {
+            if (adminResults?.knockoutPicks?.octavos?.some(at => at.name === ut.name)) total += 4;
+        });
+
+        // D. Pasan a Semis (Ganaron en Cuartos): 5 pts c/u
+        knockoutPicks?.cuartos?.forEach(ut => {
+            if (adminResults?.knockoutPicks?.cuartos?.some(at => at.name === ut.name)) total += 5;
+        });
+
+        // E. Pasan a la Final (Ganaron Semis): 6 pts c/u
+        knockoutPicks?.semis?.forEach(ut => {
+            if (adminResults?.knockoutPicks?.semis?.some(at => at.name === ut.name)) total += 6;
+        });
+
+        // F. Llegan a Tercer Puesto (Perdieron Semis): 4 pts c/u
         const uThirds = [...(knockoutPicks?.tercero || []), ...(knockoutPicks?.cuarto || [])];
         const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
         if (aThirds.length > 0) {
@@ -415,6 +526,7 @@ const WorldCupMyReport = ({ currentUser }) => {
             });
         }
 
+        // G. Posición exacta del Podio Final
         const honorSlots = [
             { id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 },
             { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }
@@ -427,6 +539,7 @@ const WorldCupMyReport = ({ currentUser }) => {
 
         if (checkSuperBonoTop4()) total += 10;
 
+        // --- 4. EXTRAS Y EVENTOS ---
         extraQuestions.forEach(q => {
             const answer = extraPicks?.[q.id];
             const officialAnswer = adminResults?.extraPicks?.[q.id];
@@ -450,6 +563,15 @@ const WorldCupMyReport = ({ currentUser }) => {
 
         return total;
     }, [matches, predictions, matchesByGroup, manualTiebreakers, knockoutPicks, extraPicks, eventPicks, adminResults, qualifiedRoundOf32, adminQualifiedRoundOf32, groupStatus, calculateStandings]);
+
+    // --- ARREGLO PARA RENDERIZAR LAS RONDAS EN ORDEN ---
+    const displayRounds = [
+        { id: 'finalistas', label: 'Clasificados a la Final (2)', pts: 6 },
+        { id: 'semis_partido', label: 'Clasificados a Semis (4)', pts: 5 },
+        { id: 'cuartos_partido', label: 'Clasificados a Cuartos (8)', pts: 4 },
+        { id: 'octavos_partido', label: 'Clasificados a Octavos (16)', pts: 3 },
+        { id: 'dieciseisavos_partido', label: 'Clasificados a 16vos (32)', pts: 2 }
+    ];
 
     if (loading) {
         return (
@@ -792,17 +914,40 @@ const WorldCupMyReport = ({ currentUser }) => {
                         </div>
                     </div>
 
+                    {/* --- 🔧 MAPEO PROGRESIVO DE LAS RONDAS DEL BRACKET --- */}
                     <div>
                         <h3 className="text-2xl font-black text-foreground mb-6 flex items-center gap-3 border-b border-border pb-2">
-                            <span>📈</span> Mis Clasificados
+                            <span>📈</span> Camino a la Gloria
                         </h3>
                         <div className="space-y-6">
-                            {roundTabs.map(round => {
-                                const roundTeams = round.id === 'dieciseisavos' ? qualifiedRoundOf32.all32 : (knockoutPicks[round.id] || []);
-                                const officialRoundTeams = round.id === 'dieciseisavos' ? adminQualifiedRoundOf32.all32 : (adminResults?.knockoutPicks?.[round.id] || []);
-                                const roundPoints = round.pts;
+                            {displayRounds.map(round => {
+                                let roundTeams = [];
+                                let officialRoundTeams = [];
+                                let hasOfficialData = false;
+
+                                if (round.id === 'dieciseisavos_partido') {
+                                    roundTeams = qualifiedRoundOf32.all32;
+                                    officialRoundTeams = adminQualifiedRoundOf32.all32;
+                                    hasOfficialData = groupStatus.allFinished && officialRoundTeams.length > 0;
+                                } else if (round.id === 'octavos_partido') {
+                                    roundTeams = knockoutPicks?.dieciseisavos || [];
+                                    officialRoundTeams = adminResults?.knockoutPicks?.dieciseisavos || [];
+                                    hasOfficialData = officialRoundTeams.length > 0;
+                                } else if (round.id === 'cuartos_partido') {
+                                    roundTeams = knockoutPicks?.octavos || [];
+                                    officialRoundTeams = adminResults?.knockoutPicks?.octavos || [];
+                                    hasOfficialData = officialRoundTeams.length > 0;
+                                } else if (round.id === 'semis_partido') {
+                                    roundTeams = knockoutPicks?.cuartos || [];
+                                    officialRoundTeams = adminResults?.knockoutPicks?.cuartos || [];
+                                    hasOfficialData = officialRoundTeams.length > 0;
+                                } else if (round.id === 'finalistas') {
+                                    roundTeams = knockoutPicks?.semis || [];
+                                    officialRoundTeams = adminResults?.knockoutPicks?.semis || [];
+                                    hasOfficialData = officialRoundTeams.length > 0;
+                                }
                                 
-                                const hasOfficialData = round.id === 'dieciseisavos' ? groupStatus.allFinished : officialRoundTeams.length > 0;
+                                const roundPoints = round.pts;
 
                                 return (
                                     <div key={round.id} className="bg-background-offset border border-border rounded-3xl p-5 sm:p-8 shadow-sm">

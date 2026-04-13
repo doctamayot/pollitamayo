@@ -8,7 +8,6 @@ import StatsBanner from './StatsBanner';
 
 // --- IMPORTACIONES MODULARES ---
 import { 
-    
     translateTeam, 
     extraQuestions, 
     specialEvents, 
@@ -318,6 +317,16 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     const hasTiesInGroup = useMemo(() => currentGroupStandings.some(t => t.isTied), [currentGroupStandings]);
 
+    // --- 🚦 VERIFICADOR DE FASE DE GRUPOS COMPLETA ---
+    const isGroupStageComplete = useMemo(() => {
+        const allGroupMatches = Object.values(matchesByGroup).flat();
+        if (allGroupMatches.length === 0) return false;
+        return allGroupMatches.every(m => 
+            predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== '' && 
+            predictions[m.id]?.away !== undefined && predictions[m.id]?.away !== ''
+        );
+    }, [matchesByGroup, predictions]);
+
     const qualifiedRoundOf32 = useMemo(() => {
         let top2 = []; let thirds = [];
         Object.keys(matchesByGroup).forEach(groupName => {
@@ -349,9 +358,12 @@ const WorldCupPredictions = ({ currentUser }) => {
             const predictedGroups = allGroupMatches.filter(m => predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== '' && predictions[m.id]?.away !== undefined && predictions[m.id]?.away !== '').length;
             if (predictedGroups < allGroupMatches.length) missing.push(`Grupos (${predictedGroups}/${allGroupMatches.length})`);
 
-            if ((knockoutPicks.octavos?.length || 0) < 16) missing.push(`Octavos (${knockoutPicks.octavos?.length || 0}/16)`);
-            if ((knockoutPicks.cuartos?.length || 0) < 8) missing.push(`Cuartos (${knockoutPicks.cuartos?.length || 0}/8)`);
-            if ((knockoutPicks.semis?.length || 0) < 4) missing.push(`Semis (${knockoutPicks.semis?.length || 0}/4)`);
+            // --- 🔧 LÍMITES ARREGLADOS AQUÍ (16, 8, 4, 2) ---
+            // --- 🔧 LÍMITES ARREGLADOS AQUÍ (16, 8, 4, 2) ---
+            if ((knockoutPicks.dieciseisavos?.length || 0) < 16) missing.push(`16vos (${knockoutPicks.dieciseisavos?.length || 0}/16)`);
+            if ((knockoutPicks.octavos?.length || 0) < 8) missing.push(`Octavos (${knockoutPicks.octavos?.length || 0}/8)`);
+            if ((knockoutPicks.cuartos?.length || 0) < 4) missing.push(`Cuartos (${knockoutPicks.cuartos?.length || 0}/4)`);
+            if ((knockoutPicks.semis?.length || 0) < 2) missing.push(`Semis (${knockoutPicks.semis?.length || 0}/2)`);
             
             const podiumMissing = [];
             if (!knockoutPicks.campeon?.length) podiumMissing.push('Campeón');
@@ -506,25 +518,57 @@ const WorldCupPredictions = ({ currentUser }) => {
     const handleClearData = () => {
         if (!window.confirm("⚠️ ¡Atención Admin! Vas a BORRAR TODAS tus respuestas. ¿Continuar?")) return;
         setPredictions({}); setEventPicks({}); setExtraPicks({});
-        setKnockoutPicks({ octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] });
+        // 🔧 FIX: Agregamos dieciseisavos al reseteo
+        setKnockoutPicks({ dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] });
         setManualTiebreakers({});
         toast.success("🧹 ¡Todo ha sido borrado! Recuerda presionar Guardar.");
     };
 
     const handleSimulateData = () => {
-        if (!window.confirm("🎲 ¡Atención Admin! Vas a sobreescribir TODAS tus respuestas con datos aleatorios. ¿Continuar?")) return;
+        if (!window.confirm("🎲 ¡Atención Admin! Vas a generar marcadores aleatorios. Las clasificaciones de fases quedarán vacías. ¿Continuar?")) return;
+        
         const shuffledTeams = [...allTeams].sort(() => 0.5 - Math.random());
         const newPreds = {};
         
-        Object.values(matchesByGroup).flat().forEach(m => newPreds[m.id] = { home: Math.floor(Math.random() * 4), away: Math.floor(Math.random() * 4) });
+        // 1. Solo generamos los marcadores (Goles)
+        // Marcadores de Grupos
+        Object.values(matchesByGroup).flat().forEach(m => {
+            newPreds[m.id] = { 
+                home: Math.floor(Math.random() * 4), 
+                away: Math.floor(Math.random() * 4) 
+            };
+        });
+
+        // Marcadores de Knockout (Si ya existen los partidos)
         Object.values(knockoutMatches).flat().forEach(m => {
-             newPreds[m.id] = { home: Math.floor(Math.random() * 4), away: Math.floor(Math.random() * 4), customHomeTeam: shuffledTeams[Math.floor(Math.random() * shuffledTeams.length)]?.name, customAwayTeam: shuffledTeams[Math.floor(Math.random() * shuffledTeams.length)]?.name };
+             newPreds[m.id] = { 
+                home: Math.floor(Math.random() * 4), 
+                away: Math.floor(Math.random() * 4), 
+                customHomeTeam: shuffledTeams[Math.floor(Math.random() * shuffledTeams.length)]?.name, 
+                customAwayTeam: shuffledTeams[Math.floor(Math.random() * shuffledTeams.length)]?.name 
+             };
         });
         
         setPredictions(newPreds);
+
+        // 2. Vaciamos las clasificaciones de fases (Knockout Picks)
+        // Esto obliga a que, tras la simulación, las llaves aparezcan pero sin ganador seleccionado.
+        setKnockoutPicks({ 
+            dieciseisavos: [], 
+            octavos: [], 
+            cuartos: [], 
+            semis: [], 
+            campeon: [], 
+            subcampeon: [], 
+            tercero: [], 
+            cuarto: [] 
+        });
+
+        // 3. Opcional: Llenar extras y eventos (puedes comentar esto si tampoco quieres que los llene)
         const newEvents = {};
         specialEvents.forEach(e => { newEvents[e.id] = Math.random() > 0.5 ? 'SI' : 'NO'; });
         setEventPicks(newEvents);
+
         const newExtras = {};
         extraQuestions.forEach(q => {
             if (q.type === 'team') newExtras[q.id] = allTeams[Math.floor(Math.random() * allTeams.length)]?.name || '';
@@ -532,11 +576,8 @@ const WorldCupPredictions = ({ currentUser }) => {
             else newExtras[q.id] = 'Jugador Test ' + Math.floor(Math.random() * 100);
         });
         setExtraPicks(newExtras);
-        setKnockoutPicks({
-            octavos: shuffledTeams.slice(0, 16), cuartos: shuffledTeams.slice(0, 8), semis: shuffledTeams.slice(0, 4),
-            campeon: [shuffledTeams[0]], subcampeon: [shuffledTeams[1]], tercero: [shuffledTeams[2]], cuarto: [shuffledTeams[3]]
-        });
-        toast.success("✅ ¡Datos inyectados! Recuerda presionar Guardar.");
+        
+        toast.success("✅ Marcadores generados. Selecciona los ganadores de las llaves manualmente.");
     };
 
     const handleSubTabScroll = (direction) => {
@@ -721,6 +762,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     activeRoundTab={activeRoundTab} setActiveRoundTab={setActiveRoundTab} handleRoundTabScroll={handleRoundTabScroll}
                     roundTabsRef={roundTabsRef} qualifiedRoundOf32={qualifiedRoundOf32} getAvailableTeamsForRound={getAvailableTeamsForRound}
                     knockoutPicks={knockoutPicks} toggleKnockoutPick={toggleKnockoutPick} isCurrentMainTabLocked={isCurrentMainTabLocked}
+                    isGroupStageComplete={isGroupStageComplete}
                 />
             )}
 

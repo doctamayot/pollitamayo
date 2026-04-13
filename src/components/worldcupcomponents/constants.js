@@ -66,14 +66,14 @@ export const specialEvents = [
 
 // --- RONDAS Y FASES ---
 export const roundTabs = [
-    { id: 'dieciseisavos', label: '16vos', limit: 32 },
-    { id: 'octavos', label: '8vos', limit: 16 },
-    { id: 'cuartos', label: '4tos', limit: 8 },
-    { id: 'semis', label: 'Semis', limit: 4 },
-    { id: 'campeon', label: 'Campeón', limit: 1 },
-    { id: 'subcampeon', label: 'Subcampeón', limit: 1 },
-    { id: 'tercero', label: 'Tercero', limit: 1 },
-    { id: 'cuarto', label: 'Cuarto', limit: 1 }
+    { id: 'dieciseisavos', label: '16VOS', pts: 2, limit: 16 },
+    { id: 'octavos', label: '8VOS', pts: 3, limit: 8 },
+    { id: 'cuartos', label: '4TOS', pts: 4, limit: 4 },
+    { id: 'semis', label: 'SEMIS', pts: 5, limit: 2 },
+    { id: 'campeon', label: 'CAMPEÓN', pts: 10, limit: 1 },
+    { id: 'subcampeon', label: 'SUBCAMPEÓN', pts: 6, limit: 1 },
+    { id: 'tercero', label: 'TERCERO', pts: 6, limit: 1 },
+    { id: 'cuarto', label: 'CUARTO', pts: 6, limit: 1 }
 ];
 
 export const knockoutSubTabs = [

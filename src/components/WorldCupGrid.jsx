@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 
@@ -47,7 +47,6 @@ const formatShortName = (fullName) => {
     return `${parts[0]} ${parts[1].charAt(0)}.`;
 };
 
-// Formateador de fechas elegante para los Tabs
 const formatDateObj = (dateStr) => {
     const [y, m, d] = dateStr.split('-');
     const date = new Date(y, m - 1, d);
@@ -57,7 +56,10 @@ const formatDateObj = (dateStr) => {
     return { dayName, dayNum, monthName };
 };
 
-const WorldCupGrid = () => {
+// 🔴 ¡IMPORTANTE! Agregamos currentUser a los props para poder saber si es el Admin
+const WorldCupGrid = ({ currentUser }) => {
+    const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
+
     const [matches, setMatches] = useState([]);
     const [allPredictions, setAllPredictions] = useState({});
     const [usersInfo, setUsersInfo] = useState({});
@@ -96,9 +98,45 @@ const WorldCupGrid = () => {
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, []);
 
+    // --- 🔮 MAGIA DE SIMULACIÓN GLOBAL ---
+    // Leemos la simulación desde la base de datos (afecta a todos los usuarios)
+    const simulatedDate = adminResults?.simulation?.simulatedDate || '';
+
+    // Reemplazamos los estados reales de los partidos por los simulados si existen
+    const effectiveMatches = useMemo(() => {
+        return matches.map(m => {
+            const simStatus = adminResults?.simulation?.matchStatuses?.[m.id];
+            if (simStatus && simStatus !== '') {
+                return { ...m, status: simStatus };
+            }
+            return m;
+        });
+    }, [matches, adminResults]);
+
+    // Funciones para guardar la simulación en Firebase
+    const handleSimulateDate = async (newDate) => {
+        const adminRef = doc(db, 'worldCupAdmin', 'results');
+        await setDoc(adminRef, { simulation: { simulatedDate: newDate } }, { merge: true });
+    };
+
+    const handleSimulateStatus = async (matchId, newStatus) => {
+        const adminRef = doc(db, 'worldCupAdmin', 'results');
+        const currentSim = adminResults?.simulation || {};
+        const currentStatuses = currentSim.matchStatuses || {};
+        
+        // El secreto: Guardamos el string vacío en la DB. 
+        // Firestore lo actualiza y nuestra app sabe que "" significa "Usar API Real".
+        const newStatuses = { ...currentStatuses, [matchId]: newStatus };
+
+        await setDoc(adminRef, { 
+            simulation: { ...currentSim, matchStatuses: newStatuses } 
+        }, { merge: true });
+    };
+
+    // De aquí en adelante, usamos `effectiveMatches` en lugar de `matches`
     const allTeams = useMemo(() => {
         const teamsMap = new Map();
-        matches.forEach(m => {
+        effectiveMatches.forEach(m => {
             const hName = m.homeTeam?.name || '';
             const aName = m.awayTeam?.name || '';
             if (hName && !hName.includes('Winner') && !hName.includes('Loser') && hName !== 'TBD') {
@@ -109,7 +147,7 @@ const WorldCupGrid = () => {
             }
         });
         return Array.from(teamsMap.values());
-    }, [matches]);
+    }, [effectiveMatches]);
 
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
@@ -143,7 +181,7 @@ const WorldCupGrid = () => {
         });
     }, []);
 
-    const groupStageMatches = useMemo(() => matches.filter(m => m.stage === 'GROUP_STAGE'), [matches]);
+    const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
 
     const groupMatchesMap = useMemo(() => {
         return groupStageMatches.reduce((acc, m) => {
@@ -180,7 +218,7 @@ const WorldCupGrid = () => {
 
             let total = 0;
 
-            matches.forEach(m => {
+            effectiveMatches.forEach(m => {
                 const p = userData.predictions?.[m.id]; const a = adminResults?.predictions?.[m.id];
                 const rH = a?.home !== undefined && a?.home !== '' ? a.home : m.score?.fullTime?.home;
                 const rA = a?.away !== undefined && a?.away !== '' ? a.away : m.score?.fullTime?.away;
@@ -232,37 +270,46 @@ const WorldCupGrid = () => {
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            roundTabs.forEach(r => {
-                const is16 = r.id === 'dieciseisavos';
-                if (is16 && !isGroupStageFinished) return;
-                const uTeams = is16 ? userQualified32 : (userData.knockoutPicks?.[r.id] || []);
-                const aTeams = is16 ? adminQualified32 : (adminResults?.knockoutPicks?.[r.id] || []);
+            // --- INICIO DE PUNTOS EXACTOS DE RONDAS ---
+            
+            // 1. PUNTOS POR CLASIFICAR A 16VOS (32 equipos): 2 pts c/u
+            if (isGroupStageFinished && adminQualified32.length > 0) {
+                userQualified32.forEach(ut => {
+                    if (adminQualified32.some(at => at.name === ut.name)) total += 2;
+                });
+            }
+
+            // 2. PUNTOS POR AVANZAR EN EL BRACKET
+            const koRounds = [
+                { id: 'dieciseisavos', pts: 3 }, // Los 16 que ganan 16vos y pasan a Octavos
+                { id: 'octavos', pts: 4 },       // Los 8 que ganan Octavos y pasan a Cuartos
+                { id: 'cuartos', pts: 5 },       // Los 4 que ganan Cuartos y pasan a Semis
+                { id: 'semis', pts: 6 }          // Los 2 que ganan Semis y pasan a la Final
+            ];
+
+            koRounds.forEach(r => {
+                const uTeams = userData.knockoutPicks?.[r.id] || [];
+                const aTeams = adminResults?.knockoutPicks?.[r.id] || [];
                 if (aTeams.length > 0) {
-                    uTeams.forEach(ut => { if (aTeams.some(at => at.name === ut.name)) total += r.pts; });
+                    uTeams.forEach(ut => {
+                        if (aTeams.some(at => at.name === ut.name)) total += r.pts;
+                    });
                 }
             });
 
-            const uFinalists = [...(userData.knockoutPicks?.campeon || []), ...(userData.knockoutPicks?.subcampeon || [])];
-            const aFinalists = [...(adminResults?.knockoutPicks?.campeon || []), ...(adminResults?.knockoutPicks?.subcampeon || [])];
-            if (aFinalists.length > 0) {
-                uFinalists.forEach(ut => {
-                    if (ut && aFinalists.some(at => at && at.name === ut.name)) total += 6;
+            // 3. PUNTOS POR PASAR A 3ER PUESTO (Los 2 que pierden Semis): 4 pts c/u
+            const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
+            const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+            if (aThirdsList.length > 0) {
+                uThirdsList.forEach(ut => {
+                    if (ut && aThirdsList.some(at => at && at.name === ut.name)) total += 4;
                 });
             }
 
-            const uThirds = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
-            const aThirds = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
-            if (aThirds.length > 0) {
-                uThirds.forEach(ut => {
-                    if (ut && aThirds.some(at => at && at.name === ut.name)) total += 4;
-                });
-            }
-
-            // Honor y bonos
+            // 4. PODIO Y SÚPER BONO
             const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
-            let honorHits = 0;
             honorSlots.forEach(s => {
-                if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; honorHits++; }
+                if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; }
             });
             
             let isSuperBono = false;
@@ -270,8 +317,8 @@ const WorldCupGrid = () => {
                 isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
             }
             if (isSuperBono) total += 10;
+            // --- FIN DE PUNTOS EXACTOS DE RONDAS ---
 
-            // Extras y eventos
             const extraQuestions = [ { id: 'goleador', manual: true }, { id: 'equipo_goleador' }, { id: 'equipo_menos_goleador' }, { id: 'mas_amarillas' }, { id: 'mas_rojas' }, { id: 'valla_menos_vencida' }, { id: 'valla_mas_vencida' }, { id: 'grupo_mas_goles' }, { id: 'grupo_menos_goles' }, { id: 'maximo_asistidor', manual: true }, { id: 'atajapenales', manual: true } ];
             const specialEvents = [ { id: 'gol_olimpico' }, { id: 'remontada_epica' }, { id: 'el_festival' }, { id: 'muralla_final' }, { id: 'hat_trick_hero' }, { id: 'roja_banquillo' }, { id: 'portero_goleador' }, { id: 'debut_sin_red' }, { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' } ];
             
@@ -307,31 +354,33 @@ const WorldCupGrid = () => {
         });
 
         return ranks;
-    }, [allPredictions, matches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings]);
+    }, [allPredictions, effectiveMatches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings]);
 
-    // --- REFACTORIZACIÓN DE FECHAS ---
     const matchesByDate = useMemo(() => {
         const grouped = {};
-        matches.forEach(m => {
+        effectiveMatches.forEach(m => {
             const d = new Date(m.utcDate);
             const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             if (!grouped[dateStr]) grouped[dateStr] = [];
             grouped[dateStr].push(m);
         });
         return grouped;
-    }, [matches]);
+    }, [effectiveMatches]);
 
     const sortedDates = useMemo(() => {
         return Object.keys(matchesByDate).sort(); 
     }, [matchesByDate]);
 
+    // --- EFECTO: AUTO-SELECCIONAR FECHA (Real o Simulada) ---
     useEffect(() => {
-        if (sortedDates.length > 0 && !selectedDate) {
-            const d = new Date();
-            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (sortedDates.length > 0) {
+            let targetDate = simulatedDate || (() => {
+                const d = new Date();
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            })();
             
-            if (sortedDates.includes(today)) {
-                setSelectedDate(today);
+            if (sortedDates.includes(targetDate)) {
+                setSelectedDate(targetDate);
             } else {
                 const nextActiveDate = sortedDates.find(date => {
                     return matchesByDate[date]?.some(m => m.status !== 'FINISHED');
@@ -339,7 +388,21 @@ const WorldCupGrid = () => {
                 setSelectedDate(nextActiveDate || sortedDates[sortedDates.length - 1]);
             }
         }
-    }, [sortedDates, selectedDate, matchesByDate]);
+    // Solo reaccionamos si cambia la fecha simulada global o si se cargan las fechas por primera vez
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sortedDates, simulatedDate]); 
+
+    // --- 🎯 EFECTO: AUTO-SCROLL AL DÍA SELECCIONADO ---
+    useEffect(() => {
+        if (selectedDate && scrollContainerRef.current) {
+            const activeTab = document.getElementById(`date-tab-${selectedDate}`);
+            if (activeTab) {
+                const container = scrollContainerRef.current;
+                const scrollLeft = activeTab.offsetLeft - (container.offsetWidth / 2) + (activeTab.offsetWidth / 2);
+                container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+            }
+        }
+    }, [selectedDate]);
 
     const sortedMatchesOfDay = useMemo(() => {
         if (!selectedDate || !matchesByDate[selectedDate]) return [];
@@ -390,6 +453,41 @@ const WorldCupGrid = () => {
                 </div>
             </div>
 
+            {/* ⏱️ PANEL MÁQUINA DEL TIEMPO (SOLO PARA ADMIN) */}
+            {isAdmin && (
+                <div className="mb-8 bg-purple-900/20 border border-purple-500/30 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(168,85,247,0.05)] animate-fade-in">
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl sm:text-3xl animate-pulse">⏱️</span>
+                        <div>
+                            <h4 className="font-black text-purple-400 uppercase tracking-widest text-[10px] sm:text-xs mb-0.5">Control Maestro: Simulación Global</h4>
+                            <p className="text-[10px] sm:text-xs text-purple-300/70 leading-tight">Cambia la fecha y los estados. ¡Esto afectará a TODOS los usuarios conectados!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        {!simulatedDate && (
+                            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-green-500 bg-green-500/10 px-3 py-2.5 rounded-xl border border-green-500/20 whitespace-nowrap">
+                                🟢 API Real
+                            </span>
+                        )}
+                        <input 
+                            type="date" 
+                            value={simulatedDate}
+                            onChange={(e) => handleSimulateDate(e.target.value)}
+                            className="flex-1 sm:flex-none bg-background-offset border border-purple-500/50 text-foreground font-bold p-2 sm:p-2.5 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-xs sm:text-sm"
+                        />
+                        {simulatedDate && (
+                            <button 
+                                onClick={() => handleSimulateDate('')} 
+                                className="bg-red-500/20 text-red-400 px-3 py-2 sm:py-2.5 rounded-xl font-black hover:bg-red-500/40 transition-colors text-xs flex items-center gap-1.5 uppercase tracking-widest" 
+                                title="Volver a fecha real"
+                            >
+                                <span>✖️</span> <span className="hidden sm:inline">Apagar</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* --- SELECTOR DE FECHAS ESTILO PREMIUM CON FLECHAS --- */}
             <div className="relative w-full mb-8 flex items-center group">
                 <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none"></div>
@@ -415,6 +513,7 @@ const WorldCupGrid = () => {
                         return (
                             <button 
                                 key={d} 
+                                id={`date-tab-${d}`} // ID para el auto-scroll
                                 onClick={() => setSelectedDate(d)} 
                                 className={`snap-center shrink-0 flex flex-col items-center justify-center w-16 h-20 sm:w-20 sm:h-[5.5rem] rounded-2xl transition-all duration-300 relative border ${
                                     isSelected 
@@ -466,7 +565,6 @@ const WorldCupGrid = () => {
                     const hasO = (a && a.home !== '' && a.away !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
                     const isLive = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
 
-                    // --- ORDENAMIENTO EXTREMO (Top 3 > Puntos Partido > Puntos Globales) ---
                     const matchSpecificRanking = liveRanking.map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
                         let pts = null;
@@ -483,7 +581,6 @@ const WorldCupGrid = () => {
                         }
                         return { ...user, uP, pts };
                     }).sort((userA, userB) => {
-                        // 1. TOP 3 LÍDERES TIENEN PRIORIDAD ABSOLUTA
                         const isTop3A = userA.position <= 3;
                         const isTop3B = userB.position <= 3;
                         
@@ -494,12 +591,10 @@ const WorldCupGrid = () => {
                             if (userA.position !== userB.position) return userA.position - userB.position;
                         }
 
-                        // 2. ORDENAR POR ACIERTOS EN ESTE PARTIDO ESPECÍFICO (5 > 3 > 2 > 1 > 0)
                         const ptsA = userA.pts !== null ? userA.pts : -1; 
                         const ptsB = userB.pts !== null ? userB.pts : -1;
                         if (ptsA !== ptsB) return ptsB - ptsA;
 
-                        // 3. DESEMPATE FINAL POR PUNTOS GLOBALES EN LA POLLA
                         return userB.totalPoints - userA.totalPoints;
                     });
 
@@ -521,6 +616,24 @@ const WorldCupGrid = () => {
                     return (
                         <div key={match.id} className={`bg-card border ${isLive ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
+                            {/* SELECTOR DE ESTADO (SOLO PARA ADMIN) */}
+                            {isAdmin && (
+                                <div className="absolute top-3 right-3 z-50">
+                                    <select 
+                                        className="bg-purple-900 text-purple-100 text-[9px] font-bold p-1 rounded-lg outline-none border border-purple-500/50 shadow-md cursor-pointer hover:bg-purple-800 transition-colors"
+                                        value={adminResults?.simulation?.matchStatuses?.[match.id] || ''}
+                                        onChange={(e) => handleSimulateStatus(match.id, e.target.value)}
+                                        title="Simular Estado del Partido"
+                                    >
+                                        <option value="">⚙️ API Real</option>
+                                        <option value="SCHEDULED">⏱️ Programado</option>
+                                        <option value="IN_PLAY">🟢 En Juego</option>
+                                        <option value="PAUSED">⏸️ En Pausa</option>
+                                        <option value="FINISHED">🏁 Finalizado</option>
+                                    </select>
+                                </div>
+                            )}
+
                             <div className={`${isLive ? 'bg-green-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
                                 <div className="flex justify-between items-center mb-3 sm:mb-5">
                                     <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
@@ -532,7 +645,6 @@ const WorldCupGrid = () => {
                                 </div>
                                 
                                 <div className="flex items-center justify-between w-full gap-1 sm:gap-4 px-1 sm:px-4">
-                                    {/* EQUIPO LOCAL */}
                                     <div className="flex-1 flex flex-col items-center justify-start min-w-0">
                                         {homeCrest ? <img src={homeCrest} className="h-8 sm:h-16 mb-2 sm:mb-3 drop-shadow-lg" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
                                         <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
@@ -540,32 +652,27 @@ const WorldCupGrid = () => {
                                         </p>
                                     </div>
                                     
-                                    {/* MARCADOR DIGITAL PREMIUM */}
                                     <div className="flex flex-col items-center justify-center shrink-0 min-w-[90px] sm:min-w-[140px]">
                                         <span className={`text-[7px] sm:text-[9px] font-black uppercase tracking-widest mb-2 sm:mb-3 px-2 py-0.5 rounded shadow-sm ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse border border-green-500/20' : 'text-foreground-muted bg-background/50 border border-border/50'}`}>
                                             {isLive ? '• EN VIVO' : matchStatusTranslations[match.status] || match.status}
                                         </span>
                                         
                                         <div className="flex items-center justify-center gap-1.5 sm:gap-3">
-                                            {/* Caja Número Local */}
                                             <div className={`flex items-center justify-center w-9 h-11 sm:w-16 sm:h-20 rounded-lg sm:rounded-2xl font-black text-xl sm:text-4xl shadow-inner border transition-all ${hasO ? 'bg-background-offset text-primary border-primary/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-background text-foreground-muted border-border/50 opacity-50'}`}>
                                                 {hasO ? (rH ?? 0) : '-'}
                                             </div>
                                             
-                                            {/* Separador (Dos puntitos estilo reloj digital) */}
                                             <div className="flex flex-col gap-1 sm:gap-2 opacity-50">
                                                 <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-foreground"></span>
                                                 <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-foreground"></span>
                                             </div>
                                             
-                                            {/* Caja Número Visitante */}
                                             <div className={`flex items-center justify-center w-9 h-11 sm:w-16 sm:h-20 rounded-lg sm:rounded-2xl font-black text-xl sm:text-4xl shadow-inner border transition-all ${hasO ? 'bg-background-offset text-primary border-primary/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-background text-foreground-muted border-border/50 opacity-50'}`}>
                                                 {hasO ? (rA ?? 0) : '-'}
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    {/* EQUIPO VISITANTE */}
                                     <div className="flex-1 flex flex-col items-center justify-start min-w-0">
                                         {awayCrest ? <img src={awayCrest} className="h-8 sm:h-16 mb-2 sm:mb-3 drop-shadow-lg" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
                                         <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
@@ -593,7 +700,6 @@ const WorldCupGrid = () => {
                                             const is2nd = user.position === 2;
                                             const is3rd = user.position === 3;
 
-                                            // Estilos Premium según el rango (Oro, Plata, Bronce)
                                             let rowBg = 'hover:bg-background-offset/50';
                                             if (is1st) rowBg = 'bg-yellow-500/10 hover:bg-yellow-500/20';
                                             else if (is2nd) rowBg = 'bg-slate-400/10 hover:bg-slate-400/20';
