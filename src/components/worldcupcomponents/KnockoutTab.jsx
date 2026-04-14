@@ -103,17 +103,25 @@ const KnockoutTab = ({
             const homeIsSelected = match.home && knockoutPicks[currentTabId]?.some(t => t.name === match.home.name);
             const awayIsSelected = match.away && knockoutPicks[currentTabId]?.some(t => t.name === match.away.name);
 
-            // 🚀 INTERCAMBIO LIMPIO Y SIN DUPLICADOS
-            const handlePick = (teamToSelect, isOpponentSelected, opponentTeam) => {
-                // Si estamos eligiendo la Final o el Tercer Puesto, NO heredamos, solo asignamos (porque ya es el fin)
+            // 🚀 INTERCAMBIO BLINDADO CONTRA CHOQUES DE TRENES
+            const handlePick = (teamToSelect, isThisTeamSelected, isOpponentSelected, opponentTeam) => {
+                
+                // 1. SI EL EQUIPO YA ESTABA SELECCIONADO, LO APAGAMOS. 
+                // (Esto soluciona el bug cuando dos equipos quedan seleccionados a la vez)
+                if (isThisTeamSelected) {
+                    toggleKnockoutPick(currentTabId, teamToSelect, limit);
+                    return;
+                }
+
+                // 2. Si estamos eligiendo la Final o el Tercer Puesto, NO heredamos, solo asignamos
                 if (currentTabId === 'campeon' || currentTabId === 'tercero') {
                     toggleKnockoutPick(currentTabId, teamToSelect, limit);
                 } 
-                // Si es cualquier otra ronda (16vos, 8vos, etc.) Y cambiamos de opinión, heredamos el camino futuro
+                // 3. Si es cualquier otra ronda Y cambiamos de opinión (el oponente estaba seleccionado), heredamos
                 else if (isOpponentSelected) {
                     replaceKnockoutPick(currentTabId, opponentTeam, teamToSelect);
                 } 
-                // Si era una selección nueva (botón vacío), solo seleccionamos normal
+                // 4. Si era una selección nueva (ambos vacíos), solo seleccionamos normal
                 else {
                     toggleKnockoutPick(currentTabId, teamToSelect, limit);
                 }
@@ -127,8 +135,9 @@ const KnockoutTab = ({
                     </span>
                     
                     <div className="flex items-center justify-between mt-5 w-full gap-2">
+                        {/* BOTÓN EQUIPO LOCAL */}
                         <button 
-                            onClick={() => match.home && handlePick(match.home, awayIsSelected, match.away)}
+                            onClick={() => match.home && handlePick(match.home, homeIsSelected, awayIsSelected, match.away)}
                             disabled={isCurrentMainTabLocked || !match.home}
                             className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
@@ -149,8 +158,9 @@ const KnockoutTab = ({
                             <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">VS</span>
                         </div>
 
+                        {/* BOTÓN EQUIPO VISITANTE */}
                         <button 
-                            onClick={() => match.away && handlePick(match.away, homeIsSelected, match.home)}
+                            onClick={() => match.away && handlePick(match.away, awayIsSelected, homeIsSelected, match.home)}
                             disabled={isCurrentMainTabLocked || !match.away}
                             className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >

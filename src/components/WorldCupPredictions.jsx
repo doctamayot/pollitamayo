@@ -248,13 +248,11 @@ const WorldCupPredictions = ({ currentUser }) => {
         return Array.from(teamsMap.values()).sort((a, b) => translateTeam(a.name).localeCompare(translateTeam(b.name)));
     }, [matchesByGroup]);
 
-    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero
     const calculateStandings = useCallback((groupName) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
 
-        // 1. Calcular Puntos y Estadísticas Generales (Para el primer filtro y filtros d, e)
         groupMatches.forEach(m => {
             const h = m.homeTeam?.name || 'Por definir';
             const a = m.awayTeam?.name || 'Por definir';
@@ -280,11 +278,9 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
         });
 
-        // 2. Función Recursiva de Desempate (Reglas a, b, c -> d, e -> f)
         const resolveTie = (tiedTeams) => {
             if (tiedTeams.length <= 1) return tiedTeams;
 
-            // Calcular H2H solo entre los equipos empatados
             const h2hStats = {};
             tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
             const tiedNames = tiedTeams.map(t => t.name);
@@ -305,7 +301,6 @@ const WorldCupPredictions = ({ currentUser }) => {
                 }
             });
 
-            // Agrupar por H2H (Reglas a, b, c)
             const h2hGroups = {};
             tiedTeams.forEach(t => {
                 const stats = h2hStats[t.name];
@@ -327,11 +322,9 @@ const WorldCupPredictions = ({ currentUser }) => {
             sortedH2HKeys.forEach(key => {
                 const subGroup = h2hGroups[key];
                 
-                // Si el subgrupo es más pequeño, el ciclo de empate se rompió parcialmente. Recursividad.
                 if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
                     finalSorted.push(...resolveTie(subGroup));
                 } 
-                // Si el subgrupo sigue siendo igual de grande, el H2H es un círculo perfecto. Pasamos a Reglas d, e.
                 else if (subGroup.length > 1) {
                     const groupedByOverall = {};
                     subGroup.forEach(t => {
@@ -349,15 +342,13 @@ const WorldCupPredictions = ({ currentUser }) => {
 
                     sortedOverallKeys.forEach(oKey => {
                         const finalTied = groupedByOverall[oKey];
-                        // Si después de TODO, siguen empatados (Regla f - FairPlay / Manual)
                         if (finalTied.length > 1) {
                             const tNames = finalTied.map(t => t.name);
                             finalTied.forEach(t => {
-                                t.isTrulyTied = true; // Etiqueta secreta para activar el botón manual
+                                t.isTrulyTied = true; 
                                 t.tiedTeamNamesArray = tNames;
                             });
                             
-                            // Resolver manual o alfabético
                             finalTied.sort((a, b) => {
                                 const tieA = manualTiebreakers[groupName]?.[a.name] || 99;
                                 const tieB = manualTiebreakers[groupName]?.[b.name] || 99;
@@ -376,7 +367,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             return finalSorted;
         };
 
-        // 3. Agrupamos inicialmente solo por Puntos Totales
         const groupedByPts = {};
         Object.values(teams).forEach(t => {
             if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
@@ -388,7 +378,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         let finalFlattenedStandings = [];
         let currentRank = 1;
 
-        // 4. Resolvemos cada bloque de puntos y asignamos etiquetas para el frontend
         sortedPtsKeys.forEach(pts => {
             const groupTeams = groupedByPts[pts];
             const resolved = resolveTie(groupTeams);
@@ -516,9 +505,23 @@ const WorldCupPredictions = ({ currentUser }) => {
     const handleScoreChange = (matchId, team, value) => {
         if (activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) return;
         if (value !== '' && (isNaN(value) || value < 0 || value > 99)) return;
+        
         setPredictions(prev => ({
             ...prev, [matchId]: { ...prev[matchId], [team]: value === '' ? '' : parseInt(value, 10) }
         }));
+
+        // 🟢 MAGIA DE PROTECCIÓN: Si cambias un partido de grupos, se borran tus rondas finales automáticamente
+        const isGroupMatch = Object.values(matchesByGroup).flat().some(m => String(m.id) === String(matchId));
+        if (isGroupMatch) {
+            setKnockoutPicks(prev => {
+                const hasPicks = Object.values(prev).some(arr => arr && arr.length > 0);
+                if (hasPicks) {
+                    setTimeout(() => toast('Llaves reiniciadas por cambio en Fase de Grupos', { icon: '🧹', id: 'reset-bracket' }), 100);
+                    return { dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] };
+                }
+                return prev;
+            });
+        }
     };
 
     const handleCustomTeamChange = (matchId, side, teamName) => {
@@ -575,6 +578,16 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
             return { ...prev, [group]: groupTies };
         });
+
+        // 🟢 MAGIA DE PROTECCIÓN: Si cambias el orden manual, también se borran las llaves
+        setKnockoutPicks(prev => {
+            const hasPicks = Object.values(prev).some(arr => arr && arr.length > 0);
+            if (hasPicks) {
+                setTimeout(() => toast('Llaves reiniciadas por cambio en desempates', { icon: '🧹', id: 'reset-bracket' }), 100);
+                return { dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] };
+            }
+            return prev;
+        });
     };
 
     const replaceKnockoutPick = (roundId, oldTeam, newTeam) => {
@@ -618,8 +631,9 @@ const WorldCupPredictions = ({ currentUser }) => {
             if (isSelected) {
                 const newPicks = { ...prev };
                 newPicks[roundId] = currentRoundPicks.filter(t => t.name !== team.name);
-                const roundsOrder = ['octavos', 'cuartos', 'semis'];
+                const roundsOrder = ['dieciseisavos', 'octavos', 'cuartos', 'semis'];
                 const startIndex = roundsOrder.indexOf(roundId);
+                
                 if (startIndex !== -1) {
                     for (let i = startIndex + 1; i < roundsOrder.length; i++) {
                         newPicks[roundsOrder[i]] = (newPicks[roundsOrder[i]] || []).filter(t => t.name !== team.name);
