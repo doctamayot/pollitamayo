@@ -41,6 +41,7 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [manualTiebreakers, setManualTiebreakers] = useState({});
     const [lockedMatches, setLockedMatches] = useState({}); 
     const [isAutoSyncActive, setIsAutoSyncActive] = useState(false); 
+    const [predictionsClosed, setPredictionsClosed] = useState(false); 
     
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -110,24 +111,29 @@ const WorldCupPredictions = ({ currentUser }) => {
         fetchMatchesAndData();
     }, [currentUser, isAdmin]);
 
-    //const activePhase = adminResults?.activePhase || 'GROUP_STAGE';
+    useEffect(() => {
+        const unsubSettings = onSnapshot(doc(db, 'worldCupAdmin', 'settings'), (docSnap) => {
+            if (docSnap.exists()) {
+                setPredictionsClosed(!!docSnap.data().predictionsClosed);
+            }
+        });
+        return () => unsubSettings();
+    }, []);
+
     const isKnockoutPhaseActive = activePhase !== 'GROUP_STAGE' && activePhase !== 'ALL_OPEN';
 
-    // --- 🟢 MAGIA: REORDENAMIENTO DE PESTAÑAS ---
     const orderedSubTabs = useMemo(() => {
         const groupTabs = Object.keys(matchesByGroup).sort((a,b)=>a.localeCompare(b)).map(gn => ({
             id: gn, type: 'group', label: gn.replace('Grupo ', '')
         }));
         
         if (isKnockoutPhaseActive) {
-            // Si estamos en rondas finales, poner KO primero, luego un divisor, y grupos al FINAL
             return [
                 ...knockoutSubTabs.map(k => ({...k, type: 'knockout'})),
                 { type: 'divider', id: 'div1' },
                 ...groupTabs
             ];
         } else {
-            // Si estamos en grupos, poner Grupos primero, luego un divisor, y KO al FINAL
             return [
                 ...groupTabs, 
                 { type: 'divider', id: 'div1' }, 
@@ -140,12 +146,11 @@ const WorldCupPredictions = ({ currentUser }) => {
         if (isKnockoutPhaseActive) {
             setSelectedSubTab(activePhase);
         } else if (Object.keys(matchesByGroup).length > 0 && (!selectedSubTab || !selectedSubTab.startsWith('Grupo'))) {
-            setSelectedSubTab(Object.keys(matchesByGroup).sort((a, b) => a.localeCompare(b))[0]); // Selecciona Grupo A
+            setSelectedSubTab(Object.keys(matchesByGroup).sort((a, b) => a.localeCompare(b))[0]); 
         }
     }, [activePhase, matchesByGroup, isKnockoutPhaseActive]);
 
     useEffect(() => {
-        // Auto-Scroll visual hacia el tab seleccionado
         if (selectedSubTab && selectedSubTab !== 'ALL' && subTabsRef.current) {
             setTimeout(() => {
                 const tabElement = document.getElementById(`subtab-${selectedSubTab}`);
@@ -157,7 +162,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     }, [selectedSubTab, orderedSubTabs]); 
 
-    // --- 🤖 MOTOR DE AUTO-SYNC ---
     useEffect(() => {
         if (!isAdmin || !isAutoSyncActive) return;
 
@@ -166,7 +170,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             if (now - lastSyncTime.current < 14000) return;
             lastSyncTime.current = now;
 
-            console.log("📡 [AUTO-SYNC] Haciendo petición real a la API...");
             try {
                 const data = await getWorldCupMatches();
                 if (!data || !data.matches) return;
@@ -223,15 +226,18 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     const isSubTabLocked = useCallback((subTab) => {
         if (isAdmin || activePhase === 'ALL_OPEN') return false;
+        if (predictionsClosed && subTab && subTab.startsWith('Grupo')) return true;
         if (!subTab) return true;
         if (subTab.startsWith('Grupo')) return activePhase !== 'GROUP_STAGE';
         return activePhase !== subTab;
-    }, [activePhase, isAdmin]);
+    }, [activePhase, isAdmin, predictionsClosed]);
 
     const isCurrentMainTabLocked = useMemo(() => {
-        if (isAdmin || activePhase === 'ALL_OPEN' || activeTab === 'partidos') return false; 
+        if (isAdmin || activePhase === 'ALL_OPEN') return false; 
+        if (predictionsClosed && (activeTab === 'extras' || activeTab === 'eventos' || activeTab === 'rondas')) return true;
+        if (activeTab === 'partidos') return false; 
         return activePhase !== 'GROUP_STAGE'; 
-    }, [activeTab, activePhase, isAdmin]);
+    }, [activeTab, activePhase, isAdmin, predictionsClosed]);
 
     const allTeams = useMemo(() => {
         const teamsMap = new Map();
@@ -547,7 +553,42 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
     };
 
-    const toggleKnockoutPick = (roundId, team, limit) => {
+    // 🟢 MAGIA SUPREMA: INTERCAMBIO TOTAL (SWAP)
+    const replaceKnockoutPick = (roundId, oldTeam, newTeam) => {
+        if (isCurrentMainTabLocked) return;
+        setKnockoutPicks(prev => {
+            const newPicks = { ...prev };
+            const roundsOrder = ['dieciseisavos', 'octavos', 'cuartos', 'semis', 'campeon'];
+            const podiumSlots = ['subcampeon', 'tercero', 'cuarto'];
+            const startIndex = roundsOrder.indexOf(roundId);
+            
+            if (startIndex !== -1) {
+                // Función que invierte los destinos de dos equipos
+                const swapInArray = (arr) => {
+                    if (!Array.isArray(arr)) return [];
+                    return arr.map(t => {
+                        if (t.name === oldTeam.name) return newTeam;
+                        if (t.name === newTeam.name) return oldTeam;
+                        return t;
+                    });
+                };
+
+                // Aplicar el intercambio SOLO de la ronda actual hacia adelante
+                for (let i = startIndex; i < roundsOrder.length; i++) {
+                    const r = roundsOrder[i];
+                    newPicks[r] = swapInArray(newPicks[r]);
+                }
+                
+                // Aplicar el intercambio en los puestos de honor
+                podiumSlots.forEach(slot => {
+                    newPicks[slot] = swapInArray(newPicks[slot]);
+                });
+            }
+            return newPicks;
+        });
+    };
+
+    const toggleKnockoutPick = (roundId, team, limit, opponentTeam = null) => {
         if (isCurrentMainTabLocked) return;
         setKnockoutPicks(prev => {
             const currentRoundPicks = prev[roundId] || [];
@@ -576,14 +617,16 @@ const WorldCupPredictions = ({ currentUser }) => {
 
                     if (roundId === 'campeon') {
                         const finalistas = newPicks.semis || [];
-                        const sub = finalistas.find(t => t.name !== team.name);
+                        // Si nos pasaron el oponente directamente, usamos ese, sino lo deducimos
+                        const sub = opponentTeam || finalistas.find(t => t.name !== team.name);
                         if (sub) newPicks.subcampeon = [sub];
                     }
                     if (roundId === 'tercero') {
                         const semifinalistas = newPicks.cuartos || []; 
                         const finalistas = newPicks.semis || []; 
+                        // Si nos pasaron el oponente directamente, usamos ese, sino lo deducimos
                         const contenders = semifinalistas.filter(st => !finalistas.some(ft => ft.name === st.name));
-                        const cuarto = contenders.find(t => t.name !== team.name);
+                        const cuarto = opponentTeam || contenders.find(t => t.name !== team.name);
                         if (cuarto) newPicks.cuarto = [cuarto];
                     }
                     return newPicks;
@@ -662,19 +705,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         setKnockoutPicks({ dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] });
         
         const newEvents = {};
-        specialEvents.forEach(e => {
-                let u = userData.eventPicks?.[e.id]; 
-                let a = adminResults?.eventPicks?.[e.id];
-                
-                // 🟢 LIMPIEZA FORZADA PARA LA GRILLA
-                if (u && a) {
-                    u = String(u).toUpperCase().trim();
-                    a = String(a).toUpperCase().trim();
-                    if (a === u) {
-                        total += (u === 'SI' ? 5 : 2);
-                    }
-                }
-            });
+        specialEvents.forEach(e => { newEvents[e.id] = Math.random() > 0.5 ? 'SI' : 'NO'; });
         setEventPicks(newEvents);
 
         const newExtras = {};
@@ -892,7 +923,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 <KnockoutTab 
                     activeRoundTab={activeRoundTab} setActiveRoundTab={setActiveRoundTab} handleRoundTabScroll={handleRoundTabScroll}
                     roundTabsRef={roundTabsRef} qualifiedRoundOf32={qualifiedRoundOf32} getAvailableTeamsForRound={getAvailableTeamsForRound}
-                    knockoutPicks={knockoutPicks} toggleKnockoutPick={toggleKnockoutPick} isCurrentMainTabLocked={isCurrentMainTabLocked}
+                    knockoutPicks={knockoutPicks} toggleKnockoutPick={toggleKnockoutPick} replaceKnockoutPick={replaceKnockoutPick} isCurrentMainTabLocked={isCurrentMainTabLocked}
                     isGroupStageComplete={isGroupStageComplete}
                 />
             )}

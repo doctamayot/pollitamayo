@@ -11,12 +11,12 @@ const KnockoutTab = ({
     getAvailableTeamsForRound,
     knockoutPicks,
     toggleKnockoutPick,
+    replaceKnockoutPick, 
     isCurrentMainTabLocked,
     isGroupStageComplete
 }) => {
     const [isCleaning, setIsCleaning] = useState(false);
 
-    // --- 🔮 MOTOR DE SIMULACIÓN DE LLAVES ---
     const fullBracket = useMemo(() => {
         if (isGroupStageComplete && qualifiedRoundOf32?.all32?.length === 32) {
             return generateFullBracket(qualifiedRoundOf32.all32, knockoutPicks);
@@ -81,9 +81,7 @@ const KnockoutTab = ({
         });
     };
 
-    // --- ⚔️ RENDERIZADOR INTELIGENTE DE CRUCES ---
     const renderMatchups = (matchesObj, currentTabId) => {
-        // 🛑 BLOQUEO DE PANTALLA
         if (!isGroupStageComplete) {
             return (
                 <div className="col-span-full text-center py-16 text-foreground-muted animate-fade-in bg-background-offset border border-border rounded-3xl shadow-inner mt-4">
@@ -105,9 +103,20 @@ const KnockoutTab = ({
             const homeIsSelected = match.home && knockoutPicks[currentTabId]?.some(t => t.name === match.home.name);
             const awayIsSelected = match.away && knockoutPicks[currentTabId]?.some(t => t.name === match.away.name);
 
-            // 🚀 AQUÍ ESTÁ LA SOLUCIÓN: Limpiamos la función y dejamos que el padre haga el trabajo
-            const handlePick = (teamToSelect) => {
-                toggleKnockoutPick(currentTabId, teamToSelect, limit);
+            // 🚀 INTERCAMBIO LIMPIO Y SIN DUPLICADOS
+            const handlePick = (teamToSelect, isOpponentSelected, opponentTeam) => {
+                // Si estamos eligiendo la Final o el Tercer Puesto, NO heredamos, solo asignamos (porque ya es el fin)
+                if (currentTabId === 'campeon' || currentTabId === 'tercero') {
+                    toggleKnockoutPick(currentTabId, teamToSelect, limit);
+                } 
+                // Si es cualquier otra ronda (16vos, 8vos, etc.) Y cambiamos de opinión, heredamos el camino futuro
+                else if (isOpponentSelected) {
+                    replaceKnockoutPick(currentTabId, opponentTeam, teamToSelect);
+                } 
+                // Si era una selección nueva (botón vacío), solo seleccionamos normal
+                else {
+                    toggleKnockoutPick(currentTabId, teamToSelect, limit);
+                }
             };
 
             return (
@@ -118,9 +127,8 @@ const KnockoutTab = ({
                     </span>
                     
                     <div className="flex items-center justify-between mt-5 w-full gap-2">
-                        {/* BOTÓN EQUIPO LOCAL */}
                         <button 
-                            onClick={() => match.home && handlePick(match.home)}
+                            onClick={() => match.home && handlePick(match.home, awayIsSelected, match.away)}
                             disabled={isCurrentMainTabLocked || !match.home}
                             className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
@@ -130,21 +138,19 @@ const KnockoutTab = ({
                             <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${homeIsSelected ? 'text-primary' : 'text-foreground'}`}>
                                 {match.home ? translateTeam(match.home.name) : match.placeholderHome}
                             </span>
-                            {match.home?.qualReason && (
-                                <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase">
+                            {match.home?.qualReason && currentTabId === 'dieciseisavos' && (
+                                <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase mt-0.5">
                                     {match.home.qualReason} {match.home.group?.replace('Grupo ', '')}
                                 </span>
                             )}
                         </button>
 
-                        {/* VS Badge */}
                         <div className="w-[10%] flex justify-center">
                             <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">VS</span>
                         </div>
 
-                        {/* BOTÓN EQUIPO VISITANTE */}
                         <button 
-                            onClick={() => match.away && handlePick(match.away)}
+                            onClick={() => match.away && handlePick(match.away, homeIsSelected, match.home)}
                             disabled={isCurrentMainTabLocked || !match.away}
                             className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
@@ -154,8 +160,8 @@ const KnockoutTab = ({
                             <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${awayIsSelected ? 'text-primary' : 'text-foreground'}`}>
                                 {match.away ? translateTeam(match.away.name) : match.placeholderAway}
                             </span>
-                            {match.away?.qualReason && (
-                                <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase">
+                            {match.away?.qualReason && currentTabId === 'dieciseisavos' && (
+                                <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase mt-0.5">
                                     {match.away.qualReason} {match.away.group?.replace('Grupo ', '')}
                                 </span>
                             )}
@@ -170,7 +176,6 @@ const KnockoutTab = ({
 
     return (
         <div className="animate-fade-in">
-            {/* --- SUB-TABS CLASIFICADOS --- */}
             <div className="relative w-full mb-8 flex items-center group justify-center">
                 <button onClick={() => handleRoundTabScroll('left')} className="absolute left-0 z-20 bg-card border border-border p-1.5 rounded-full shadow-lg md:hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
@@ -206,7 +211,6 @@ const KnockoutTab = ({
                 </button>
             </div>
             
-            {/* --- PANEL DE AVISOS INFORMATIVOS --- */}
             <div className="mb-6 px-4 flex flex-col gap-4">
                 <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center gap-4 shadow-sm animate-fade-in">
                     <div className="text-2xl shrink-0">
@@ -239,7 +243,7 @@ const KnockoutTab = ({
                 )}
             </div>
 
-            {/* --- ALERTA DE INCONSISTENCIA (FANTASMAS) --- */}
+            {/* --- ALERTA DE INCONSISTENCIA (FANTASMAS) EXPLICADA --- */}
             {invalidPicks.length > 0 && isGroupStageComplete && (
                 <div className="mx-4 mb-6 bg-red-500/10 border border-red-500/30 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in shadow-sm">
                     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -249,7 +253,8 @@ const KnockoutTab = ({
                                 Equipos Fantasma Detectados
                             </h4>
                             <p className="text-[10px] sm:text-xs text-foreground-muted leading-tight">
-                                Tienes <strong>{invalidPicks.length}</strong> selección(es) antigua(s) que ya no coincide(n) con tus llaves actuales debido a versiones actualizadas de la App. Limpia este error para poder continuar.
+                                <strong>¿Por qué sale esto?</strong> Tienes <strong>{invalidPicks.length}</strong> selección(es) guardada(s) de versiones anteriores de tu Polla que <strong>ya no coinciden</strong> con las llaves reales.<br className="hidden sm:block" />
+                                Presiona limpiar para eliminar esos equipos antiguos y volver a sincronizar tu cuadro con la realidad.
                             </p>
                         </div>
                     </div>
@@ -263,7 +268,6 @@ const KnockoutTab = ({
                 </div>
             )}
 
-            {/* --- GRILLA DE ENFRENTAMIENTOS --- */}
             <div className="bg-background-offset border border-border p-6 sm:p-10 rounded-3xl shadow-sm">
                 <div className={`grid gap-4 ${activeRoundTab === 'campeon' || activeRoundTab === 'tercero' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
                     

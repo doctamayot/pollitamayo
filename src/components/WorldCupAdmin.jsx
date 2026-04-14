@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
-import SearchBar from './SearchBar'; // Asegúrate de que la ruta sea correcta
+import SearchBar from './SearchBar'; 
 
 const WorldCupAdmin = () => {
     const [participants, setParticipants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [liveMenuMode, setLiveMenuMode] = useState(false);
-    const [searchTerm, setSearchTerm] = useState(''); // <-- Estado para la barra de búsqueda
+    const [searchTerm, setSearchTerm] = useState(''); 
 
     useEffect(() => {
-        // Escuchamos en tiempo real la colección donde se guardan las predicciones del mundial
         const unsubscribe = onSnapshot(collection(db, 'worldCupPredictions'), (snapshot) => {
             const usersData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -20,7 +19,6 @@ const WorldCupAdmin = () => {
             setLoading(false);
         });
 
-        // Escuchamos en tiempo real el ajuste del Modo Live
         const settingsRef = doc(db, 'worldCupAdmin', 'settings');
         const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -34,7 +32,6 @@ const WorldCupAdmin = () => {
         };
     }, []);
 
-    // <-- MEMO: Filtrar participantes por nombre o email en tiempo real -->
     const filteredParticipants = useMemo(() => {
         if (!searchTerm) return participants;
         
@@ -42,14 +39,25 @@ const WorldCupAdmin = () => {
         return participants.filter(p => {
             const nameMatch = p.displayName?.toLowerCase().includes(lowerTerm);
             const emailMatch = p.email?.toLowerCase().includes(lowerTerm);
-            return nameMatch || emailMatch; // Permite buscar por nombre o correo
+            return nameMatch || emailMatch; 
         });
     }, [participants, searchTerm]);
 
     const toggleLiveMode = async () => {
+        // 🟢 NUEVO: Alerta de confirmación para el Admin
+        const confirmMsg = liveMenuMode
+            ? "¿Seguro que deseas VOLVER AL PRE-MUNDIAL? Esto reabrirá las predicciones de Grupos, Extras y Eventos para todos los usuarios."
+            : "🚨 ¿INICIAR MUNDIAL? Esto BLOQUEARÁ permanentemente las predicciones de Grupos, Clasificados (Bracket), Extras y Eventos para los usuarios.";
+            
+        if (!window.confirm(confirmMsg)) return;
+
         try {
             const settingsRef = doc(db, 'worldCupAdmin', 'settings');
-            await setDoc(settingsRef, { liveMenuMode: !liveMenuMode }, { merge: true });
+            // 🟢 NUEVO: Enviamos el flag "predictionsClosed" a Firebase
+            await setDoc(settingsRef, { 
+                liveMenuMode: !liveMenuMode,
+                predictionsClosed: !liveMenuMode 
+            }, { merge: true });
         } catch (error) {
             console.error("Error al cambiar de modo:", error);
             alert("No se pudo actualizar el menú de la aplicación.");
@@ -98,26 +106,28 @@ const WorldCupAdmin = () => {
             </div>
 
             {/* BOTON DE CAMBIO DE MODO GLOBAL */}
-            <div className="mb-10 bg-background-offset border border-border p-6 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className={`mb-10 border p-6 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 transition-colors ${liveMenuMode ? 'bg-red-500/10 border-red-500/30' : 'bg-background-offset border-border'}`}>
                 <div>
                     <h3 className="text-lg font-black flex items-center gap-2">
-                        <span>📱</span> Menú Principal de la App
+                        <span>{liveMenuMode ? '🚨' : '📱'}</span> {liveMenuMode ? 'El Mundial está en Juego' : 'Modo Pre-Mundial Activo'}
                     </h3>
-                    <p className="text-sm text-foreground-muted mt-1">
-                        Controla qué botones aparecen en la barra inferior de todos los usuarios.
+                    <p className="text-sm text-foreground-muted mt-1 max-w-md">
+                        {liveMenuMode 
+                            ? 'Los usuarios ya NO pueden editar sus Grupos, Clasificados ni Extras. El menú ahora muestra Grilla Live.' 
+                            : 'Los usuarios pueden editar todas sus predicciones iniciales sin restricción.'}
                     </p>
                 </div>
                 
                 <button 
                     onClick={toggleLiveMode}
-                    className={`relative w-64 h-14 rounded-full p-1 transition-colors duration-300 flex items-center ${liveMenuMode ? 'bg-green-500' : 'bg-amber-500'}`}
+                    className={`relative w-64 h-14 rounded-full p-1 transition-colors duration-300 flex items-center shrink-0 ${liveMenuMode ? 'bg-red-500' : 'bg-amber-500'}`}
                 >
                     <div className="absolute inset-0 flex justify-between items-center px-4 font-bold text-[10px] sm:text-xs text-white uppercase tracking-widest pointer-events-none">
-                        <span className={`${liveMenuMode ? 'opacity-100' : 'opacity-0'}`}>Torneo Vivo</span>
-                        <span className={`${!liveMenuMode ? 'opacity-100' : 'opacity-0'}`}>Pre-Mundial</span>
+                        <span className={`${liveMenuMode ? 'opacity-100' : 'opacity-0'}`}>Cerrado</span>
+                        <span className={`${!liveMenuMode ? 'opacity-100' : 'opacity-0'}`}>Abierto</span>
                     </div>
                     <div className={`w-12 h-12 bg-white rounded-full shadow-md transform transition-transform duration-300 flex items-center justify-center text-xl ${liveMenuMode ? 'translate-x-[200px]' : 'translate-x-0'}`}>
-                        {liveMenuMode ? '📡' : '✍️'}
+                        {liveMenuMode ? '🔒' : '✍️'}
                     </div>
                 </button>
             </div>
