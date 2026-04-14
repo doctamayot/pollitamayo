@@ -26,6 +26,18 @@ const StatusWarnings = ({ isAdmin, hasPaid, missingSections, isLocked }) => {
                     </div>
                 </div>
             )}
+
+            {hasPaid && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 sm:p-5 flex items-start sm:items-center gap-3 shadow-sm animate-fade-in">
+                    <div className="text-2xl sm:text-3xl shrink-0">✅</div>
+                    <div>
+                        <h3 className="font-bold text-green-500 mb-1 text-sm sm:text-base">¡Ya estas Oficialmente inscrito!</h3>
+                        <a href="https://chat.whatsapp.com/E223l4vTVhy21yCcVwGY44" target="_blank" rel="noopener noreferrer" className="text-amber-500 font-bold underline hover:text-amber-400 transition-colors">
+                                Entrar al grupo de Whatsapp
+                            </a>
+                    </div>
+                </div>
+            )}
             
             {missingSections.length > 0 ? (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 sm:p-5 flex items-start gap-3 shadow-sm animate-fade-in">
