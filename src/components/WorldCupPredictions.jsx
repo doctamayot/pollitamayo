@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import logocopa from '../assets/logocopa.png';
 import StatsBanner from './StatsBanner';
 
-// --- IMPORTACIONES MODULARES ---
 import { 
     translateTeam, 
     extraQuestions, 
@@ -22,7 +21,7 @@ import MatchCard from './worldcupcomponents/MatchCard';
 import StatusWarnings from './worldcupcomponents/StatusWarning';
 
 const WorldCupPredictions = ({ currentUser }) => {
-    const isAdmin = currentUser.email === 'doctamayot@gmail.com';
+    const isAdmin = currentUser.email === 'doctamayot@gmail.com' || currentUser.email === 'admin@polli-tamayo.com';
 
     // ESTADOS
     const [activePhase, setActivePhase] = useState('GROUP_STAGE'); 
@@ -35,11 +34,14 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [selectedSubTab, setSelectedSubTab] = useState(null); 
     const [predictions, setPredictions] = useState({});
     const [knockoutPicks, setKnockoutPicks] = useState({
-        octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: []
+        dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: []
     });
     const [extraPicks, setExtraPicks] = useState({});
     const [eventPicks, setEventPicks] = useState({});
     const [manualTiebreakers, setManualTiebreakers] = useState({});
+    const [lockedMatches, setLockedMatches] = useState({}); 
+    const [isAutoSyncActive, setIsAutoSyncActive] = useState(false); 
+    
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [hasPaid, setHasPaid] = useState(false);
@@ -47,6 +49,7 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     const subTabsRef = useRef(null);
     const roundTabsRef = useRef(null);
+    const lastSyncTime = useRef(0);
 
     const tabs = [
         { id: 'partidos', label: 'Marcadores', icon: '⚽', linkedPhase: 'GROUP_STAGE' },
@@ -83,9 +86,6 @@ const WorldCupPredictions = ({ currentUser }) => {
 
                 setMatchesByGroup(groupedGroups);
                 setKnockoutMatches(ko);
-                
-                const sortedGroups = Object.keys(groupedGroups).sort((a, b) => a.localeCompare(b));
-                if (sortedGroups.length > 0 && !selectedSubTab) setSelectedSubTab(sortedGroups[0]);
 
                 if (currentUser) {
                     const docRef = isAdmin ? doc(db, 'worldCupAdmin', 'results') : doc(db, 'worldCupPredictions', currentUser.uid);
@@ -97,6 +97,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                         if (savedData.extraPicks) setExtraPicks(savedData.extraPicks);
                         if (savedData.eventPicks) setEventPicks(savedData.eventPicks);
                         if (savedData.manualTiebreakers) setManualTiebreakers(savedData.manualTiebreakers);
+                        if (savedData.lockedMatches) setLockedMatches(savedData.lockedMatches); 
                     }
                 }
             } catch (err) {
@@ -108,6 +109,99 @@ const WorldCupPredictions = ({ currentUser }) => {
         };
         fetchMatchesAndData();
     }, [currentUser, isAdmin]);
+
+    //const activePhase = adminResults?.activePhase || 'GROUP_STAGE';
+    const isKnockoutPhaseActive = activePhase !== 'GROUP_STAGE' && activePhase !== 'ALL_OPEN';
+
+    // --- 🟢 MAGIA: REORDENAMIENTO DE PESTAÑAS ---
+    const orderedSubTabs = useMemo(() => {
+        const groupTabs = Object.keys(matchesByGroup).sort((a,b)=>a.localeCompare(b)).map(gn => ({
+            id: gn, type: 'group', label: gn.replace('Grupo ', '')
+        }));
+        
+        if (isKnockoutPhaseActive) {
+            // Si estamos en rondas finales, poner KO primero, luego un divisor, y grupos al FINAL
+            return [
+                ...knockoutSubTabs.map(k => ({...k, type: 'knockout'})),
+                { type: 'divider', id: 'div1' },
+                ...groupTabs
+            ];
+        } else {
+            // Si estamos en grupos, poner Grupos primero, luego un divisor, y KO al FINAL
+            return [
+                ...groupTabs, 
+                { type: 'divider', id: 'div1' }, 
+                ...knockoutSubTabs.map(k => ({...k, type: 'knockout'}))
+            ];
+        }
+    }, [matchesByGroup, isKnockoutPhaseActive]);
+
+    useEffect(() => {
+        if (isKnockoutPhaseActive) {
+            setSelectedSubTab(activePhase);
+        } else if (Object.keys(matchesByGroup).length > 0 && (!selectedSubTab || !selectedSubTab.startsWith('Grupo'))) {
+            setSelectedSubTab(Object.keys(matchesByGroup).sort((a, b) => a.localeCompare(b))[0]); // Selecciona Grupo A
+        }
+    }, [activePhase, matchesByGroup, isKnockoutPhaseActive]);
+
+    useEffect(() => {
+        // Auto-Scroll visual hacia el tab seleccionado
+        if (selectedSubTab && selectedSubTab !== 'ALL' && subTabsRef.current) {
+            setTimeout(() => {
+                const tabElement = document.getElementById(`subtab-${selectedSubTab}`);
+                if (tabElement && subTabsRef.current) {
+                    const scrollLeft = tabElement.offsetLeft - (subTabsRef.current.offsetWidth / 2) + (tabElement.offsetWidth / 2);
+                    subTabsRef.current.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+                }
+            }, 150); 
+        }
+    }, [selectedSubTab, orderedSubTabs]); 
+
+    // --- 🤖 MOTOR DE AUTO-SYNC ---
+    useEffect(() => {
+        if (!isAdmin || !isAutoSyncActive) return;
+
+        const performAutoSync = async () => {
+            const now = Date.now();
+            if (now - lastSyncTime.current < 14000) return;
+            lastSyncTime.current = now;
+
+            console.log("📡 [AUTO-SYNC] Haciendo petición real a la API...");
+            try {
+                const data = await getWorldCupMatches();
+                if (!data || !data.matches) return;
+
+                const adminDoc = await getDoc(doc(db, 'worldCupAdmin', 'results'));
+                let dbPreds = adminDoc.exists() ? (adminDoc.data().predictions || {}) : {};
+                let currentLocks = adminDoc.exists() ? (adminDoc.data().lockedMatches || {}) : {};
+                let hasChanges = false;
+
+                data.matches.forEach(m => {
+                    if (currentLocks[m.id]) return; 
+
+                    const apiH = (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) ? m.score.fullTime.home : '';
+                    const apiA = (m.score?.fullTime?.away !== null && m.score?.fullTime?.away !== undefined) ? m.score.fullTime.away : '';
+
+                    if (dbPreds[m.id]?.home !== apiH || dbPreds[m.id]?.away !== apiA) {
+                        dbPreds[m.id] = { ...dbPreds[m.id], home: apiH, away: apiA };
+                        hasChanges = true;
+                    }
+                });
+
+                if (hasChanges) {
+                    await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
+                    setPredictions(dbPreds); 
+                    toast.success('⚽ ¡Auto-Sync: Marcadores sincronizados con la API!', { id: 'autosync-toast' });
+                }
+            } catch (error) {
+                console.error("❌ Error en Auto-Sync:", error);
+            }
+        };
+
+        performAutoSync();
+        const intervalId = setInterval(performAutoSync, 15000);
+        return () => clearInterval(intervalId);
+    }, [isAdmin, isAutoSyncActive]);
 
     useEffect(() => {
         if (!currentUser || isAdmin) return;
@@ -127,7 +221,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         return () => unsubAdmin();
     }, []);
 
-    // --- LÓGICAS DE BLOQUEO Y DESEMPATE ---
     const isSubTabLocked = useCallback((subTab) => {
         if (isAdmin || activePhase === 'ALL_OPEN') return false;
         if (!subTab) return true;
@@ -154,7 +247,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
 
-        // 1. Inicializar estadísticas
         groupMatches.forEach(m => {
             const home = m.homeTeam?.name || 'Por definir';
             const away = m.awayTeam?.name || 'Por definir';
@@ -162,7 +254,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
         });
 
-        // 2. Calcular Estadísticas Generales
         groupMatches.forEach(m => {
             const pred = predictions[m.id];
             if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
@@ -186,8 +277,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
 
         const teamsArray = Object.values(teams);
-
-        // 3. Regla FIFA 2026: Agrupar por Puntos Totales
         const groupedByPts = {};
         teamsArray.forEach(t => {
             if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
@@ -196,10 +285,8 @@ const WorldCupPredictions = ({ currentUser }) => {
 
         const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
 
-        // 4. FUNCIÓN RECURSIVA: "Cara a Cara"
         const resolveTie = (tiedTeams) => {
             if (tiedTeams.length <= 1) return [tiedTeams];
-
             const h2hStats = {};
             tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
             const tiedNames = tiedTeams.map(t => t.name);
@@ -212,10 +299,8 @@ const WorldCupPredictions = ({ currentUser }) => {
                         const aG = parseInt(pred.away, 10);
                         const home = m.homeTeam.name;
                         const away = m.awayTeam.name;
-
                         h2hStats[home].gf += hG; h2hStats[away].gf += aG;
                         h2hStats[home].dg += (hG - aG); h2hStats[away].dg += (aG - hG);
-
                         if (hG > aG) h2hStats[home].pts += 3;
                         else if (hG < aG) h2hStats[away].pts += 3;
                         else { h2hStats[home].pts += 1; h2hStats[away].pts += 1; }
@@ -268,9 +353,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             }
 
             let finalGroups = [];
-            for (const sg of subGroups) {
-                finalGroups.push(...resolveTie(sg));
-            }
+            for (const sg of subGroups) { finalGroups.push(...resolveTie(sg)); }
             return finalGroups;
         };
 
@@ -317,7 +400,6 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     const hasTiesInGroup = useMemo(() => currentGroupStandings.some(t => t.isTied), [currentGroupStandings]);
 
-    // --- 🚦 VERIFICADOR DE FASE DE GRUPOS COMPLETA ---
     const isGroupStageComplete = useMemo(() => {
         const allGroupMatches = Object.values(matchesByGroup).flat();
         if (allGroupMatches.length === 0) return false;
@@ -344,7 +426,12 @@ const WorldCupPredictions = ({ currentUser }) => {
             case 'dieciseisavos': case 'LAST_32': case 'octavos': return qualifiedRoundOf32.all32;
             case 'LAST_16': case 'cuartos': return knockoutPicks.octavos || [];
             case 'QUARTER_FINALS': case 'semis': return knockoutPicks.cuartos || [];
-            case 'SEMI_FINALS': case 'campeon': case 'subcampeon': case 'tercero': case 'cuarto': case 'FINALS': return knockoutPicks.semis || [];
+            case 'SEMI_FINALS': case 'campeon': case 'subcampeon': case 'FINALS': return knockoutPicks.semis || [];
+            case 'tercero': case 'cuarto': {
+                const semifinalistas = knockoutPicks.cuartos || []; 
+                const finalistas = knockoutPicks.semis || [];       
+                return semifinalistas.filter(st => !finalistas.some(ft => ft.name === st.name));
+            }
             default: return [];
         }
     }, [qualifiedRoundOf32, knockoutPicks]);
@@ -358,8 +445,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             const predictedGroups = allGroupMatches.filter(m => predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== '' && predictions[m.id]?.away !== undefined && predictions[m.id]?.away !== '').length;
             if (predictedGroups < allGroupMatches.length) missing.push(`Grupos (${predictedGroups}/${allGroupMatches.length})`);
 
-            // --- 🔧 LÍMITES ARREGLADOS AQUÍ (16, 8, 4, 2) ---
-            // --- 🔧 LÍMITES ARREGLADOS AQUÍ (16, 8, 4, 2) ---
             if ((knockoutPicks.dieciseisavos?.length || 0) < 16) missing.push(`16vos (${knockoutPicks.dieciseisavos?.length || 0}/16)`);
             if ((knockoutPicks.octavos?.length || 0) < 8) missing.push(`Octavos (${knockoutPicks.octavos?.length || 0}/8)`);
             if ((knockoutPicks.cuartos?.length || 0) < 4) missing.push(`Cuartos (${knockoutPicks.cuartos?.length || 0}/4)`);
@@ -398,7 +483,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         return missing;
     }, [activePhase, matchesByGroup, knockoutMatches, predictions, knockoutPicks, extraPicks, eventPicks, isAdmin]);
 
-    // --- HANDLERS Y ACTIONS ---
     const handleScoreChange = (matchId, team, value) => {
         if (activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) return;
         if (value !== '' && (isNaN(value) || value < 0 || value > 99)) return;
@@ -422,6 +506,21 @@ const WorldCupPredictions = ({ currentUser }) => {
     const handleEventChange = (eventId, value) => {
         if (isCurrentMainTabLocked) return;
         setEventPicks(prev => ({ ...prev, [eventId]: prev[eventId] === value ? '' : value }));
+    };
+
+    const handleToggleLockMatch = async (matchId) => {
+        if (!isAdmin) return;
+        const newValue = !lockedMatches[matchId];
+        setLockedMatches(prev => ({ ...prev, [matchId]: newValue }));
+        
+        try {
+            await setDoc(doc(db, 'worldCupAdmin', 'results'), { 
+                lockedMatches: { [matchId]: newValue } 
+            }, { merge: true });
+            
+            if (newValue) toast.success("🔒 Partido cerrado a los 90min (El Robot no lo sobrescribirá)");
+            else toast("🔓 Partido desbloqueado para la API", { icon: '🔓' });
+        } catch (error) { toast.error("Error al bloquear el partido"); }
     };
 
     const handleManualTiebreaker = (group, teamName, positionValue, tiedTeamNames, tieOptions) => {
@@ -466,14 +565,30 @@ const WorldCupPredictions = ({ currentUser }) => {
                     }
                     podiumSlots.forEach(slot => newPicks[slot] = (newPicks[slot] || []).filter(t => t.name !== team.name));
                 }
+                if (roundId === 'campeon') newPicks.subcampeon = [];
+                if (roundId === 'tercero') newPicks.cuarto = [];
                 return newPicks;
             } else {
                 const newPicks = { ...prev };
                 if (limit === 1) {
                     podiumSlots.forEach(slot => { newPicks[slot] = (newPicks[slot] || []).filter(t => t.name !== team.name); });
                     newPicks[roundId] = [team];
+
+                    if (roundId === 'campeon') {
+                        const finalistas = newPicks.semis || [];
+                        const sub = finalistas.find(t => t.name !== team.name);
+                        if (sub) newPicks.subcampeon = [sub];
+                    }
+                    if (roundId === 'tercero') {
+                        const semifinalistas = newPicks.cuartos || []; 
+                        const finalistas = newPicks.semis || []; 
+                        const contenders = semifinalistas.filter(st => !finalistas.some(ft => ft.name === st.name));
+                        const cuarto = contenders.find(t => t.name !== team.name);
+                        if (cuarto) newPicks.cuarto = [cuarto];
+                    }
                     return newPicks;
                 }
+                
                 if (podiumSlots.includes(roundId)) podiumSlots.forEach(slot => newPicks[slot] = (newPicks[slot] || []).filter(t => t.name !== team.name));
                 if ((newPicks[roundId] || []).length < limit) newPicks[roundId] = [...(newPicks[roundId] || []), team];
                 return newPicks;
@@ -518,9 +633,9 @@ const WorldCupPredictions = ({ currentUser }) => {
     const handleClearData = () => {
         if (!window.confirm("⚠️ ¡Atención Admin! Vas a BORRAR TODAS tus respuestas. ¿Continuar?")) return;
         setPredictions({}); setEventPicks({}); setExtraPicks({});
-        // 🔧 FIX: Agregamos dieciseisavos al reseteo
         setKnockoutPicks({ dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] });
         setManualTiebreakers({});
+        setLockedMatches({});
         toast.success("🧹 ¡Todo ha sido borrado! Recuerda presionar Guardar.");
     };
 
@@ -530,16 +645,10 @@ const WorldCupPredictions = ({ currentUser }) => {
         const shuffledTeams = [...allTeams].sort(() => 0.5 - Math.random());
         const newPreds = {};
         
-        // 1. Solo generamos los marcadores (Goles)
-        // Marcadores de Grupos
         Object.values(matchesByGroup).flat().forEach(m => {
-            newPreds[m.id] = { 
-                home: Math.floor(Math.random() * 4), 
-                away: Math.floor(Math.random() * 4) 
-            };
+            newPreds[m.id] = { home: Math.floor(Math.random() * 4), away: Math.floor(Math.random() * 4) };
         });
 
-        // Marcadores de Knockout (Si ya existen los partidos)
         Object.values(knockoutMatches).flat().forEach(m => {
              newPreds[m.id] = { 
                 home: Math.floor(Math.random() * 4), 
@@ -550,23 +659,22 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
         
         setPredictions(newPreds);
-
-        // 2. Vaciamos las clasificaciones de fases (Knockout Picks)
-        // Esto obliga a que, tras la simulación, las llaves aparezcan pero sin ganador seleccionado.
-        setKnockoutPicks({ 
-            dieciseisavos: [], 
-            octavos: [], 
-            cuartos: [], 
-            semis: [], 
-            campeon: [], 
-            subcampeon: [], 
-            tercero: [], 
-            cuarto: [] 
-        });
-
-        // 3. Opcional: Llenar extras y eventos (puedes comentar esto si tampoco quieres que los llene)
+        setKnockoutPicks({ dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] });
+        
         const newEvents = {};
-        specialEvents.forEach(e => { newEvents[e.id] = Math.random() > 0.5 ? 'SI' : 'NO'; });
+        specialEvents.forEach(e => {
+                let u = userData.eventPicks?.[e.id]; 
+                let a = adminResults?.eventPicks?.[e.id];
+                
+                // 🟢 LIMPIEZA FORZADA PARA LA GRILLA
+                if (u && a) {
+                    u = String(u).toUpperCase().trim();
+                    a = String(a).toUpperCase().trim();
+                    if (a === u) {
+                        total += (u === 'SI' ? 5 : 2);
+                    }
+                }
+            });
         setEventPicks(newEvents);
 
         const newExtras = {};
@@ -598,7 +706,26 @@ const WorldCupPredictions = ({ currentUser }) => {
         <div className="max-w-full mx-auto pb-24 px-4 xl:px-8">
             
             {isAdmin && (
-                <AdminPanel activePhase={activePhase} handleAdminSetPhase={handleAdminSetPhase} handleClearData={handleClearData} handleSimulateData={handleSimulateData} />
+                <>
+                    <div className="mb-6 flex justify-center animate-fade-in">
+                        <button
+                            onClick={() => setIsAutoSyncActive(!isAutoSyncActive)}
+                            className={`flex items-center gap-3 px-6 py-3 rounded-full font-black text-sm uppercase tracking-widest shadow-lg transition-all transform hover:scale-105 ${
+                                isAutoSyncActive 
+                                ? 'bg-green-500 text-white shadow-green-500/30 border-2 border-green-400' 
+                                : 'bg-card text-foreground-muted border-2 border-border hover:bg-background-offset'
+                            }`}
+                        >
+                            {isAutoSyncActive ? (
+                                <><span className="animate-spin text-xl">🔄</span> Auto-Sync Activado (15s)</>
+                            ) : (
+                                <><span className="text-xl">📡</span> Activar Auto-Sync API</>
+                            )}
+                        </button>
+                    </div>
+
+                    <AdminPanel activePhase={activePhase} handleAdminSetPhase={handleAdminSetPhase} handleClearData={handleClearData} handleSimulateData={handleSimulateData} />
+                </>
             )}
 
             <div className="mb-8 text-center animate-fade-in">
@@ -647,33 +774,35 @@ const WorldCupPredictions = ({ currentUser }) => {
                         </button>
 
                         <div ref={subTabsRef} className="flex overflow-x-auto hide-scrollbar gap-2 sm:gap-3 pb-4 pt-2 px-2 md:px-10 snap-x scroll-smooth items-center w-full">
-                            {Object.keys(matchesByGroup).sort((a,b)=>a.localeCompare(b)).map(gn => {
-                                const isSelected = selectedSubTab === gn;
+                            {orderedSubTabs.map(tab => {
+                                if (tab.type === 'divider') {
+                                    return <div key={tab.id} className="w-px h-10 bg-gradient-to-b from-transparent via-border to-transparent mx-2 sm:mx-4 shrink-0"></div>;
+                                }
+                                
+                                const isSelected = selectedSubTab === tab.id;
+                                
+                                if (tab.type === 'group') {
+                                    return (
+                                        <button 
+                                            key={tab.id} id={`subtab-${tab.id}`} onClick={() => setSelectedSubTab(tab.id)} 
+                                            className={`snap-center shrink-0 flex flex-col items-center justify-center min-w-[70px] sm:min-w-[85px] h-14 sm:h-16 rounded-[1rem] font-black transition-all border ${
+                                                isSelected ? 'bg-gradient-to-b from-primary to-amber-600 text-white border-transparent scale-105 z-10' : 'bg-card text-foreground-muted hover:bg-background-offset'
+                                            }`}
+                                        >
+                                            <span className="text-xs sm:text-base tracking-widest">{tab.label}</span>
+                                            <span className={`text-[8px] sm:text-[9px] uppercase tracking-widest opacity-70 mt-0.5 ${isSelected ? 'text-white' : ''}`}>Grupo</span>
+                                        </button>
+                                    );
+                                }
+                                
                                 return (
                                     <button 
-                                        key={gn} onClick={() => setSelectedSubTab(gn)} 
-                                        className={`snap-center shrink-0 flex flex-col items-center justify-center min-w-[70px] sm:min-w-[85px] h-14 sm:h-16 rounded-[1rem] font-black transition-all border ${
-                                            isSelected ? 'bg-gradient-to-b from-primary to-amber-600 text-white border-transparent scale-105 z-10' : 'bg-card text-foreground-muted hover:bg-background-offset'
-                                        }`}
-                                    >
-                                        <span className="text-xs sm:text-base tracking-widest">{gn.replace('Grupo ', '')}</span>
-                                        <span className={`text-[8px] sm:text-[9px] uppercase tracking-widest opacity-70 mt-0.5 ${isSelected ? 'text-white' : ''}`}>Grupo</span>
-                                    </button>
-                                );
-                            })}
-                            
-                            <div className="w-px h-10 bg-gradient-to-b from-transparent via-border to-transparent mx-2 sm:mx-4 shrink-0"></div>
-                            
-                            {knockoutSubTabs.map(ko => {
-                                const isSelected = selectedSubTab === ko.id;
-                                return (
-                                    <button 
-                                        key={ko.id} onClick={() => setSelectedSubTab(ko.id)} 
+                                        key={tab.id} id={`subtab-${tab.id}`} onClick={() => setSelectedSubTab(tab.id)} 
                                         className={`snap-center shrink-0 flex items-center justify-center px-4 sm:px-6 h-14 sm:h-16 rounded-[1rem] font-black transition-all border ${
                                             isSelected ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-transparent scale-105 z-10' : 'bg-card text-foreground-muted hover:bg-background-offset'
                                         }`}
                                     >
-                                        <span className="text-[10px] sm:text-xs uppercase tracking-widest">{ko.label}</span>
+                                        <span className="text-[10px] sm:text-xs uppercase tracking-widest">{tab.label}</span>
                                     </button>
                                 );
                             })}
@@ -709,11 +838,12 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     <StatsBanner activeGroup={selectedSubTab} />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    {matchesByGroup[selectedSubTab].map(match => (
+                                    {matchesByGroup[selectedSubTab]?.map(match => (
                                         <MatchCard 
                                             key={match.id} match={match} isLocked={isSubTabLocked(selectedSubTab)}
                                             allowTbdInput={activePhase === 'ALL_OPEN'} predictions={predictions} adminResults={adminResults} 
                                             allTeams={allTeams} isAdmin={isAdmin} handleScoreChange={handleScoreChange} handleCustomTeamChange={handleCustomTeamChange} 
+                                            lockedMatches={lockedMatches} handleToggleLockMatch={handleToggleLockMatch} 
                                         />
                                     ))}
                                 </div>
@@ -730,7 +860,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                         <div className="max-w-4xl mx-auto space-y-4 animate-fade-in">
                             <div className="flex items-center justify-between border-b border-border pb-3 mb-6">
                                 <h3 className="text-xl sm:text-2xl font-black text-primary uppercase tracking-widest">
-                                    Partidos de {knockoutSubTabs.find(k => k.id === selectedSubTab)?.label}
+                                    Partidos de {knockoutSubTabs.find(k => k.id === selectedSubTab)?.label || 'Ronda Final'}
                                 </h3>
                             </div>
                             
@@ -741,6 +871,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                             key={match.id} match={match} isLocked={isSubTabLocked(selectedSubTab)}
                                             allowTbdInput={activePhase === 'ALL_OPEN'} predictions={predictions} adminResults={adminResults} 
                                             allTeams={allTeams} isAdmin={isAdmin} handleScoreChange={handleScoreChange} handleCustomTeamChange={handleCustomTeamChange} 
+                                            lockedMatches={lockedMatches} handleToggleLockMatch={handleToggleLockMatch} 
                                         />
                                     ))}
                                 </div>

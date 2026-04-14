@@ -1,6 +1,6 @@
 import React from 'react';
 import { stageTranslations, translateTeam } from './constants';
-import logocopa from '../../assets/logocopa.png'; // Ajustamos la ruta de la imagen
+import logocopa from '../../assets/logocopa.png'; 
 
 const MatchCard = ({ 
     match, 
@@ -11,7 +11,9 @@ const MatchCard = ({
     allTeams, 
     isAdmin, 
     handleScoreChange, 
-    handleCustomTeamChange 
+    handleCustomTeamChange,
+    lockedMatches, 
+    handleToggleLockMatch 
 }) => {
     const homeOriginal = match.homeTeam?.name;
     const awayOriginal = match.awayTeam?.name;
@@ -22,7 +24,6 @@ const MatchCard = ({
     const customHome = predictions[match.id]?.customHomeTeam || '';
     const customAway = predictions[match.id]?.customAwayTeam || '';
     
-    // JUGADORES VEN EL EQUIPO QUE PUSO EL ADMIN, ADMIN VE SU PROPIO SELECTOR
     const displayHome = isUnknownHome ? (isAdmin ? customHome : (adminResults?.predictions?.[match.id]?.customHomeTeam || '')) : homeOriginal;
     const displayAway = isUnknownAway ? (isAdmin ? customAway : (adminResults?.predictions?.[match.id]?.customAwayTeam || '')) : awayOriginal;
     
@@ -31,13 +32,29 @@ const MatchCard = ({
 
     return (
         <div className={`bg-card border ${isLocked ? 'border-border/50 opacity-80' : 'border-card-border hover:border-primary/50'} rounded-2xl shadow-sm relative overflow-hidden flex flex-col transition-all`}>
+            
+            {/* 🔒 BOTÓN DE CANDADO (SOLO ADMIN Y DESDE 16VOS) */}
+            {isAdmin && match.stage !== 'GROUP_STAGE' && (
+                <button
+                    onClick={(e) => { e.preventDefault(); handleToggleLockMatch(match.id); }}
+                    className={`absolute top-2 right-2 z-20 flex items-center justify-center w-7 h-7 rounded-full border shadow-sm transition-all ${
+                        lockedMatches?.[match.id] 
+                            ? 'bg-red-500 text-white border-red-600 hover:bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.5)]' 
+                            : 'bg-background-offset text-foreground-muted border-border hover:bg-foreground hover:text-background'
+                    }`}
+                    title={lockedMatches?.[match.id] ? "Desbloquear Partido (Permitir Auto-Sync)" : "Cerrar Partido en 90 Min (Ignorar Auto-Sync)"}
+                >
+                    {lockedMatches?.[match.id] ? '🔒' : '🔓'}
+                </button>
+            )}
+
             <div className="bg-background-offset px-4 py-2.5 flex justify-between items-center border-b border-border">
                 <div className="flex items-center gap-2">
                     <span className="text-[9px] font-black text-background bg-primary px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
                         {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage.replace(/_/g, ' ')}
                     </span>
                 </div>
-                <span className="text-[10px] text-foreground-muted font-semibold uppercase tracking-wider">
+                <span className={`text-[10px] text-foreground-muted font-semibold uppercase tracking-wider ${isAdmin && match.stage !== 'GROUP_STAGE' ? 'pr-8' : ''}`}>
                     {new Date(match.utcDate).toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour:'2-digit', minute:'2-digit' }).replace('.', '')}
                 </span>
             </div>

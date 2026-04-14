@@ -12,12 +12,11 @@ const KnockoutTab = ({
     knockoutPicks,
     toggleKnockoutPick,
     isCurrentMainTabLocked,
-    isGroupStageComplete // <--- Recibimos la validación
+    isGroupStageComplete
 }) => {
     const [isCleaning, setIsCleaning] = useState(false);
 
     // --- 🔮 MOTOR DE SIMULACIÓN DE LLAVES ---
-    // Solo se ejecuta si la fase de grupos está 100% completa
     const fullBracket = useMemo(() => {
         if (isGroupStageComplete && qualifiedRoundOf32?.all32?.length === 32) {
             return generateFullBracket(qualifiedRoundOf32.all32, knockoutPicks);
@@ -84,7 +83,7 @@ const KnockoutTab = ({
 
     // --- ⚔️ RENDERIZADOR INTELIGENTE DE CRUCES ---
     const renderMatchups = (matchesObj, currentTabId) => {
-        // 🛑 BLOQUEO DE PANTALLA: Si no ha terminado grupos
+        // 🛑 BLOQUEO DE PANTALLA
         if (!isGroupStageComplete) {
             return (
                 <div className="col-span-full text-center py-16 text-foreground-muted animate-fade-in bg-background-offset border border-border rounded-3xl shadow-inner mt-4">
@@ -106,35 +105,9 @@ const KnockoutTab = ({
             const homeIsSelected = match.home && knockoutPicks[currentTabId]?.some(t => t.name === match.home.name);
             const awayIsSelected = match.away && knockoutPicks[currentTabId]?.some(t => t.name === match.away.name);
 
-            const handlePick = (teamToSelect, isOpponentSelected, opponentTeam) => {
-                const isCurrentlySelected = knockoutPicks[currentTabId]?.some(t => t.name === teamToSelect.name);
-
-                const executePick = () => {
-                    toggleKnockoutPick(currentTabId, teamToSelect, limit);
-                    
-                    if (currentTabId === 'campeon' || currentTabId === 'tercero') {
-                        const loserTabId = currentTabId === 'campeon' ? 'subcampeon' : 'cuarto';
-                        const currentLoserPicks = knockoutPicks[loserTabId] || [];
-                        
-                        if (!isCurrentlySelected) {
-                            if (currentLoserPicks.length > 0 && currentLoserPicks[0].name !== opponentTeam.name) {
-                                toggleKnockoutPick(loserTabId, currentLoserPicks[0], 1); 
-                            }
-                            setTimeout(() => toggleKnockoutPick(loserTabId, opponentTeam, 1), 50);
-                        } else {
-                            if (currentLoserPicks.some(t => t.name === opponentTeam.name)) {
-                                toggleKnockoutPick(loserTabId, opponentTeam, 1);
-                            }
-                        }
-                    }
-                };
-
-                if (isOpponentSelected) {
-                    toggleKnockoutPick(currentTabId, opponentTeam, limit); 
-                    setTimeout(executePick, 50); 
-                } else {
-                    executePick();
-                }
+            // 🚀 AQUÍ ESTÁ LA SOLUCIÓN: Limpiamos la función y dejamos que el padre haga el trabajo
+            const handlePick = (teamToSelect) => {
+                toggleKnockoutPick(currentTabId, teamToSelect, limit);
             };
 
             return (
@@ -147,7 +120,7 @@ const KnockoutTab = ({
                     <div className="flex items-center justify-between mt-5 w-full gap-2">
                         {/* BOTÓN EQUIPO LOCAL */}
                         <button 
-                            onClick={() => match.home && handlePick(match.home, awayIsSelected, match.away)}
+                            onClick={() => match.home && handlePick(match.home)}
                             disabled={isCurrentMainTabLocked || !match.home}
                             className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
@@ -171,7 +144,7 @@ const KnockoutTab = ({
 
                         {/* BOTÓN EQUIPO VISITANTE */}
                         <button 
-                            onClick={() => match.away && handlePick(match.away, homeIsSelected, match.home)}
+                            onClick={() => match.away && handlePick(match.away)}
                             disabled={isCurrentMainTabLocked || !match.away}
                             className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
