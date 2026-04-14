@@ -30,6 +30,20 @@ const MatchCard = ({
     const homeCrest = isUnknownHome && displayHome ? allTeams.find(t=>t.name === displayHome)?.crest : match.homeTeam?.crest;
     const awayCrest = isUnknownAway && displayAway ? allTeams.find(t=>t.name === displayAway)?.crest : match.awayTeam?.crest;
 
+    // 🟢 FORMATO DE HORA Y FECHA: Convierte UTC a hora local en formato 12h (AM/PM)
+    const formatMatchDate = (utcStr) => {
+        if (!utcStr) return '';
+        const d = new Date(utcStr);
+        const day = d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short' }).replace('.', '');
+        const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        return `${day} - ${time}`;
+    };
+
+    // 🟢 ÁRBITRO: Extrae el árbitro principal si la API lo manda
+    const mainReferee = match.referees && match.referees.length > 0 
+        ? match.referees.find(r => r.type === 'REFEREE' || r.role === 'REFEREE') || match.referees[0] 
+        : null;
+
     return (
         <div className={`bg-card border ${isLocked ? 'border-border/50 opacity-80' : 'border-card-border hover:border-primary/50'} rounded-2xl shadow-sm relative overflow-hidden flex flex-col transition-all`}>
             
@@ -53,9 +67,16 @@ const MatchCard = ({
                     <span className="text-[9px] font-black text-background bg-primary px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
                         {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage.replace(/_/g, ' ')}
                     </span>
+                    
+                    {/* 🟢 INFO DE ÁRBITRO EN ESCRITORIO (Se oculta en móviles para ahorrar espacio) */}
+                    <span className="hidden sm:flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2 py-0.5 rounded border border-border/50">
+                        <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
+                    </span>
                 </div>
+                
+                {/* 🟢 LA HORA LOCAL AQUÍ */}
                 <span className={`text-[10px] text-foreground-muted font-semibold uppercase tracking-wider ${isAdmin && match.stage !== 'GROUP_STAGE' ? 'pr-8' : ''}`}>
-                    {new Date(match.utcDate).toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour:'2-digit', minute:'2-digit' }).replace('.', '')}
+                    {formatMatchDate(match.utcDate)}
                 </span>
             </div>
 
@@ -114,6 +135,13 @@ const MatchCard = ({
                         placeholder="-" disabled={isLocked || (!displayAway && !allowTbdInput)}
                         value={predictions[match.id]?.away ?? ''} onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)} 
                     />
+                </div>
+
+                {/* 🟢 INFO DE ÁRBITRO EN MÓVIL (Aparece abajo para que quepa bien) */}
+                <div className="mt-1 text-center sm:hidden">
+                    <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-1 rounded border border-border/50">
+                        <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Árbitro por Definir'}
+                    </span>
                 </div>
             </div>
         </div>

@@ -42,11 +42,10 @@ const formatShortName = (fullName) => {
 };
 
 const formatDateObj = (dateStr) => {
-    const [y, m, d] = dateStr.split('-');
-    const date = new Date(y, m - 1, d);
-    const dayName = date.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace('.', '');
-    const dayNum = date.getDate();
-    const monthName = date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+    const d = new Date(dateStr + "T12:00:00"); 
+    const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace('.', '');
+    const dayNum = d.getDate();
+    const monthName = d.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
     return { dayName, dayNum, monthName };
 };
 
@@ -66,7 +65,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
     const scrollContainerRef = useRef(null);
     const lastSyncTime = useRef(0);
-    const prevSimDateRef = useRef(''); // 🟢 NUEVO: Rastreador de cambios del simulador
+    const prevSimDateRef = useRef(''); 
 
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
         try {
@@ -210,52 +209,119 @@ const WorldCupGrid = ({ currentUser }) => {
         return Array.from(teamsMap.values());
     }, [effectiveMatches]);
 
+    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
         groupMatches.forEach(m => {
-            const h = m.homeTeam.name; const v = m.awayTeam.name;
-            if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
-            if (!teams[v]) teams[v] = { name: v, pts: 0, dg: 0, gf: 0 };
+            const h = m.homeTeam?.name || 'Por definir';
+            const a = m.awayTeam?.name || 'Por definir';
+            if (!teams[h]) teams[h] = { name: h, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
+            if (!teams[a]) teams[a] = { name: a, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
         });
 
         groupMatches.forEach(m => {
             const pr = preds?.[m.id];
             if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '' && pr.away !== undefined) {
                 const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
-                teams[m.homeTeam.name].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
-                teams[m.awayTeam.name].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
-                teams[m.homeTeam.name].dg += (gh - ga); teams[m.awayTeam.name].dg += (ga - gh);
-                teams[m.homeTeam.name].gf += gh; teams[m.awayTeam.name].gf += ga;
+                const h = m.homeTeam.name; const a = m.awayTeam.name;
+                teams[h].pj++; teams[a].pj++;
+                teams[h].gf += gh; teams[a].gf += ga;
+                teams[h].gc += ga; teams[a].gc += gh;
+                teams[h].dg = teams[h].gf - teams[h].gc;
+                teams[a].dg = teams[a].gf - teams[a].gc;
+                if (gh > ga) { teams[h].pts += 3; teams[h].pg++; teams[a].pp++; } 
+                else if (gh < ga) { teams[a].pts += 3; teams[a].pg++; teams[h].pp++; } 
+                else { teams[h].pts += 1; teams[a].pts += 1; teams[h].pe++; teams[a].pe++; }
             }
         });
 
-        return Object.values(teams).sort((a, b) => {
-            if (b.pts !== a.pts) return b.pts - a.pts;
-            if (b.dg !== a.dg) return b.dg - a.dg;
-            if (b.gf !== a.gf) return b.gf - a.gf;
-            
-            const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
-            const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
-            if (tieA !== tieB) return tieA - tieB; 
+        const resolveTie = (tiedTeams) => {
+            if (tiedTeams.length <= 1) return tiedTeams;
 
-            const tiedMatches = groupMatches.filter(m => 
-                (m.homeTeam.name === a.name && m.awayTeam.name === b.name) ||
-                (m.homeTeam.name === b.name && m.awayTeam.name === a.name)
-            );
-            if (tiedMatches.length > 0) {
-                const tm = tiedMatches[0];
-                const p = preds?.[tm.id];
-                if (p && p.home !== '' && p.away !== '') {
-                    const ph = parseInt(p.home); const pa = parseInt(p.away);
-                    if (ph !== pa) {
-                        if (tm.homeTeam.name === a.name) return pa - ph;
-                        return ph - pa;
+            const h2hStats = {};
+            tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
+            const tiedNames = tiedTeams.map(t => t.name);
+
+            groupMatches.forEach(m => {
+                if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
+                    const pr = preds?.[m.id];
+                    if (pr && pr.home !== '' && pr.away !== '') {
+                        const hG = parseInt(pr.home, 10); const aG = parseInt(pr.away, 10);
+                        const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        h2hStats[h].gf += hG; h2hStats[a].gf += aG;
+                        h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
+                        if (hG > aG) h2hStats[h].pts += 3;
+                        else if (hG < aG) h2hStats[a].pts += 3;
+                        else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
                     }
                 }
-            }
+            });
 
-            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+            const h2hGroups = {};
+            tiedTeams.forEach(t => {
+                const stats = h2hStats[t.name];
+                const key = `${stats.pts}_${stats.dg}_${stats.gf}`;
+                if (!h2hGroups[key]) h2hGroups[key] = [];
+                h2hGroups[key].push(t);
+            });
+
+            const sortedH2HKeys = Object.keys(h2hGroups).sort((a, b) => {
+                const [ptsA, dgA, gfA] = a.split('_').map(Number);
+                const [ptsB, dgB, gfB] = b.split('_').map(Number);
+                if (ptsB !== ptsA) return ptsB - ptsA;
+                if (dgB !== dgA) return dgB - dgA;
+                return gfB - gfA;
+            });
+
+            let finalSorted = [];
+            sortedH2HKeys.forEach(key => {
+                const subGroup = h2hGroups[key];
+                if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
+                    finalSorted.push(...resolveTie(subGroup));
+                } else if (subGroup.length > 1) {
+                    const groupedByOverall = {};
+                    subGroup.forEach(t => {
+                        const oKey = `${t.dg}_${t.gf}`;
+                        if (!groupedByOverall[oKey]) groupedByOverall[oKey] = [];
+                        groupedByOverall[oKey].push(t);
+                    });
+                    const sortedOverallKeys = Object.keys(groupedByOverall).sort((a, b) => {
+                        const [dgA, gfA] = a.split('_').map(Number);
+                        const [dgB, gfB] = b.split('_').map(Number);
+                        if (dgB !== dgA) return dgB - dgA;
+                        return gfB - gfA;
+                    });
+                    sortedOverallKeys.forEach(oKey => {
+                        const finalTied = groupedByOverall[oKey];
+                        if (finalTied.length > 1) {
+                            finalTied.sort((a, b) => {
+                                const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
+                                const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
+                                if (tieA !== tieB) return tieA - tieB; 
+                                return translateTeam(a.name).localeCompare(translateTeam(b.name));
+                            });
+                        }
+                        finalSorted.push(...finalTied);
+                    });
+                } else {
+                    finalSorted.push(subGroup[0]);
+                }
+            });
+            return finalSorted;
+        };
+
+        const groupedByPts = {};
+        Object.values(teams).forEach(t => {
+            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
+            groupedByPts[t.pts].push(t);
         });
+
+        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+        let finalFlattenedStandings = [];
+        sortedPtsKeys.forEach(pts => {
+            finalFlattenedStandings.push(...resolveTie(groupedByPts[pts]));
+        });
+        return finalFlattenedStandings;
     }, []);
 
     const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
@@ -470,19 +536,15 @@ const WorldCupGrid = ({ currentUser }) => {
         return [...knockoutDates, ...groupDates];
     }, [matchesByDate, adminResults]);
 
-    // 🟢 NUEVO EFECTO: LÓGICA DE SELECCIÓN DE FECHA A PRUEBA DE FALLOS
     useEffect(() => {
         if (sortedDates.length === 0) return;
 
-        // 1. Si el admin acaba de cambiar el simulador manualmente
         if (simulatedDate !== prevSimDateRef.current) {
             prevSimDateRef.current = simulatedDate;
             
-            // Si le puso una fecha y existe en el arreglo, saltamos directo a ella
             if (simulatedDate && sortedDates.includes(simulatedDate)) {
                 setSelectedDate(simulatedDate);
             } 
-            // Si el admin APAGÓ el simulador (simulatedDate es vacio), volvemos a la realidad
             else if (!simulatedDate) {
                 const d = new Date();
                 const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -497,7 +559,6 @@ const WorldCupGrid = ({ currentUser }) => {
             return;
         }
 
-        // 2. Si es la primera vez que carga la página (selectedDate es null)
         if (!selectedDate) {
             let targetDate = simulatedDate || (() => {
                 const d = new Date();
@@ -740,6 +801,11 @@ const WorldCupGrid = ({ currentUser }) => {
                     const homeCrest = isUnknownHome && customHome ? allTeams.find(t => t.name === customHome)?.crest : match.homeTeam?.crest;
                     const awayCrest = isUnknownAway && customAway ? allTeams.find(t => t.name === customAway)?.crest : match.awayTeam?.crest;
 
+                    // 🟢 NUEVO: Extraer árbitro principal (API de football-data a veces usa type, a veces role)
+                    const mainReferee = match.referees && match.referees.length > 0 
+                        ? match.referees.find(r => r.type === 'REFEREE' || r.role === 'REFEREE') || match.referees[0] 
+                        : null;
+
                     return (
                         <div key={match.id} className={`bg-card border ${isLive ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
@@ -762,11 +828,18 @@ const WorldCupGrid = ({ currentUser }) => {
 
                             <div className={`${isLive ? 'bg-green-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
                                 <div className="flex justify-between items-center mb-3 sm:mb-5">
-                                    <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
-                                        {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
-                                    </span>
+                                    <div className="flex items-center gap-2 sm:gap-4">
+                                        <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
+                                            {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
+                                        </span>
+                                        {/* 🟢 INFO DE ÁRBITRO EN ESCRITORIO */}
+                                        <span className="hidden sm:flex items-center gap-1.5 text-[10px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-0.5 rounded border border-border/50">
+                                            <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
+                                        </span>
+                                    </div>
+                                    {/* 🟢 HORA NORMAL (AM/PM) CON ZONA HORARIA LOCAL */}
                                     <span className="text-[10px] sm:text-xs font-bold text-foreground-muted uppercase tracking-widest bg-background/50 px-2 py-1 rounded border border-border/50">
-                                        {new Date(match.utcDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                        {new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
                                     </span>
                                 </div>
                                 
@@ -805,6 +878,13 @@ const WorldCupGrid = ({ currentUser }) => {
                                             {translateTeam(finalAwayName)}
                                         </p>
                                     </div>
+                                </div>
+
+                                {/* 🟢 INFO DE ÁRBITRO EN MÓVIL */}
+                                <div className="mt-4 text-center sm:hidden">
+                                    <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-1 rounded border border-border/50">
+                                        <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
+                                    </span>
                                 </div>
                             </div>
 

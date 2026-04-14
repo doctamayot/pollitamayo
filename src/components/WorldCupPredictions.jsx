@@ -248,51 +248,43 @@ const WorldCupPredictions = ({ currentUser }) => {
         return Array.from(teamsMap.values()).sort((a, b) => translateTeam(a.name).localeCompare(translateTeam(b.name)));
     }, [matchesByGroup]);
 
+    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero
     const calculateStandings = useCallback((groupName) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
 
+        // 1. Calcular Puntos y Estadísticas Generales (Para el primer filtro y filtros d, e)
         groupMatches.forEach(m => {
-            const home = m.homeTeam?.name || 'Por definir';
-            const away = m.awayTeam?.name || 'Por definir';
-            if (!teams[home]) teams[home] = { name: home, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
-            if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
+            const h = m.homeTeam?.name || 'Por definir';
+            const a = m.awayTeam?.name || 'Por definir';
+            if (!teams[h]) teams[h] = { name: h, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
+            if (!teams[a]) teams[a] = { name: a, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
         });
 
         groupMatches.forEach(m => {
             const pred = predictions[m.id];
             if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
-                const homeGoals = parseInt(pred.home, 10);
-                const awayGoals = parseInt(pred.away, 10);
+                const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
+                const h = m.homeTeam.name; const a = m.awayTeam.name;
 
-                teams[m.homeTeam.name].pj += 1; teams[m.awayTeam.name].pj += 1;
-                teams[m.homeTeam.name].gf += homeGoals; teams[m.awayTeam.name].gf += awayGoals;
-                teams[m.homeTeam.name].gc += awayGoals; teams[m.awayTeam.name].gc += homeGoals;
-                teams[m.homeTeam.name].dg = teams[m.homeTeam.name].gf - teams[m.homeTeam.name].gc;
-                teams[m.awayTeam.name].dg = teams[m.awayTeam.name].gf - teams[m.awayTeam.name].gc;
+                teams[h].pj++; teams[a].pj++;
+                teams[h].gf += hG; teams[a].gf += aG;
+                teams[h].gc += aG; teams[a].gc += hG;
+                teams[h].dg = teams[h].gf - teams[h].gc;
+                teams[a].dg = teams[a].gf - teams[a].gc;
 
-                if (homeGoals > awayGoals) {
-                    teams[m.homeTeam.name].pts += 3; teams[m.homeTeam.name].pg += 1; teams[m.awayTeam.name].pp += 1;
-                } else if (homeGoals < awayGoals) {
-                    teams[m.awayTeam.name].pts += 3; teams[m.awayTeam.name].pg += 1; teams[m.homeTeam.name].pp += 1;
-                } else {
-                    teams[m.homeTeam.name].pts += 1; teams[m.awayTeam.name].pts += 1; teams[m.homeTeam.name].pe += 1; teams[m.awayTeam.name].pe += 1;
-                }
+                if (hG > aG) { teams[h].pts += 3; teams[h].pg++; teams[a].pp++; } 
+                else if (hG < aG) { teams[a].pts += 3; teams[a].pg++; teams[h].pp++; } 
+                else { teams[h].pts += 1; teams[a].pts += 1; teams[h].pe++; teams[a].pe++; }
             }
         });
 
-        const teamsArray = Object.values(teams);
-        const groupedByPts = {};
-        teamsArray.forEach(t => {
-            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
-            groupedByPts[t.pts].push(t);
-        });
-
-        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
-
+        // 2. Función Recursiva de Desempate (Reglas a, b, c -> d, e -> f)
         const resolveTie = (tiedTeams) => {
-            if (tiedTeams.length <= 1) return [tiedTeams];
+            if (tiedTeams.length <= 1) return tiedTeams;
+
+            // Calcular H2H solo entre los equipos empatados
             const h2hStats = {};
             tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
             const tiedNames = tiedTeams.map(t => t.name);
@@ -300,100 +292,132 @@ const WorldCupPredictions = ({ currentUser }) => {
             groupMatches.forEach(m => {
                 if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
                     const pred = predictions[m.id];
-                    if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
-                        const hG = parseInt(pred.home, 10);
-                        const aG = parseInt(pred.away, 10);
-                        const home = m.homeTeam.name;
-                        const away = m.awayTeam.name;
-                        h2hStats[home].gf += hG; h2hStats[away].gf += aG;
-                        h2hStats[home].dg += (hG - aG); h2hStats[away].dg += (aG - hG);
-                        if (hG > aG) h2hStats[home].pts += 3;
-                        else if (hG < aG) h2hStats[away].pts += 3;
-                        else { h2hStats[home].pts += 1; h2hStats[away].pts += 1; }
+                    if (pred && pred.home !== '' && pred.away !== '') {
+                        const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
+                        const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        
+                        h2hStats[h].gf += hG; h2hStats[a].gf += aG;
+                        h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
+                        if (hG > aG) { h2hStats[h].pts += 3; }
+                        else if (hG < aG) { h2hStats[a].pts += 3; }
+                        else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
                     }
                 }
             });
 
-            const sortedByH2H = [...tiedTeams].sort((a, b) => {
-                const sA = h2hStats[a.name];
-                const sB = h2hStats[b.name];
-                if (sB.pts !== sA.pts) return sB.pts - sA.pts;
-                if (sB.dg !== sA.dg) return sB.dg - sA.dg;
-                return sB.gf - sA.gf;
+            // Agrupar por H2H (Reglas a, b, c)
+            const h2hGroups = {};
+            tiedTeams.forEach(t => {
+                const stats = h2hStats[t.name];
+                const key = `${stats.pts}_${stats.dg}_${stats.gf}`;
+                if (!h2hGroups[key]) h2hGroups[key] = [];
+                h2hGroups[key].push(t);
             });
 
-            const subGroups = [];
-            let currGroup = [sortedByH2H[0]];
-            for (let i = 1; i < sortedByH2H.length; i++) {
-                const prev = h2hStats[sortedByH2H[i-1].name];
-                const curr = h2hStats[sortedByH2H[i].name];
-                if (prev.pts === curr.pts && prev.dg === curr.dg && prev.gf === curr.gf) {
-                    currGroup.push(sortedByH2H[i]);
-                } else {
-                    subGroups.push(currGroup); 
-                    currGroup = [sortedByH2H[i]];
-                }
-            }
-            subGroups.push(currGroup);
+            const sortedH2HKeys = Object.keys(h2hGroups).sort((a, b) => {
+                const [ptsA, dgA, gfA] = a.split('_').map(Number);
+                const [ptsB, dgB, gfB] = b.split('_').map(Number);
+                if (ptsB !== ptsA) return ptsB - ptsA;
+                if (dgB !== dgA) return dgB - dgA;
+                return gfB - gfA;
+            });
 
-            if (subGroups.length === 1) {
-                const sortedByOverall = [...tiedTeams].sort((a, b) => {
-                    if (b.dg !== a.dg) return b.dg - a.dg;
-                    return b.gf - a.gf;
-                });
+            let finalSorted = [];
+
+            sortedH2HKeys.forEach(key => {
+                const subGroup = h2hGroups[key];
                 
-                const overallGroups = [];
-                let currOverallGroup = [sortedByOverall[0]];
-                for (let i = 1; i < sortedByOverall.length; i++) {
-                    const prev = sortedByOverall[i-1];
-                    const curr = sortedByOverall[i];
-                    if (prev.dg === curr.dg && prev.gf === curr.gf) {
-                        currOverallGroup.push(sortedByOverall[i]);
-                    } else {
-                        overallGroups.push(currOverallGroup);
-                        currOverallGroup = [sortedByOverall[i]];
-                    }
-                }
-                overallGroups.push(currOverallGroup);
-                return overallGroups; 
-            }
+                // Si el subgrupo es más pequeño, el ciclo de empate se rompió parcialmente. Recursividad.
+                if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
+                    finalSorted.push(...resolveTie(subGroup));
+                } 
+                // Si el subgrupo sigue siendo igual de grande, el H2H es un círculo perfecto. Pasamos a Reglas d, e.
+                else if (subGroup.length > 1) {
+                    const groupedByOverall = {};
+                    subGroup.forEach(t => {
+                        const oKey = `${t.dg}_${t.gf}`;
+                        if (!groupedByOverall[oKey]) groupedByOverall[oKey] = [];
+                        groupedByOverall[oKey].push(t);
+                    });
+                    
+                    const sortedOverallKeys = Object.keys(groupedByOverall).sort((a, b) => {
+                        const [dgA, gfA] = a.split('_').map(Number);
+                        const [dgB, gfB] = b.split('_').map(Number);
+                        if (dgB !== dgA) return dgB - dgA;
+                        return gfB - gfA;
+                    });
 
-            let finalGroups = [];
-            for (const sg of subGroups) { finalGroups.push(...resolveTie(sg)); }
-            return finalGroups;
+                    sortedOverallKeys.forEach(oKey => {
+                        const finalTied = groupedByOverall[oKey];
+                        // Si después de TODO, siguen empatados (Regla f - FairPlay / Manual)
+                        if (finalTied.length > 1) {
+                            const tNames = finalTied.map(t => t.name);
+                            finalTied.forEach(t => {
+                                t.isTrulyTied = true; // Etiqueta secreta para activar el botón manual
+                                t.tiedTeamNamesArray = tNames;
+                            });
+                            
+                            // Resolver manual o alfabético
+                            finalTied.sort((a, b) => {
+                                const tieA = manualTiebreakers[groupName]?.[a.name] || 99;
+                                const tieB = manualTiebreakers[groupName]?.[b.name] || 99;
+                                if (tieA !== tieB) return tieA - tieB; 
+                                return translateTeam(a.name).localeCompare(translateTeam(b.name));
+                            });
+                        }
+                        finalSorted.push(...finalTied);
+                    });
+                } 
+                else {
+                    finalSorted.push(subGroup[0]);
+                }
+            });
+
+            return finalSorted;
         };
 
-        let finalRankedGroups = [];
-        sortedPtsKeys.forEach(pts => {
-            const groupTeams = groupedByPts[pts];
-            finalRankedGroups.push(...resolveTie(groupTeams)); 
+        // 3. Agrupamos inicialmente solo por Puntos Totales
+        const groupedByPts = {};
+        Object.values(teams).forEach(t => {
+            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
+            groupedByPts[t.pts].push(t);
         });
 
-        let currentRank = 1;
+        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+
         let finalFlattenedStandings = [];
+        let currentRank = 1;
 
-        finalRankedGroups.forEach(groupTeams => {
-            const numTeams = groupTeams.length;
-            const availablePositions = [];
-            for (let i = 0; i < numTeams; i++) availablePositions.push(currentRank + i);
-            const tiedTeamNames = groupTeams.map(t => t.name);
+        // 4. Resolvemos cada bloque de puntos y asignamos etiquetas para el frontend
+        sortedPtsKeys.forEach(pts => {
+            const groupTeams = groupedByPts[pts];
+            const resolved = resolveTie(groupTeams);
 
-            groupTeams.forEach(t => {
-                const isRealTie = numTeams > 1 && t.pj > 0;
-                t.isTied = isRealTie; 
-                t.tieOptions = isRealTie ? availablePositions : [];
-                t.tiedTeamNames = isRealTie ? tiedTeamNames : [];
-            });
-
-            const sortedGroup = [...groupTeams].sort((a, b) => {
-                const tieA = manualTiebreakers[groupName]?.[a.name] || 99;
-                const tieB = manualTiebreakers[groupName]?.[b.name] || 99;
-                if (tieA !== tieB) return tieA - tieB; 
-                return translateTeam(a.name).localeCompare(translateTeam(b.name));
-            });
-
-            finalFlattenedStandings.push(...sortedGroup);
-            currentRank += numTeams;
+            let i = 0;
+            while(i < resolved.length) {
+                const t = resolved[i];
+                if (t.isTrulyTied) {
+                    const tiedBlockSize = t.tiedTeamNamesArray.length;
+                    const availablePositions = [];
+                    for(let k=0; k<tiedBlockSize; k++) { availablePositions.push(currentRank + k); }
+                    
+                    for(let k=0; k<tiedBlockSize; k++) {
+                        const currT = resolved[i+k];
+                        currT.isTied = currT.pj > 0; 
+                        currT.tieOptions = currT.pj > 0 ? availablePositions : [];
+                        currT.tiedTeamNames = currT.pj > 0 ? t.tiedTeamNamesArray : [];
+                    }
+                    currentRank += tiedBlockSize;
+                    i += tiedBlockSize;
+                } else {
+                    t.isTied = false;
+                    t.tieOptions = [];
+                    t.tiedTeamNames = [];
+                    currentRank += 1;
+                    i++;
+                }
+            }
+            finalFlattenedStandings.push(...resolved);
         });
 
         return finalFlattenedStandings;
@@ -553,7 +577,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
     };
 
-    // 🟢 MAGIA SUPREMA: INTERCAMBIO TOTAL (SWAP)
     const replaceKnockoutPick = (roundId, oldTeam, newTeam) => {
         if (isCurrentMainTabLocked) return;
         setKnockoutPicks(prev => {
@@ -563,7 +586,6 @@ const WorldCupPredictions = ({ currentUser }) => {
             const startIndex = roundsOrder.indexOf(roundId);
             
             if (startIndex !== -1) {
-                // Función que invierte los destinos de dos equipos
                 const swapInArray = (arr) => {
                     if (!Array.isArray(arr)) return [];
                     return arr.map(t => {
@@ -573,13 +595,11 @@ const WorldCupPredictions = ({ currentUser }) => {
                     });
                 };
 
-                // Aplicar el intercambio SOLO de la ronda actual hacia adelante
                 for (let i = startIndex; i < roundsOrder.length; i++) {
                     const r = roundsOrder[i];
                     newPicks[r] = swapInArray(newPicks[r]);
                 }
                 
-                // Aplicar el intercambio en los puestos de honor
                 podiumSlots.forEach(slot => {
                     newPicks[slot] = swapInArray(newPicks[slot]);
                 });
@@ -617,14 +637,12 @@ const WorldCupPredictions = ({ currentUser }) => {
 
                     if (roundId === 'campeon') {
                         const finalistas = newPicks.semis || [];
-                        // Si nos pasaron el oponente directamente, usamos ese, sino lo deducimos
                         const sub = opponentTeam || finalistas.find(t => t.name !== team.name);
                         if (sub) newPicks.subcampeon = [sub];
                     }
                     if (roundId === 'tercero') {
                         const semifinalistas = newPicks.cuartos || []; 
                         const finalistas = newPicks.semis || []; 
-                        // Si nos pasaron el oponente directamente, usamos ese, sino lo deducimos
                         const contenders = semifinalistas.filter(st => !finalistas.some(ft => ft.name === st.name));
                         const cuarto = opponentTeam || contenders.find(t => t.name !== team.name);
                         if (cuarto) newPicks.cuarto = [cuarto];
@@ -884,6 +902,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                 <StandingsTable 
                                     currentGroupStandings={currentGroupStandings} hasTiesInGroup={hasTiesInGroup} manualTiebreakers={manualTiebreakers}
                                     selectedSubTab={selectedSubTab} handleManualTiebreaker={handleManualTiebreaker}
+                                    isGroupStageComplete={isGroupStageComplete} qualifiedRoundOf32={qualifiedRoundOf32} 
                                 />
                             </div>
                         </div>
