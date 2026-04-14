@@ -249,7 +249,7 @@ const KnockoutTab = ({
                                 Equipos Fantasma Detectados
                             </h4>
                             <p className="text-[10px] sm:text-xs text-foreground-muted leading-tight">
-                                Tienes <strong>{invalidPicks.length}</strong> selección(es) antigua(s) que ya no coincide(n) con tus llaves actuales. Limpia este error para poder continuar.
+                                Tienes <strong>{invalidPicks.length}</strong> selección(es) antigua(s) que ya no coincide(n) con tus llaves actuales debido a versiones actualizadas de la App. Limpia este error para poder continuar.
                             </p>
                         </div>
                     </div>
