@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
+import toast from 'react-hot-toast';
 
 // --- TRADUCCIONES Y CONSTANTES ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
@@ -82,12 +83,13 @@ const WorldCupGrid = ({ currentUser }) => {
     const [isApiLoading, setIsApiLoading] = useState(true);
     const [isDbLoading, setIsDbLoading] = useState(true);
     const [isLivePollingActive, setIsLivePollingActive] = useState(false);
+    const [isAutoSyncActive, setIsAutoSyncActive] = useState(false);
 
     const scrollContainerRef = useRef(null);
     const lastSyncTime = useRef(0);
     const prevSimDateRef = useRef(''); 
     const apiFetchedRef = useRef(false); // <--- 1. AGREGA ESTA LÍNEA
-    
+    const autoSyncTimeRef = useRef(0);
 
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
         try {
@@ -170,7 +172,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
         let pollInterval;
 
-        if (hasLiveMatches) {
+        if (hasLiveMatches || isAutoSyncActive) {
             pollInterval = setInterval(() => {
                 const now = Date.now();
                 if (now - lastSyncTime.current >= 14000) {
@@ -189,7 +191,51 @@ const WorldCupGrid = ({ currentUser }) => {
         }
 
         return () => clearInterval(pollInterval);
-    }, [matches, isAdmin, fetchApiMatches]);
+    }, [matches, isAdmin, fetchApiMatches, isAutoSyncActive]);
+
+    // 🟢 ROBOT AUTO-SYNC: Sincroniza la API con la Base de Datos automáticamente
+    useEffect(() => {
+        if (!isAdmin || !isAutoSyncActive) return;
+
+        const performAutoSync = async () => {
+            const now = Date.now();
+            if (now - autoSyncTimeRef.current < 14000) return;
+            autoSyncTimeRef.current = now;
+
+            try {
+                const data = await getWorldCupMatches();
+                if (!data || !data.matches) return;
+
+                const adminDoc = await getDoc(doc(db, 'worldCupAdmin', 'results'));
+                let dbPreds = adminDoc.exists() ? (adminDoc.data().predictions || {}) : {};
+                let currentLocks = adminDoc.exists() ? (adminDoc.data().lockedMatches || {}) : {};
+                let hasChanges = false;
+
+                data.matches.forEach(m => {
+                    if (currentLocks[m.id]) return; 
+
+                    const apiH = (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) ? m.score.fullTime.home : '';
+                    const apiA = (m.score?.fullTime?.away !== null && m.score?.fullTime?.away !== undefined) ? m.score.fullTime.away : '';
+
+                    if (dbPreds[m.id]?.home !== apiH || dbPreds[m.id]?.away !== apiA) {
+                        dbPreds[m.id] = { ...dbPreds[m.id], home: apiH, away: apiA };
+                        hasChanges = true;
+                    }
+                });
+
+                if (hasChanges) {
+                    await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
+                    toast.success('⚽ ¡Auto-Sync: Marcadores sincronizados en la Grilla!', { id: 'autosync-grid-toast' });
+                }
+            } catch (error) {
+                console.error("❌ Error en Auto-Sync:", error);
+            }
+        };
+
+        performAutoSync();
+        const intervalId = setInterval(performAutoSync, 15000);
+        return () => clearInterval(intervalId);
+    }, [isAdmin, isAutoSyncActive]);
 
     const simulatedDate = adminResults?.simulation?.simulatedDate || '';
 
@@ -635,8 +681,26 @@ const WorldCupGrid = ({ currentUser }) => {
                     </div>
                 </div>
             </div>
-
+{isAdmin && (
+                <div className="mb-6 flex justify-center animate-fade-in">
+                    <button
+                        onClick={() => setIsAutoSyncActive(!isAutoSyncActive)}
+                        className={`flex items-center gap-3 px-6 py-3 rounded-full font-black text-sm uppercase tracking-widest shadow-lg transition-all transform hover:scale-105 ${
+                            isAutoSyncActive 
+                            ? 'bg-green-500 text-white shadow-green-500/30 border-2 border-green-400' 
+                            : 'bg-card text-foreground-muted border-2 border-border hover:bg-background-offset'
+                        }`}
+                    >
+                        {isAutoSyncActive ? (
+                            <><span className="animate-spin text-xl">🔄</span> Auto-Sync Activado (15s)</>
+                        ) : (
+                            <><span className="text-xl">📡</span> Activar Auto-Sync API</>
+                        )}
+                    </button>
+                </div>
+            )}
             {isAdmin && (
+                
                 <div className="mb-8 bg-purple-900/20 border border-purple-500/30 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(168,85,247,0.05)] animate-fade-in">
                     <div className="flex items-center gap-3">
                         <span className="text-2xl sm:text-3xl animate-pulse">⏱️</span>
