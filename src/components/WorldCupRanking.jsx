@@ -101,49 +101,164 @@ const WorldCupRanking = () => {
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, []);
 
+    const effectiveMatches = useMemo(() => {
+        return matches.map(m => {
+            const simStatus = adminResults?.simulation?.matchStatuses?.[m.id];
+            if (simStatus && simStatus !== '') {
+                return { ...m, status: simStatus };
+            }
+            return m;
+        });
+    }, [matches, adminResults]);
+
+    // 🟢 CEREBRO FUSIONADO: Combina lo manual del Admin con lo vivo de la API
+    const mergedAdminPreds = useMemo(() => {
+        const preds = { ...(adminResults?.predictions || {}) };
+        effectiveMatches.forEach(m => {
+            const status = m.status || '';
+            const hasO = (preds[m.id] && preds[m.id].home !== '' && preds[m.id].away !== '') || status === 'FINISHED' || status.includes('PLAY');
+            
+            if (hasO) {
+                if (preds[m.id]?.home === undefined || preds[m.id]?.home === '') {
+                    if (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) {
+                        preds[m.id] = {
+                            ...preds[m.id],
+                            home: m.score.fullTime.home,
+                            away: m.score.fullTime.away
+                        };
+                    }
+                }
+            }
+        });
+        return preds;
+    }, [adminResults, effectiveMatches]);
+
+    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero (Igualado con la Grilla)
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
         groupMatches.forEach(m => {
-            const h = m.homeTeam.name; const v = m.awayTeam.name;
-            if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
-            if (!teams[v]) teams[v] = { name: v, pts: 0, dg: 0, gf: 0 };
+            const h = m.homeTeam?.name || 'Por definir';
+            const a = m.awayTeam?.name || 'Por definir';
+            if (!teams[h]) teams[h] = { name: h, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
+            if (!teams[a]) teams[a] = { name: a, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
         });
 
         groupMatches.forEach(m => {
             const pr = preds?.[m.id];
             if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '' && pr.away !== undefined) {
                 const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
-                teams[m.homeTeam.name].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
-                teams[m.awayTeam.name].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
-                teams[m.homeTeam.name].dg += (gh - ga); teams[m.awayTeam.name].dg += (ga - gh);
-                teams[m.homeTeam.name].gf += gh; teams[m.awayTeam.name].gf += ga;
+                const h = m.homeTeam.name; const a = m.awayTeam.name;
+                teams[h].pj++; teams[a].pj++;
+                teams[h].gf += gh; teams[a].gf += ga;
+                teams[h].gc += ga; teams[a].gc += gh;
+                teams[h].dg = teams[h].gf - teams[h].gc;
+                teams[a].dg = teams[a].gf - teams[a].gc;
+                if (gh > ga) { teams[h].pts += 3; teams[h].pg++; teams[a].pp++; } 
+                else if (gh < ga) { teams[a].pts += 3; teams[a].pg++; teams[h].pp++; } 
+                else { teams[h].pts += 1; teams[a].pts += 1; teams[h].pe++; teams[a].pe++; }
             }
         });
 
-        return Object.values(teams).sort((a, b) => {
-            if (b.pts !== a.pts) return b.pts - a.pts;
-            if (b.dg !== a.dg) return b.dg - a.dg;
-            if (b.gf !== a.gf) return b.gf - a.gf;
-            const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
-            const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
-            if (tieA !== tieB) return tieA - tieB; 
-            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+        const resolveTie = (tiedTeams) => {
+            if (tiedTeams.length <= 1) return tiedTeams;
+
+            const h2hStats = {};
+            tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
+            const tiedNames = tiedTeams.map(t => t.name);
+
+            groupMatches.forEach(m => {
+                if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
+                    const pr = preds?.[m.id];
+                    if (pr && pr.home !== '' && pr.away !== '') {
+                        const hG = parseInt(pr.home, 10); const aG = parseInt(pr.away, 10);
+                        const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        h2hStats[h].gf += hG; h2hStats[a].gf += aG;
+                        h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
+                        if (hG > aG) h2hStats[h].pts += 3;
+                        else if (hG < aG) h2hStats[a].pts += 3;
+                        else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
+                    }
+                }
+            });
+
+            const h2hGroups = {};
+            tiedTeams.forEach(t => {
+                const stats = h2hStats[t.name];
+                const key = `${stats.pts}_${stats.dg}_${stats.gf}`;
+                if (!h2hGroups[key]) h2hGroups[key] = [];
+                h2hGroups[key].push(t);
+            });
+
+            const sortedH2HKeys = Object.keys(h2hGroups).sort((a, b) => {
+                const [ptsA, dgA, gfA] = a.split('_').map(Number);
+                const [ptsB, dgB, gfB] = b.split('_').map(Number);
+                if (ptsB !== ptsA) return ptsB - ptsA;
+                if (dgB !== dgA) return dgB - dgA;
+                return gfB - gfA;
+            });
+
+            let finalSorted = [];
+            sortedH2HKeys.forEach(key => {
+                const subGroup = h2hGroups[key];
+                if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
+                    finalSorted.push(...resolveTie(subGroup));
+                } else if (subGroup.length > 1) {
+                    const groupedByOverall = {};
+                    subGroup.forEach(t => {
+                        const oKey = `${t.dg}_${t.gf}`;
+                        if (!groupedByOverall[oKey]) groupedByOverall[oKey] = [];
+                        groupedByOverall[oKey].push(t);
+                    });
+                    const sortedOverallKeys = Object.keys(groupedByOverall).sort((a, b) => {
+                        const [dgA, gfA] = a.split('_').map(Number);
+                        const [dgB, gfB] = b.split('_').map(Number);
+                        if (dgB !== dgA) return dgB - dgA;
+                        return gfB - gfA;
+                    });
+                    sortedOverallKeys.forEach(oKey => {
+                        const finalTied = groupedByOverall[oKey];
+                        if (finalTied.length > 1) {
+                            finalTied.sort((a, b) => {
+                                const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
+                                const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
+                                if (tieA !== tieB) return tieA - tieB; 
+                                return translateTeam(a.name).localeCompare(translateTeam(b.name));
+                            });
+                        }
+                        finalSorted.push(...finalTied);
+                    });
+                } else {
+                    finalSorted.push(subGroup[0]);
+                }
+            });
+            return finalSorted;
+        };
+
+        const groupedByPts = {};
+        Object.values(teams).forEach(t => {
+            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
+            groupedByPts[t.pts].push(t);
         });
+
+        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+        let finalFlattenedStandings = [];
+        sortedPtsKeys.forEach(pts => {
+            finalFlattenedStandings.push(...resolveTie(groupedByPts[pts]));
+        });
+        return finalFlattenedStandings;
     }, []);
 
-    const groupStageMatches = useMemo(() => matches.filter(m => m.stage === 'GROUP_STAGE'), [matches]);
+    const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
 
     const isGroupStageFinished = useMemo(() => {
         if (groupStageMatches.length === 0) return false;
         return groupStageMatches.every(m => {
-            const apiFinished = m.status === 'FINISHED';
-            const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
-            return apiFinished || adminFinished;
+            const p = mergedAdminPreds[m.id];
+            return p && p.home !== '' && p.home !== undefined;
         });
-    }, [groupStageMatches, adminResults]);
+    }, [groupStageMatches, mergedAdminPreds]);
 
     const adminQualified32 = useMemo(() => {
-        if (!adminResults?.predictions) return [];
         let top2 = []; let thirds = [];
         const byGroup = groupStageMatches.reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
@@ -151,12 +266,12 @@ const WorldCupRanking = () => {
         }, {});
         
         Object.keys(byGroup).forEach(g => {
-            const st = getStandings(byGroup[g], adminResults.predictions, g, adminResults.manualTiebreakers);
+            const st = getStandings(byGroup[g], mergedAdminPreds, g, adminResults?.manualTiebreakers);
             if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return [...top2, ...thirds.slice(0, 8)];
-    }, [groupStageMatches, adminResults, getStandings]);
+    }, [groupStageMatches, mergedAdminPreds, adminResults, getStandings]);
 
     const ranking = useMemo(() => {
         const ranks = [];
@@ -171,11 +286,13 @@ const WorldCupRanking = () => {
 
             const stats = { plenosCount: 0, ptsPlenos: 0, ptsOtrosAciertos: 0, ptsHonorYBonos: 0, ptsRondas: 0, ptsExtras: 0, ptsEventos: 0, total: 0 };
 
-            matches.forEach(m => {
-                const p = userData.predictions?.[m.id]; const a = adminResults?.predictions?.[m.id];
-                const rH = a?.home !== undefined && a?.home !== '' ? a.home : m.score?.fullTime?.home;
-                const rA = a?.away !== undefined && a?.away !== '' ? a.away : m.score?.fullTime?.away;
-                const hasO = (a && a.home !== '' && a.away !== '') || m.status === 'FINISHED' || m.status.includes('PLAY');
+            effectiveMatches.forEach(m => {
+                const p = userData.predictions?.[m.id]; 
+                const rH = mergedAdminPreds[m.id]?.home;
+                const rA = mergedAdminPreds[m.id]?.away;
+                const matchStatus = m.status || '';
+                const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                
                 if (hasO && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
                     if (pH == rH && pA == rA) { stats.plenosCount++; stats.ptsPlenos += 5; }
@@ -193,7 +310,6 @@ const WorldCupRanking = () => {
             Object.keys(byGroup).forEach(g => {
                 const groupMatches = byGroup[g];
                 
-                // 🛑 SEGURO CONTRA PUNTOS FANTASMA: Contar cuántos partidos de este grupo predijo el usuario
                 let predictedCount = 0;
                 groupMatches.forEach(m => {
                     const p = userData.predictions?.[m.id];
@@ -202,21 +318,18 @@ const WorldCupRanking = () => {
                     }
                 });
 
-                // Si no predijo NINGÚN partido, se ignora el grupo
                 if (predictedCount === 0) return;
 
                 const isGroupFinished = groupMatches.every(m => {
-                    const apiFinished = m.status === 'FINISHED';
-                    const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
-                    return apiFinished || adminFinished;
+                    const p = mergedAdminPreds[m.id];
+                    return p && p.home !== '' && p.home !== undefined;
                 });
                 
                 const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
                 
-                // Solo gana el PLENO si predijo el grupo completo (los 6 partidos)
                 if (isGroupFinished && predictedCount === groupMatches.length) {
-                    const aT = getStandings(groupMatches, adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                    const aT = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
                     if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
                         stats.ptsHonorYBonos += 8;
                     }
@@ -226,21 +339,17 @@ const WorldCupRanking = () => {
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            // --- INICIO DE PUNTOS EXACTOS DE RONDAS ---
-            
-            // 1. PUNTOS POR CLASIFICAR A 16VOS (32 equipos): 2 pts c/u
             if (isGroupStageFinished && adminQualified32.length > 0) {
                 userQualified32.forEach(ut => {
                     if (adminQualified32.some(at => at.name === ut.name)) stats.ptsRondas += 2;
                 });
             }
 
-            // 2. PUNTOS POR AVANZAR EN EL BRACKET
             const koRounds = [
-                { id: 'dieciseisavos', pts: 3 }, // Los 16 que ganan 16vos y pasan a Octavos
-                { id: 'octavos', pts: 4 },       // Los 8 que ganan Octavos y pasan a Cuartos
-                { id: 'cuartos', pts: 5 },       // Los 4 que ganan Cuartos y pasan a Semis
-                { id: 'semis', pts: 6 }          // Los 2 que ganan Semis y pasan a la Final
+                { id: 'dieciseisavos', pts: 3 }, 
+                { id: 'octavos', pts: 4 },       
+                { id: 'cuartos', pts: 5 },       
+                { id: 'semis', pts: 6 }          
             ];
 
             koRounds.forEach(r => {
@@ -253,7 +362,6 @@ const WorldCupRanking = () => {
                 }
             });
 
-            // 3. PUNTOS POR PASAR A 3ER PUESTO (Los 2 que pierden Semis): 4 pts c/u
             const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
             const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
             if (aThirdsList.length > 0) {
@@ -261,21 +369,26 @@ const WorldCupRanking = () => {
                     if (ut && aThirdsList.some(at => at && at.name === ut.name)) stats.ptsRondas += 4;
                 });
             }
-            // --- FIN DE PUNTOS EXACTOS DE RONDAS ---
 
             extraQuestions.forEach(q => {
                 const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
                 if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) stats.ptsExtras += 6;
             });
             specialEvents.forEach(e => {
-                const u = userData.eventPicks?.[e.id]; const a = adminResults?.eventPicks?.[e.id];
-                if (u && a === u) stats.ptsEventos += (u === 'SI' ? 5 : 2);
+                let u = userData.eventPicks?.[e.id]; 
+                let a = adminResults?.eventPicks?.[e.id];
+                if (u && a) {
+                    u = String(u).toUpperCase().trim();
+                    a = String(a).toUpperCase().trim();
+                    if (a === u) {
+                        stats.ptsEventos += (u === 'SI' ? 5 : 2);
+                    }
+                }
             });
 
             const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
-            let honorHits = 0;
             honorSlots.forEach(s => {
-                if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { stats.ptsHonorYBonos += s.pts; honorHits++; }
+                if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { stats.ptsHonorYBonos += s.pts; }
             });
             
             let isSuperBono = false;
@@ -295,7 +408,7 @@ const WorldCupRanking = () => {
             r.position = currentRank;
         });
         return ranks;
-    }, [allPredictions, matches, groupStageMatches, adminResults, usersInfo, isGroupStageFinished, adminQualified32, getStandings]);
+    }, [allPredictions, effectiveMatches, groupStageMatches, adminResults, usersInfo, isGroupStageFinished, adminQualified32, getStandings, mergedAdminPreds]);
 
     const premiosRepartidos = useMemo(() => {
         if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, r1: 1, r2: 0, r3: 0 };

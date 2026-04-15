@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import logocopa from '../assets/logocopa.png';
 import StatsBanner from './StatsBanner';
 
+import { generateFullBracket } from '../services/bracketEngine'; 
+
 import { 
     translateTeam, 
     extraQuestions, 
@@ -83,7 +85,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 });
 
                 Object.keys(groupedGroups).forEach(key => groupedGroups[key].sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)));
-                Object.keys(ko).forEach(key => ko[key].sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)));
+                Object.keys(ko).forEach(key => ko[key].sort((a, b) => Number(a.id) - Number(b.id)));
 
                 setMatchesByGroup(groupedGroups);
                 setKnockoutMatches(ko);
@@ -428,7 +430,62 @@ const WorldCupPredictions = ({ currentUser }) => {
         );
     }, [matchesByGroup, predictions]);
 
+    function getStandingsForAdmin(groupMatches, preds, groupName, tiebreakers) {
+        const teams = {};
+        groupMatches.forEach(m => {
+            const h = m.homeTeam?.name || 'Por definir'; const a = m.awayTeam?.name || 'Por definir';
+            if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
+            if (!teams[a]) teams[a] = { name: a, pts: 0, dg: 0, gf: 0 };
+        });
+        groupMatches.forEach(m => {
+            const pr = preds?.[m.id];
+            if (pr && pr.home !== '' && pr.away !== '') {
+                const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
+                teams[m.homeTeam.name].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
+                teams[m.awayTeam.name].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
+                teams[m.homeTeam.name].dg += (gh - ga); teams[m.awayTeam.name].dg += (ga - gh);
+                teams[m.homeTeam.name].gf += gh; teams[m.awayTeam.name].gf += ga;
+            }
+        });
+        return Object.values(teams).sort((a, b) => {
+            if (b.pts !== a.pts) return b.pts - a.pts;
+            if (b.dg !== a.dg) return b.dg - a.dg;
+            if (b.gf !== a.gf) return b.gf - a.gf;
+            const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
+            const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
+            if (tieA !== tieB) return tieA - tieB; 
+            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+        });
+    }
+
+    const isAdminGroupStageComplete = useMemo(() => {
+        const allGroupMatches = Object.values(matchesByGroup).flat();
+        if (allGroupMatches.length === 0) return false;
+        return allGroupMatches.every(m => 
+            adminResults?.predictions?.[m.id]?.home !== undefined && adminResults?.predictions?.[m.id]?.home !== '' && 
+            adminResults?.predictions?.[m.id]?.away !== undefined && adminResults?.predictions?.[m.id]?.away !== ''
+        );
+    }, [matchesByGroup, adminResults]);
+
+    const adminQualified32 = useMemo(() => {
+        if (!isAdminGroupStageComplete) return [];
+        
+        const adminPreds = adminResults?.predictions || {};
+        const adminTies = adminResults?.manualTiebreakers || {};
+        
+        let top2 = []; let thirds = [];
+        Object.keys(matchesByGroup).forEach(groupName => {
+            const standings = getStandingsForAdmin(matchesByGroup[groupName], adminPreds, groupName, adminTies);
+            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
+        });
+        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+        return [...top2, ...thirds.slice(0, 8)];
+    }, [matchesByGroup, adminResults, isAdminGroupStageComplete]);
+
     const qualifiedRoundOf32 = useMemo(() => {
+        if (!isGroupStageComplete) return { all32: [] }; 
         let top2 = []; let thirds = [];
         Object.keys(matchesByGroup).forEach(groupName => {
             const standings = calculateStandings(groupName);
@@ -438,7 +495,14 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, calculateStandings]);
+    }, [matchesByGroup, calculateStandings, isGroupStageComplete]);
+
+    const adminFullBracket = useMemo(() => {
+        if (!isAdminGroupStageComplete || adminQualified32?.length < 32) return null;
+        
+        const currentKOPicks = adminResults?.knockoutPicks || {};
+        return generateFullBracket(adminQualified32, currentKOPicks);
+    }, [isAdminGroupStageComplete, adminQualified32, adminResults?.knockoutPicks]);
 
     const getAvailableTeamsForRound = useCallback((roundId) => {
         switch(roundId) {
@@ -506,17 +570,19 @@ const WorldCupPredictions = ({ currentUser }) => {
         if (activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) return;
         if (value !== '' && (isNaN(value) || value < 0 || value > 99)) return;
         
-        setPredictions(prev => ({
-            ...prev, [matchId]: { ...prev[matchId], [team]: value === '' ? '' : parseInt(value, 10) }
-        }));
+        setPredictions(prev => {
+            const newPreds = {
+                ...prev, [matchId]: { ...prev[matchId], [team]: value === '' ? '' : parseInt(value, 10) }
+            };
+            return newPreds;
+        });
 
-        // 🟢 MAGIA DE PROTECCIÓN: Si cambias un partido de grupos, se borran tus rondas finales automáticamente
         const isGroupMatch = Object.values(matchesByGroup).flat().some(m => String(m.id) === String(matchId));
         if (isGroupMatch) {
             setKnockoutPicks(prev => {
                 const hasPicks = Object.values(prev).some(arr => arr && arr.length > 0);
                 if (hasPicks) {
-                    setTimeout(() => toast('Llaves reiniciadas por cambio en Fase de Grupos', { icon: '🧹', id: 'reset-bracket' }), 100);
+                    setTimeout(() => toast('El Árbol de Clasificados se recalculó automáticamente', { icon: '🧹', id: 'reset-bracket' }), 100);
                     return { dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] };
                 }
                 return prev;
@@ -524,12 +590,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     };
 
-    const handleCustomTeamChange = (matchId, side, teamName) => {
-        if (!isAdmin) return; 
-        setPredictions(prev => ({
-            ...prev, [matchId]: { ...(prev[matchId] || {}), [side === 'home' ? 'customHomeTeam' : 'customAwayTeam']: teamName }
-        }));
-    };
+    const handleCustomTeamChange = () => {};
 
     const handleExtraChange = (extraId, value) => {
         if (isCurrentMainTabLocked) return;
@@ -558,6 +619,7 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     const handleManualTiebreaker = (group, teamName, positionValue, tiedTeamNames, tieOptions) => {
         if (isSubTabLocked(selectedSubTab)) return;
+        
         setManualTiebreakers(prev => {
             const groupTies = { ...(prev[group] || {}) };
             const newVal = positionValue === '' ? 0 : parseInt(positionValue, 10);
@@ -579,11 +641,10 @@ const WorldCupPredictions = ({ currentUser }) => {
             return { ...prev, [group]: groupTies };
         });
 
-        // 🟢 MAGIA DE PROTECCIÓN: Si cambias el orden manual, también se borran las llaves
         setKnockoutPicks(prev => {
             const hasPicks = Object.values(prev).some(arr => arr && arr.length > 0);
             if (hasPicks) {
-                setTimeout(() => toast('Llaves reiniciadas por cambio en desempates', { icon: '🧹', id: 'reset-bracket' }), 100);
+                setTimeout(() => toast('El Árbol de Clasificados se recalculó automáticamente', { icon: '🧹', id: 'reset-bracket' }), 100);
                 return { dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] };
             }
             return prev;
@@ -724,13 +785,9 @@ const WorldCupPredictions = ({ currentUser }) => {
             newPreds[m.id] = { home: Math.floor(Math.random() * 4), away: Math.floor(Math.random() * 4) };
         });
 
+        // En simulación solo se llenan goles para que el árbol se arme solo
         Object.values(knockoutMatches).flat().forEach(m => {
-             newPreds[m.id] = { 
-                home: Math.floor(Math.random() * 4), 
-                away: Math.floor(Math.random() * 4), 
-                customHomeTeam: shuffledTeams[Math.floor(Math.random() * shuffledTeams.length)]?.name, 
-                customAwayTeam: shuffledTeams[Math.floor(Math.random() * shuffledTeams.length)]?.name 
-             };
+             newPreds[m.id] = { home: Math.floor(Math.random() * 4), away: Math.floor(Math.random() * 4) };
         });
         
         setPredictions(newPreds);
@@ -748,7 +805,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
         setExtraPicks(newExtras);
         
-        toast.success("✅ Marcadores generados. Selecciona los ganadores de las llaves manualmente.");
+        toast.success("✅ Marcadores generados. Verifica el Árbol de Clasificados.");
     };
 
     const handleSubTabScroll = (direction) => {
@@ -811,16 +868,15 @@ const WorldCupPredictions = ({ currentUser }) => {
                 <div className="bg-card border border-card-border p-1.5 sm:p-2 rounded-[2rem] sm:rounded-full shadow-xl flex w-full max-w-3xl items-center justify-between gap-1 backdrop-blur-sm relative overflow-hidden group">
                     {tabs.map((tab) => {
                         const isSelected = activeTab === tab.id;
-                        const isLocked = !isAdmin && activePhase !== 'ALL_OPEN' && activePhase !== tab.linkedPhase && tab.id !== 'partidos';
                         
                         return (
                             <button
-                                key={tab.id} onClick={() => setActiveTab(tab.id)} disabled={isLocked}
-                                className={`flex flex-1 flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2.5 py-2 sm:py-0 sm:h-12 px-0.5 sm:px-6 rounded-xl sm:rounded-full font-black transition-all duration-300 relative overflow-hidden disabled:opacity-50 disabled:grayscale ${
+                                key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                className={`flex flex-1 flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2.5 py-2 sm:py-0 sm:h-12 px-0.5 sm:px-6 rounded-xl sm:rounded-full font-black transition-all duration-300 relative overflow-hidden ${
                                     isSelected ? 'bg-gradient-to-br from-primary to-amber-600 text-white shadow-lg sm:scale-105 z-10' : 'bg-transparent text-foreground-muted hover:bg-background-offset hover:text-foreground'
                                 }`}
                             >
-                                <span className="text-[18px] sm:text-base relative z-10 leading-none mb-0.5 sm:mb-0">{isLocked ? '🔒' : tab.icon}</span>
+                                <span className="text-[18px] sm:text-base relative z-10 leading-none mb-0.5 sm:mb-0">{tab.icon}</span>
                                 <span className="text-[8px] sm:text-xs uppercase tracking-tight sm:tracking-wider text-center relative z-10 w-full whitespace-nowrap">{tab.label}</span>
                             </button>
                         );
@@ -930,9 +986,10 @@ const WorldCupPredictions = ({ currentUser }) => {
                             
                             {knockoutMatches[selectedSubTab]?.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    {knockoutMatches[selectedSubTab].map(match => (
+                                    {knockoutMatches[selectedSubTab].map((match, index) => (
                                         <MatchCard 
-                                            key={match.id} match={match} isLocked={isSubTabLocked(selectedSubTab)}
+                                            key={match.id} match={match} index={index} adminFullBracket={adminFullBracket}
+                                            isLocked={isSubTabLocked(selectedSubTab)}
                                             allowTbdInput={activePhase === 'ALL_OPEN'} predictions={predictions} adminResults={adminResults} 
                                             allTeams={allTeams} isAdmin={isAdmin} handleScoreChange={handleScoreChange} handleCustomTeamChange={handleCustomTeamChange} 
                                             lockedMatches={lockedMatches} handleToggleLockMatch={handleToggleLockMatch} 

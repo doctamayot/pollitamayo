@@ -178,6 +178,28 @@ const WorldCupGrid = ({ currentUser }) => {
         });
     }, [matches, adminResults]);
 
+    // 🟢 CEREBRO FUSIONADO: Combina lo manual del Admin con lo vivo de la API
+    const mergedAdminPreds = useMemo(() => {
+        const preds = { ...(adminResults?.predictions || {}) };
+        effectiveMatches.forEach(m => {
+            const status = m.status || '';
+            const hasO = (preds[m.id] && preds[m.id].home !== '' && preds[m.id].away !== '') || status === 'FINISHED' || status.includes('PLAY');
+            
+            if (hasO) {
+                if (preds[m.id]?.home === undefined || preds[m.id]?.home === '') {
+                    if (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) {
+                        preds[m.id] = {
+                            ...preds[m.id],
+                            home: m.score.fullTime.home,
+                            away: m.score.fullTime.away
+                        };
+                    }
+                }
+            }
+        });
+        return preds;
+    }, [adminResults, effectiveMatches]);
+
     const handleSimulateDate = async (newDate) => {
         const adminRef = doc(db, 'worldCupAdmin', 'results');
         await setDoc(adminRef, { simulation: { simulatedDate: newDate } }, { merge: true });
@@ -209,7 +231,7 @@ const WorldCupGrid = ({ currentUser }) => {
         return Array.from(teamsMap.values());
     }, [effectiveMatches]);
 
-    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero
+    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero (Igualado con Rankings)
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
         groupMatches.forEach(m => {
@@ -336,22 +358,20 @@ const WorldCupGrid = ({ currentUser }) => {
     const isGroupStageFinished = useMemo(() => {
         if (groupStageMatches.length === 0) return false;
         return groupStageMatches.every(m => {
-            const apiFinished = m.status === 'FINISHED';
-            const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
-            return apiFinished || adminFinished;
+            const p = mergedAdminPreds[m.id];
+            return p && p.home !== '' && p.home !== undefined;
         });
-    }, [groupStageMatches, adminResults]);
+    }, [groupStageMatches, mergedAdminPreds]);
 
     const adminQualified32 = useMemo(() => {
-        if (!adminResults?.predictions) return [];
         let top2 = []; let thirds = [];
         Object.keys(groupMatchesMap).forEach(g => {
-            const st = getStandings(groupMatchesMap[g], adminResults.predictions, g, adminResults.manualTiebreakers);
+            const st = getStandings(groupMatchesMap[g], mergedAdminPreds, g, adminResults?.manualTiebreakers);
             if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return [...top2, ...thirds.slice(0, 8)];
-    }, [groupMatchesMap, adminResults, getStandings]);
+    }, [groupMatchesMap, mergedAdminPreds, adminResults, getStandings]);
 
     const liveRanking = useMemo(() => {
         const ranks = [];
@@ -362,11 +382,11 @@ const WorldCupGrid = ({ currentUser }) => {
             let total = 0;
 
             effectiveMatches.forEach(m => {
-                const p = userData.predictions?.[m.id]; const a = adminResults?.predictions?.[m.id];
-                const rH = a?.home !== undefined && a?.home !== '' ? a.home : m.score?.fullTime?.home;
-                const rA = a?.away !== undefined && a?.away !== '' ? a.away : m.score?.fullTime?.away;
+                const p = userData.predictions?.[m.id]; 
+                const rH = mergedAdminPreds[m.id]?.home;
+                const rA = mergedAdminPreds[m.id]?.away;
                 const matchStatus = m.status || '';
-                const hasO = (a && a.home !== '' && a.away !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
                 
                 if (hasO && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
@@ -396,7 +416,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
                 const groupIsOver = groupMatches.every(m => {
                     const apiFinished = m.status === 'FINISHED';
-                    const adminFinished = adminResults?.predictions?.[m.id] && adminResults.predictions[m.id].home !== '' && adminResults.predictions[m.id].home !== null;
+                    const adminFinished = mergedAdminPreds[m.id] && mergedAdminPreds[m.id].home !== '' && mergedAdminPreds[m.id].home !== null;
                     return apiFinished || adminFinished;
                 });
 
@@ -404,7 +424,7 @@ const WorldCupGrid = ({ currentUser }) => {
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
 
                 if (groupIsOver && predictedCount === groupMatches.length) {
-                    const aT = getStandings(groupMatches, adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                    const aT = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
                     if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
                         total += 8;
                     }
@@ -497,7 +517,7 @@ const WorldCupGrid = ({ currentUser }) => {
         });
 
         return ranks;
-    }, [allPredictions, effectiveMatches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings]);
+    }, [allPredictions, effectiveMatches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings, mergedAdminPreds]);
 
     const matchesByDate = useMemo(() => {
         const grouped = {};
@@ -746,11 +766,11 @@ const WorldCupGrid = ({ currentUser }) => {
 
             <div className="space-y-6 sm:space-y-10">
                 {sortedMatchesOfDay.map(match => {
-                    const a = adminResults?.predictions?.[match.id];
-                    const rH = a?.home !== undefined && a?.home !== '' ? a.home : match.score?.fullTime?.home;
-                    const rA = a?.away !== undefined && a?.away !== '' ? a.away : match.score?.fullTime?.away;
+                    const a = mergedAdminPreds[match.id];
+                    const rH = a?.home;
+                    const rA = a?.away;
                     const matchStatus = match.status || '';
-                    const hasO = (a && a.home !== '' && a.away !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                    const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
                     const isLive = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
 
                     const matchSpecificRanking = liveRanking.map(user => {
@@ -792,16 +812,16 @@ const WorldCupGrid = ({ currentUser }) => {
                     const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
                     const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
-                    const customHome = a?.customHomeTeam || '';
-                    const customAway = a?.customAwayTeam || '';
+                    const customHome = adminResults?.predictions?.[match.id]?.customHomeTeam || '';
+                    const customAway = adminResults?.predictions?.[match.id]?.customAwayTeam || '';
 
-                    const finalHomeName = isUnknownHome ? (customHome || 'Por Definir') : homeOriginal;
-                    const finalAwayName = isUnknownAway ? (customAway || 'Por Definir') : awayOriginal;
+                    // 🟢 El Admin manda. Si él guardó un CustomTeam, ignora la basura de la API
+                    const finalHomeName = customHome || (isUnknownHome ? 'Por Definir' : homeOriginal);
+                    const finalAwayName = customAway || (isUnknownAway ? 'Por Definir' : awayOriginal);
 
-                    const homeCrest = isUnknownHome && customHome ? allTeams.find(t => t.name === customHome)?.crest : match.homeTeam?.crest;
-                    const awayCrest = isUnknownAway && customAway ? allTeams.find(t => t.name === customAway)?.crest : match.awayTeam?.crest;
+                    const homeCrest = customHome ? allTeams.find(t => t.name === customHome)?.crest : match.homeTeam?.crest;
+                    const awayCrest = customAway ? allTeams.find(t => t.name === customAway)?.crest : match.awayTeam?.crest;
 
-                    // 🟢 NUEVO: Extraer árbitro principal (API de football-data a veces usa type, a veces role)
                     const mainReferee = match.referees && match.referees.length > 0 
                         ? match.referees.find(r => r.type === 'REFEREE' || r.role === 'REFEREE') || match.referees[0] 
                         : null;
@@ -837,7 +857,6 @@ const WorldCupGrid = ({ currentUser }) => {
                                             <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
                                         </span>
                                     </div>
-                                    {/* 🟢 HORA NORMAL (AM/PM) CON ZONA HORARIA LOCAL */}
                                     <span className="text-[10px] sm:text-xs font-bold text-foreground-muted uppercase tracking-widest bg-background/50 px-2 py-1 rounded border border-border/50">
                                         {new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
                                     </span>
@@ -883,7 +902,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                 {/* 🟢 INFO DE ÁRBITRO EN MÓVIL */}
                                 <div className="mt-4 text-center sm:hidden">
                                     <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-1 rounded border border-border/50">
-                                        <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
+                                        <span>👨‍⚖️</span> Árbitro: {mainReferee ? mainReferee.name : 'Por Definir'}
                                     </span>
                                 </div>
                             </div>

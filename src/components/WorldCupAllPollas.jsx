@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import html2pdf from 'html2pdf.js';
 import SearchBar from './SearchBar'; // Asegúrate de que la ruta sea correcta
@@ -49,7 +49,7 @@ const WorldCupAllPollas = () => {
     const [participants, setParticipants] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState(''); // Estado para el buscador
+    const [searchTerm, setSearchTerm] = useState(''); 
     
     const [matchesByGroup, setMatchesByGroup] = useState({});
     const [knockoutMatches, setKnockoutMatches] = useState({
@@ -98,7 +98,6 @@ const WorldCupAllPollas = () => {
         return () => unsubscribe();
     }, []);
 
-    // Filtro inteligente en tiempo real
     const filteredParticipants = useMemo(() => {
         if (!searchTerm) return participants;
         return participants.filter(p => 
@@ -148,8 +147,25 @@ const WorldCupAllPollas = () => {
         });
     }, []);
 
+    // 🟢 NUEVO CANDADO: ¿Este usuario específico ya llenó todos sus grupos?
+    const isUserGroupStageComplete = useMemo(() => {
+        if (!selectedUser) return false;
+        const allGroupMatches = Object.values(matchesByGroup).flat();
+        if (allGroupMatches.length === 0) return false;
+        
+        return allGroupMatches.every(m => 
+            selectedUser.predictions?.[m.id]?.home !== undefined && 
+            selectedUser.predictions?.[m.id]?.home !== '' && 
+            selectedUser.predictions?.[m.id]?.away !== undefined && 
+            selectedUser.predictions?.[m.id]?.away !== ''
+        );
+    }, [matchesByGroup, selectedUser]);
+
     const qualifiedRoundOf32 = useMemo(() => {
         if (!selectedUser) return [];
+        // 🟢 FIREWALL: Si no ha llenado sus grupos, no calcules nada (evita la "inercia" alfabética)
+        if (!isUserGroupStageComplete) return [];
+
         const preds = selectedUser.predictions || {};
         const manualTies = selectedUser.manualTiebreakers || {};
         let top2 = []; let thirds = [];
@@ -162,7 +178,7 @@ const WorldCupAllPollas = () => {
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return [...top2, ...thirds.slice(0, 8)];
-    }, [matchesByGroup, selectedUser, calculateUserStandings]);
+    }, [matchesByGroup, selectedUser, calculateUserStandings, isUserGroupStageComplete]);
 
     const getTeamName = (match, side, preds) => {
         const original = match[side + 'Team']?.name;
@@ -301,14 +317,21 @@ const WorldCupAllPollas = () => {
                         <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
                             2. Clasificados a 16vos
                         </h3>
-                        <div className="flex flex-wrap gap-3 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                            {qualifiedRoundOf32.map((t, idx) => (
-                                <div key={idx} className="px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}>
-                                    <span className="text-xs font-bold" style={{ color: '#0f172a' }}>{translateTeam(t.name)}</span>
-                                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded" style={{ color: '#b45309', backgroundColor: '#fef3c7' }}>{t.qualReason} {t.group.replace('Grupo ', '')}</span>
-                                </div>
-                            ))}
-                        </div>
+                        {isUserGroupStageComplete ? (
+                            <div className="flex flex-wrap gap-3 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                {qualifiedRoundOf32.map((t, idx) => (
+                                    <div key={idx} className="px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}>
+                                        <span className="text-xs font-bold" style={{ color: '#0f172a' }}>{translateTeam(t.name)}</span>
+                                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded" style={{ color: '#b45309', backgroundColor: '#fef3c7' }}>{t.qualReason} {t.group.replace('Grupo ', '')}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center p-6 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b' }}>
+                                <span className="text-2xl block mb-2">🚧</span>
+                                <p className="text-sm font-bold">El jugador aún no ha terminado de pronosticar su Fase de Grupos.</p>
+                            </div>
+                        )}
                     </div>
 
                     {/* SECCIÓN 3: FASE ELIMINATORIA */}
