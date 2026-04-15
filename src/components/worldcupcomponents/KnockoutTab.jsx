@@ -246,7 +246,7 @@ const KnockoutTab = ({
                             <p className="text-[10px] sm:text-xs text-foreground-muted leading-relaxed">
                                 Según el reglamento de la FIFA (Art. 13), el desempate para los mejores terceros se define por: <strong className="text-foreground">1. Puntos, 2. Diferencia de Goles y 3. Goles a Favor</strong>. 
                                 <br className="hidden sm:block" />
-                                Como en esta Polla es imposible predecir el <em>Juego Limpio (Fair Play)</em>, si la igualdad persiste, el sistema ordenará a los equipos <strong>alfabéticamente</strong> como criterio final.
+                                Como en esta Polla es imposible predecir el <em>Juego Limpio (Fair Play)</em>, si la igualdad persiste, el sistema ordenará a los equipos <strong>aleatoriamente</strong> como criterio final.
                             </p>
                         </div>
                     </div>
