@@ -34,6 +34,19 @@ const stageTranslations = {
     'THIRD_PLACE': 'Tercer Puesto'
 };
 
+const extraQuestions = [
+    { id: 'goleador', manual: true }, { id: 'equipo_goleador' }, { id: 'equipo_menos_goleador' },
+    { id: 'mas_amarillas' }, { id: 'mas_rojas' }, { id: 'valla_menos_vencida' },
+    { id: 'valla_mas_vencida' }, { id: 'grupo_mas_goles' }, { id: 'grupo_menos_goles' },
+    { id: 'maximo_asistidor', manual: true }, { id: 'atajapenales', manual: true }
+];
+
+const specialEvents = [
+    { id: 'gol_olimpico' }, { id: 'remontada_epica' }, { id: 'el_festival' }, { id: 'muralla_final' },
+    { id: 'hat_trick_hero' }, { id: 'roja_banquillo' }, { id: 'portero_goleador' }, { id: 'debut_sin_red' },
+    { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' }
+];
+
 const formatShortName = (fullName) => {
     if (!fullName) return 'Anon';
     const parts = fullName.trim().split(' ');
@@ -51,6 +64,13 @@ const formatDateObj = (dateStr) => {
 
 const translateTeam = (name) => teamTranslations[name] || name;
 
+const isSmartMatch = (userText, adminText) => {
+    if (!userText || !adminText) return false;
+    const clean = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
+    const u = clean(userText); const a = clean(adminText);
+    return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
+};
+
 const WorldCupGrid = ({ currentUser }) => {
     const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
 
@@ -66,6 +86,8 @@ const WorldCupGrid = ({ currentUser }) => {
     const scrollContainerRef = useRef(null);
     const lastSyncTime = useRef(0);
     const prevSimDateRef = useRef(''); 
+    const apiFetchedRef = useRef(false); // <--- 1. AGREGA ESTA LÍNEA
+    
 
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
         try {
@@ -73,7 +95,7 @@ const WorldCupGrid = ({ currentUser }) => {
             const data = await getWorldCupMatches();
             if (data && data.matches) {
                 setMatches(data.matches);
-                
+                console.log("llamando api")
                 if (isAdmin) {
                     const adminRef = doc(db, 'worldCupAdmin', 'results');
                     const adminDoc = await getDoc(adminRef);
@@ -117,7 +139,10 @@ const WorldCupGrid = ({ currentUser }) => {
     }, [isAdmin]);
 
     useEffect(() => {
-        fetchApiMatches();
+        if (!apiFetchedRef.current) {
+            fetchApiMatches();
+            apiFetchedRef.current = true;
+        }
 
         const unsubPreds = onSnapshot(collection(db, 'worldCupPredictions'), (snap) => {
             const preds = {}; snap.forEach(doc => { preds[doc.id] = doc.data(); });
@@ -178,7 +203,6 @@ const WorldCupGrid = ({ currentUser }) => {
         });
     }, [matches, adminResults]);
 
-    // 🟢 CEREBRO FUSIONADO: Combina lo manual del Admin con lo vivo de la API
     const mergedAdminPreds = useMemo(() => {
         const preds = { ...(adminResults?.predictions || {}) };
         effectiveMatches.forEach(m => {
@@ -231,7 +255,6 @@ const WorldCupGrid = ({ currentUser }) => {
         return Array.from(teamsMap.values());
     }, [effectiveMatches]);
 
-    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero (Igualado con Rankings)
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
         groupMatches.forEach(m => {
@@ -346,49 +369,34 @@ const WorldCupGrid = ({ currentUser }) => {
         return finalFlattenedStandings;
     }, []);
 
-    const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
-
     const groupMatchesMap = useMemo(() => {
-        return groupStageMatches.reduce((acc, m) => {
+        return effectiveMatches.filter(m => m.stage === 'GROUP_STAGE').reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
             if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
         }, {});
-    }, [groupStageMatches]);
+    }, [effectiveMatches]);
 
-    const isGroupStageFinished = useMemo(() => {
-        if (groupStageMatches.length === 0) return false;
-        return groupStageMatches.every(m => {
-            const p = mergedAdminPreds[m.id];
-            return p && p.home !== '' && p.home !== undefined;
-        });
-    }, [groupStageMatches, mergedAdminPreds]);
-
-    const adminQualified32 = useMemo(() => {
-        let top2 = []; let thirds = [];
-        Object.keys(groupMatchesMap).forEach(g => {
-            const st = getStandings(groupMatchesMap[g], mergedAdminPreds, g, adminResults?.manualTiebreakers);
-            if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
-        });
-        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-        return [...top2, ...thirds.slice(0, 8)];
-    }, [groupMatchesMap, mergedAdminPreds, adminResults, getStandings]);
-
-    const liveRanking = useMemo(() => {
+    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
+    const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
+        const targetDate = new Date(targetMatchDateStr);
+        const pastMatches = effectiveMatches.filter(m => new Date(m.utcDate) <= targetDate);
+
         Object.keys(allPredictions).forEach(uid => {
             const userData = allPredictions[uid];
             if (!userData.hasPaid || EXCLUDED_EMAILS.includes(userData.email)) return;
 
             let total = 0;
 
-            effectiveMatches.forEach(m => {
+            // 1. Puntos por Marcadores Progresivos
+            pastMatches.forEach(m => {
                 const p = userData.predictions?.[m.id]; 
                 const rH = mergedAdminPreds[m.id]?.home;
                 const rA = mergedAdminPreds[m.id]?.away;
                 const matchStatus = m.status || '';
-                const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                const canSumMatch = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
                 
-                if (hasO && p && p.home !== '' && p.away !== '') {
+                if (canSumMatch && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
                     if (pH == rH && pA == rA) total += 5;
                     else {
@@ -400,103 +408,70 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
             });
 
-            let userTop2 = []; let userThirds = [];
+            // 2. Plenos de Grupo (Solo si el grupo terminó antes o en la fecha del targetDate)
             Object.keys(groupMatchesMap).forEach(g => {
                 const groupMatches = groupMatchesMap[g];
-                
-                let predictedCount = 0;
-                groupMatches.forEach(m => {
-                    const p = userData.predictions?.[m.id];
-                    if (p && p.home !== '' && p.home !== undefined && p.away !== '' && p.away !== undefined) {
-                        predictedCount++;
-                    }
-                });
-
-                if (predictedCount === 0) return;
-
-                const groupIsOver = groupMatches.every(m => {
-                    const apiFinished = m.status === 'FINISHED';
-                    const adminFinished = mergedAdminPreds[m.id] && mergedAdminPreds[m.id].home !== '' && mergedAdminPreds[m.id].home !== null;
-                    return apiFinished || adminFinished;
-                });
-
-                const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
-                if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
-
-                if (groupIsOver && predictedCount === groupMatches.length) {
-                    const aT = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
-                    if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
-                        total += 8;
+                const lastMatchOfGroup = [...groupMatches].sort((a,b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
+                if (lastMatchOfGroup && new Date(lastMatchOfGroup.utcDate) <= targetDate) {
+                    const isGroupFinished = groupMatches.every(m => (mergedAdminPreds[m.id]?.home !== undefined && mergedAdminPreds[m.id]?.home !== '') || m.status === 'FINISHED');
+                    const predictedCount = groupMatches.filter(m => userData.predictions?.[m.id]?.home !== undefined && userData.predictions?.[m.id]?.home !== '').length;
+                    if (isGroupFinished && predictedCount === groupMatches.length) {
+                        const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
+                        const aT = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
+                        if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) total += 8;
                     }
                 }
             });
-            userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-            const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            if (isGroupStageFinished && adminQualified32.length > 0) {
-                userQualified32.forEach(ut => {
-                    if (adminQualified32.some(at => at.name === ut.name)) total += 2;
-                });
-            }
-
+            // 3. Clasificados a Rondas
             const koRounds = [
-                { id: 'dieciseisavos', pts: 3 }, 
-                { id: 'octavos', pts: 4 },       
-                { id: 'cuartos', pts: 5 },       
-                { id: 'semis', pts: 6 }          
+                { id: 'dieciseisavos', pts: 3, stage: 'LAST_32' }, { id: 'octavos', pts: 4, stage: 'LAST_16' },
+                { id: 'cuartos', pts: 5, stage: 'QUARTER_FINALS' }, { id: 'semis', pts: 6, stage: 'SEMI_FINALS' }
             ];
-
             koRounds.forEach(r => {
-                const uTeams = userData.knockoutPicks?.[r.id] || [];
-                const aTeams = adminResults?.knockoutPicks?.[r.id] || [];
-                if (aTeams.length > 0) {
-                    uTeams.forEach(ut => {
-                        if (aTeams.some(at => at.name === ut.name)) total += r.pts;
-                    });
+                const lastMatchOfStage = effectiveMatches.filter(m => m.stage === r.stage).sort((a,b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
+                if (lastMatchOfStage && new Date(lastMatchOfStage.utcDate) <= targetDate) {
+                    const uTeams = userData.knockoutPicks?.[r.id] || [];
+                    const aTeams = adminResults?.knockoutPicks?.[r.id] || [];
+                    uTeams.forEach(ut => { if (aTeams.some(at => at.name === ut.name)) total += r.pts; });
                 }
             });
 
-            const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
-            const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
-            if (aThirdsList.length > 0) {
-                uThirdsList.forEach(ut => {
-                    if (ut && aThirdsList.some(at => at && at.name === ut.name)) total += 4;
+            // 4. Podio y Super Bono
+            const finalMatch = effectiveMatches.find(m => m.stage === 'FINAL');
+            if (finalMatch && new Date(finalMatch.utcDate) <= targetDate) {
+                const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
+                honorSlots.forEach(s => {
+                    if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; }
                 });
+                let isSuperBono = false;
+                if (adminResults?.knockoutPicks) {
+                    isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
+                }
+                if (isSuperBono) total += 10;
             }
 
-            const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
-            honorSlots.forEach(s => {
-                if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; }
-            });
-            
-            let isSuperBono = false;
-            if (adminResults?.knockoutPicks) {
-                isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
-            }
-            if (isSuperBono) total += 10;
-
-            const extraQuestions = [ { id: 'goleador', manual: true }, { id: 'equipo_goleador' }, { id: 'equipo_menos_goleador' }, { id: 'mas_amarillas' }, { id: 'mas_rojas' }, { id: 'valla_menos_vencida' }, { id: 'valla_mas_vencida' }, { id: 'grupo_mas_goles' }, { id: 'grupo_menos_goles' }, { id: 'maximo_asistidor', manual: true }, { id: 'atajapenales', manual: true } ];
-            const specialEvents = [ { id: 'gol_olimpico' }, { id: 'remontada_epica' }, { id: 'el_festival' }, { id: 'muralla_final' }, { id: 'hat_trick_hero' }, { id: 'roja_banquillo' }, { id: 'portero_goleador' }, { id: 'debut_sin_red' }, { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' } ];
-            
-            const isSmartMatch = (userText, adminText) => {
-                if (!userText || !adminText) return false;
-                const clean = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
-                const u = clean(userText); const a = clean(adminText);
-                return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
-            };
-
+            // 5. Extras y Eventos
             extraQuestions.forEach(q => {
-                const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
-                if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) total += 6;
+                const answer = userData.extraPicks?.[q.id];
+                const officialAnswer = adminResults?.extraPicks?.[q.id];
+                if (officialAnswer && answer) {
+                    if (q.manual) {
+                        if (isSmartMatch(answer, officialAnswer)) total += 6;
+                    } else {
+                        if (officialAnswer.toLowerCase() === answer.toLowerCase()) total += 6;
+                    }
+                }
             });
+
             specialEvents.forEach(e => {
-                let u = userData.eventPicks?.[e.id]; 
-                let a = adminResults?.eventPicks?.[e.id];
-                if (u && a) {
-                    u = String(u).toUpperCase().trim();
-                    a = String(a).toUpperCase().trim();
-                    if (a === u) {
-                        total += (u === 'SI' ? 5 : 2);
+                let answer = userData.eventPicks?.[e.id];
+                let officialAnswer = adminResults?.eventPicks?.[e.id];
+                if (answer && officialAnswer) {
+                    answer = String(answer).toUpperCase().trim();
+                    officialAnswer = String(officialAnswer).toUpperCase().trim();
+                    if (officialAnswer === answer) {
+                        total += answer === 'SI' ? 5 : 2;
                     }
                 }
             });
@@ -517,7 +492,7 @@ const WorldCupGrid = ({ currentUser }) => {
         });
 
         return ranks;
-    }, [allPredictions, effectiveMatches, adminResults, usersInfo, groupMatchesMap, isGroupStageFinished, adminQualified32, getStandings, mergedAdminPreds]);
+    }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo]);
 
     const matchesByDate = useMemo(() => {
         const grouped = {};
@@ -650,7 +625,7 @@ const WorldCupGrid = ({ currentUser }) => {
                     <h2 className="text-xl sm:text-4xl font-black text-white mb-0.5 sm:mb-2 tracking-tighter drop-shadow-md">📡 GRILLA LIVE</h2>
                     <div className="flex gap-2">
                         <p className="text-primary font-black uppercase text-[8px] sm:text-xs tracking-widest bg-primary/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full border border-primary/20 shadow-sm">
-                            Puntos Globales
+                            Puntos Progresivos
                         </p>
                         {isAdmin && isLivePollingActive && (
                             <p className="text-green-500 font-black uppercase text-[8px] sm:text-xs tracking-widest bg-green-500/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full border border-green-500/20 shadow-sm animate-pulse">
@@ -773,7 +748,8 @@ const WorldCupGrid = ({ currentUser }) => {
                     const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
                     const isLive = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
 
-                    const matchSpecificRanking = liveRanking.map(user => {
+                    // 🟢 RANKING ESPECÍFICO HASTA ESTE PARTIDO EXACTO
+                    const matchSpecificRanking = calculateProgressiveRanking(match.utcDate).map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
                         let pts = null;
                         if (hasO && uP && uP.home !== '') {
@@ -788,22 +764,6 @@ const WorldCupGrid = ({ currentUser }) => {
                             }
                         }
                         return { ...user, uP, pts };
-                    }).sort((userA, userB) => {
-                        const isTop3A = userA.position <= 3;
-                        const isTop3B = userB.position <= 3;
-                        
-                        if (isTop3A && !isTop3B) return -1;
-                        if (!isTop3A && isTop3B) return 1;
-                        
-                        if (isTop3A && isTop3B) {
-                            if (userA.position !== userB.position) return userA.position - userB.position;
-                        }
-
-                        const ptsA = userA.pts !== null ? userA.pts : -1; 
-                        const ptsB = userB.pts !== null ? userB.pts : -1;
-                        if (ptsA !== ptsB) return ptsB - ptsA;
-
-                        return userB.totalPoints - userA.totalPoints;
                     });
 
                     const homeOriginal = match.homeTeam?.name || '';
@@ -812,10 +772,9 @@ const WorldCupGrid = ({ currentUser }) => {
                     const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
                     const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
-                    const customHome = adminResults?.predictions?.[match.id]?.customHomeTeam || '';
-                    const customAway = adminResults?.predictions?.[match.id]?.customAwayTeam || '';
+                    const customHome = a?.customHomeTeam || '';
+                    const customAway = a?.customAwayTeam || '';
 
-                    // 🟢 El Admin manda. Si él guardó un CustomTeam, ignora la basura de la API
                     const finalHomeName = customHome || (isUnknownHome ? 'Por Definir' : homeOriginal);
                     const finalAwayName = customAway || (isUnknownAway ? 'Por Definir' : awayOriginal);
 
@@ -852,7 +811,6 @@ const WorldCupGrid = ({ currentUser }) => {
                                         <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
                                             {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
                                         </span>
-                                        {/* 🟢 INFO DE ÁRBITRO EN ESCRITORIO */}
                                         <span className="hidden sm:flex items-center gap-1.5 text-[10px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-0.5 rounded border border-border/50">
                                             <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
                                         </span>
@@ -899,7 +857,6 @@ const WorldCupGrid = ({ currentUser }) => {
                                     </div>
                                 </div>
 
-                                {/* 🟢 INFO DE ÁRBITRO EN MÓVIL */}
                                 <div className="mt-4 text-center sm:hidden">
                                     <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-1 rounded border border-border/50">
                                         <span>👨‍⚖️</span> Árbitro: {mainReferee ? mainReferee.name : 'Por Definir'}
@@ -907,6 +864,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                 </div>
                             </div>
 
+                            {/* 🟢 LA TABLA AHORA SE MUESTRA SIEMPRE, SIN RESTRICCIONES */}
                             <div className="w-full relative z-10 overflow-hidden bg-background min-h-[150px] flex-grow">
                                 <img src={logocopa} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-80 sm:h-80 object-contain opacity-[0.02] dark:opacity-[0.03] pointer-events-none z-0" alt="" />
 
@@ -916,7 +874,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                             <th className="py-2 pl-3 sm:p-5 w-[42%] sm:w-[50%] lg:w-[58%] sm:pl-8">Jugador</th>
                                             <th className="py-2 w-[22%] sm:w-[18%] lg:w-[14%] text-center">Predicción</th>
                                             <th className="py-2 w-[18%] sm:w-[16%] lg:w-[14%] text-center">Puntos</th>
-                                            <th className="py-2 pr-3 sm:p-5 w-[18%] sm:w-[16%] lg:w-[14%] text-center sm:pr-8">Global</th>
+                                            <th className="py-2 pr-3 sm:p-5 w-[18%] sm:w-[16%] lg:w-[14%] text-center sm:pr-8 text-amber-500">Hasta este momento</th>
                                         </tr>
                                     </thead>
                                     <tbody className="text-[10px] sm:text-sm">
@@ -981,9 +939,9 @@ const WorldCupGrid = ({ currentUser }) => {
                                                         </div>
                                                     </td>
 
-                                                    <td className="py-3 sm:py-5 text-center pr-3 sm:pr-8">
+                                                    <td className="py-3 sm:py-5 text-center pr-3 sm:pr-8 bg-amber-500/5">
                                                         <div className="flex justify-center w-full">
-                                                            <span className="font-black text-primary text-sm sm:text-3xl tabular-nums drop-shadow-sm">
+                                                            <span className="font-black text-amber-500 text-sm sm:text-3xl tabular-nums drop-shadow-sm">
                                                                 {user.totalPoints}
                                                             </span>
                                                         </div>

@@ -71,31 +71,36 @@ const WorldCupRanking = () => {
     const [allPredictions, setAllPredictions] = useState({});
     const [usersInfo, setUsersInfo] = useState({});
     const [adminResults, setAdminResults] = useState(null);
-    const [loading, setLoading] = useState(true);
     const [expandedUser, setExpandedUser] = useState(null);
 
-    useEffect(() => {
+    const [loadingStatus, setLoadingStatus] = useState({ api: false, preds: false, users: false, admin: false });
+    const isLoading = !loadingStatus.api || !loadingStatus.preds || !loadingStatus.users || !loadingStatus.admin;
+
+   useEffect(() => {
         const fetchMatches = async () => {
             try {
                 const data = await getWorldCupMatches();
                 if (data && data.matches) setMatches(data.matches);
             } catch (err) { console.error(err); }
+            finally { setLoadingStatus(prev => ({ ...prev, api: true })); }
         };
         fetchMatches();
 
         const unsubPreds = onSnapshot(collection(db, 'worldCupPredictions'), (snap) => {
             const preds = {}; snap.forEach(doc => { preds[doc.id] = doc.data(); });
             setAllPredictions(preds);
+            setLoadingStatus(prev => ({ ...prev, preds: true }));
         });
 
         const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
             const users = {}; snap.forEach(doc => { users[doc.id] = doc.data(); });
             setUsersInfo(users);
+            setLoadingStatus(prev => ({ ...prev, users: true }));
         });
 
         const unsubAdmin = onSnapshot(doc(db, 'worldCupAdmin', 'results'), (docSnap) => {
             if (docSnap.exists()) setAdminResults(docSnap.data());
-            setLoading(false);
+            setLoadingStatus(prev => ({ ...prev, admin: true }));
         });
 
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
@@ -111,7 +116,6 @@ const WorldCupRanking = () => {
         });
     }, [matches, adminResults]);
 
-    // 🟢 CEREBRO FUSIONADO: Combina lo manual del Admin con lo vivo de la API
     const mergedAdminPreds = useMemo(() => {
         const preds = { ...(adminResults?.predictions || {}) };
         effectiveMatches.forEach(m => {
@@ -133,7 +137,6 @@ const WorldCupRanking = () => {
         return preds;
     }, [adminResults, effectiveMatches]);
 
-    // 🟢 NUEVO ALGORITMO FIFA 2026: Cara a Cara (H2H) Primero (Igualado con la Grilla)
     const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
         const teams = {};
         groupMatches.forEach(m => {
@@ -291,16 +294,23 @@ const WorldCupRanking = () => {
                 const rH = mergedAdminPreds[m.id]?.home;
                 const rA = mergedAdminPreds[m.id]?.away;
                 const matchStatus = m.status || '';
-                const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
                 
-                if (hasO && p && p.home !== '' && p.away !== '') {
+                // 🟢 FIX: Asegurarse de que el resultado oficial existe y no está vacío
+                const hasOfficialAdminResult = (rH !== undefined && rH !== '' && rH !== null) && (rA !== undefined && rA !== '' && rA !== null);
+                const isMatchActiveOrFinished = matchStatus === 'FINISHED' || matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
+                
+                const canSumPoints = hasOfficialAdminResult || isMatchActiveOrFinished;
+
+                if (canSumPoints && p && p.home !== '' && p.away !== '') {
                     const pH = parseInt(p.home); const pA = parseInt(p.away);
-                    if (pH == rH && pA == rA) { stats.plenosCount++; stats.ptsPlenos += 5; }
+                    const realH = parseInt(rH); const realA = parseInt(rA);
+
+                    if (pH === realH && pA === realA) { stats.plenosCount++; stats.ptsPlenos += 5; }
                     else {
-                        const pR = Math.sign(pH - pA); const rR = Math.sign(rH - rA);
-                        if (pR === rR && (pH == rH || pA == rA)) stats.ptsOtrosAciertos += 3;
+                        const pR = Math.sign(pH - pA); const rR = Math.sign(realH - realA);
+                        if (pR === rR && (pH === realH || pA === realA)) stats.ptsOtrosAciertos += 3;
                         else if (pR === rR) stats.ptsOtrosAciertos += 2;
-                        else if (pH == rH || pA == rA) stats.ptsOtrosAciertos += 1;
+                        else if (pH === realH || pA === realA) stats.ptsOtrosAciertos += 1;
                     }
                 }
             });
@@ -322,7 +332,7 @@ const WorldCupRanking = () => {
 
                 const isGroupFinished = groupMatches.every(m => {
                     const p = mergedAdminPreds[m.id];
-                    return p && p.home !== '' && p.home !== undefined;
+                    return p && p.home !== '' && p.home !== undefined && p.home !== null;
                 });
                 
                 const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
@@ -500,7 +510,13 @@ const WorldCupRanking = () => {
         );
     };
 
-    if (loading) return <div className="py-32 text-center">Calculando Ranking...</div>;
+    if (isLoading) return (
+        <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
+            <img src={logocopa} className="w-20 h-20 mb-6 animate-pulse opacity-50" alt="Cargando" />
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-foreground-muted font-bold tracking-widest uppercase text-xs text-center">Auditando Expedientes y Calculando Ranking...</p>
+        </div>
+    );
 
     return (
         <div className="max-w-4xl mx-auto pb-24 animate-fade-in px-3 sm:px-0">

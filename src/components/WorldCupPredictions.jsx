@@ -53,6 +53,7 @@ const WorldCupPredictions = ({ currentUser }) => {
     const subTabsRef = useRef(null);
     const roundTabsRef = useRef(null);
     const lastSyncTime = useRef(0);
+    const apiFetchedRef = useRef(false); // <--- LÍNEA NUEVA
 
     const tabs = [
         { id: 'partidos', label: 'Marcadores', icon: '⚽', linkedPhase: 'GROUP_STAGE' },
@@ -65,6 +66,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         const fetchMatchesAndData = async () => {
             try {
                 const data = await getWorldCupMatches();
+                console.log("llamando")
                 if (!data || !data.matches) return;
 
                 const groupedGroups = {};
@@ -110,7 +112,10 @@ const WorldCupPredictions = ({ currentUser }) => {
                 setLoading(false);
             }
         };
-        fetchMatchesAndData();
+        if (!apiFetchedRef.current) {
+            apiFetchedRef.current = true;
+            fetchMatchesAndData();
+        }
     }, [currentUser, isAdmin]);
 
     useEffect(() => {
@@ -197,6 +202,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
                     setPredictions(dbPreds); 
                     toast.success('⚽ ¡Auto-Sync: Marcadores sincronizados con la API!', { id: 'autosync-toast' });
+                   
                 }
             } catch (error) {
                 console.error("❌ Error en Auto-Sync:", error);
@@ -205,7 +211,8 @@ const WorldCupPredictions = ({ currentUser }) => {
 
         performAutoSync();
         const intervalId = setInterval(performAutoSync, 15000);
-        return () => clearInterval(intervalId);
+         
+        return () => clearInterval(intervalId);        
     }, [isAdmin, isAutoSyncActive]);
 
     useEffect(() => {
@@ -214,6 +221,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             if (docSnap.exists()) setHasPaid(!!docSnap.data().hasPaid);
         });
         return () => unsubUser();
+        
     }, [currentUser, isAdmin]);
 
     useEffect(() => {
@@ -221,6 +229,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             if (docSnap.exists()) {
                 setAdminResults(docSnap.data());
                 if (docSnap.data().activePhase) setActivePhase(docSnap.data().activePhase);
+               
             }
         });
         return () => unsubAdmin();
