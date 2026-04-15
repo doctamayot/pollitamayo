@@ -11,7 +11,7 @@ const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
 const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
     "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Brazil": "Brasil", 
-    "Cameroon": "Camerún", "Canada": "Canadá", "Chile": "Chile", "Colombia": "Colombia", 
+    "Cameroon": "Camerún", "Canada": "Canadá", "Chile": "Chile", "Colombia": "Colombia",  "Cape Verde Islands": "Cabo Verde",
     "Costa Rica": "Costa Rica", "Croatia": "Croacia", "Denmark": "Dinamarca", "Ecuador": "Ecuador", 
     "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Japan": "Japón", 
     "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", "Peru": "Perú", 
@@ -443,13 +443,19 @@ const WorldCupGrid = ({ currentUser }) => {
                 const canSumMatch = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
                 
                 if (canSumMatch && p && p.home !== '' && p.away !== '') {
-                    const pH = parseInt(p.home); const pA = parseInt(p.away);
-                    if (pH == rH && pA == rA) total += 5;
-                    else {
-                        const pR = Math.sign(pH - pA); const rR = Math.sign(rH - rA);
-                        if (pR === rR && (pH == rH || pA == rA)) total += 3;
-                        else if (pR === rR) total += 2;
-                        else if (pH == rH || pA == rA) total += 1;
+                    const realH = parseInt(rH, 10);
+                    const realA = parseInt(rA, 10);
+                    
+                    // CANDADO: Solo suma si hay números reales
+                    if (!isNaN(realH) && !isNaN(realA)) {
+                        const pH = parseInt(p.home, 10); const pA = parseInt(p.away, 10);
+                        if (pH === realH && pA === realA) total += 5;
+                        else {
+                            const pR = Math.sign(pH - pA); const rR = Math.sign(realH - realA);
+                            if (pR === rR && (pH === realH || pA === realA)) total += 3;
+                            else if (pR === rR) total += 2;
+                            else if (pH === realH || pA === realA) total += 1;
+                        }
                     }
                 }
             });
@@ -632,15 +638,26 @@ const WorldCupGrid = ({ currentUser }) => {
         return [...matchesByDate[selectedDate]].sort((a, b) => {
             const getStatusPriority = (m) => {
                 if (m.status === 'IN_PLAY' || m.status === 'PAUSED') return 0; 
-                if (m.status === 'TIMED' || m.status === 'SCHEDULED') return 1;
-                if (m.status === 'FINISHED') return 2; 
+                if (m.status === 'FINISHED') return 1; 
+                if (m.status === 'TIMED' || m.status === 'SCHEDULED') return 2;
                 return 3; 
             };
-            const priorityDiff = getStatusPriority(a) - getStatusPriority(b);
-            if (priorityDiff !== 0) return priorityDiff;
+            
+            const priorityA = getStatusPriority(a);
+            const priorityB = getStatusPriority(b);
+            
+            // 1. Primero por estado (En juego > Finalizados > Programados)
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            
+            // 2. Si ambos están FINALIZADOS, el más reciente (el último que se jugó) va arriba
+            if (priorityA === 1) {
+                return new Date(b.utcDate) - new Date(a.utcDate);
+            }
+            
+            // 3. Si ambos están PROGRAMADOS/EN JUGAR, orden cronológico normal (mañana a noche)
             return new Date(a.utcDate) - new Date(b.utcDate);
         });
-    }, [selectedDate, matchesByDate]); 
+    }, [selectedDate, matchesByDate]);
 
     const handleScroll = (direction) => {
         if (scrollContainerRef.current) {
@@ -816,14 +833,20 @@ const WorldCupGrid = ({ currentUser }) => {
                     const matchSpecificRanking = calculateProgressiveRanking(match.utcDate).map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
                         let pts = null;
-                        if (hasO && uP && uP.home !== '') {
-                            const pH = parseInt(uP.home); const pA = parseInt(uP.away);
-                            if (pH == rH && pA == rA) pts = 5;
+                        
+                        const realH = parseInt(rH, 10);
+                        const realA = parseInt(rA, 10);
+                        const hasValidRealScore = !isNaN(realH) && !isNaN(realA);
+
+                        if (hasO && uP && uP.home !== '' && hasValidRealScore) {
+                            const pH = parseInt(uP.home, 10); const pA = parseInt(uP.away, 10);
+                            
+                            if (pH === realH && pA === realA) pts = 5;
                             else {
-                                const pR = Math.sign(pH - pA); const rR = Math.sign(rH - rA);
-                                if (pR === rR && (pH == rH || pA == rA)) pts = 3;
+                                const pR = Math.sign(pH - pA); const rR = Math.sign(realH - realA);
+                                if (pR === rR && (pH === realH || pA === realA)) pts = 3;
                                 else if (pR === rR) pts = 2;
-                                else if (pH == rH || pA == rA) pts = 1;
+                                else if (pH === realH || pA === realA) pts = 1;
                                 else pts = 0;
                             }
                         }
@@ -886,7 +909,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                 
                                 <div className="flex items-center justify-between w-full gap-1 sm:gap-4 px-1 sm:px-4">
                                     <div className="flex-1 flex flex-col items-center justify-start min-w-0">
-                                        {homeCrest ? <img src={homeCrest} className="h-8 sm:h-16 mb-2 sm:mb-3 drop-shadow-lg" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
+                                        {homeCrest ? <img src={homeCrest} className="w-10 h-10 sm:w-18 sm:h-18 relative overflow-hidden mb-2 sm:mb-3 drop-shadow-lg rounded-full border border-border/50 object-cover object-center" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
                                         <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
                                             {translateTeam(finalHomeName)}
                                         </p>
@@ -914,7 +937,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                     </div>
                                     
                                     <div className="flex-1 flex flex-col items-center justify-start min-w-0">
-                                        {awayCrest ? <img src={awayCrest} className="h-8 sm:h-16 mb-2 sm:mb-3 drop-shadow-lg" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
+                                        {awayCrest ? <img src={awayCrest} className="w-10 h-10 sm:w-18 sm:h-18 relative overflow-hidden mb-2 sm:mb-3 drop-shadow-lg rounded-full border border-border/50 object-cover object-center" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
                                         <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
                                             {translateTeam(finalAwayName)}
                                         </p>
