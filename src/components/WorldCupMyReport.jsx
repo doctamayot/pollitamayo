@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
+import { generateFullBracket } from '../services/bracketEngine';
 
 // --- CONSTANTES Y DICCIONARIOS ---
 const teamTranslations = {
@@ -129,16 +130,14 @@ const getThirdPlaceTeams = (picksObj) => {
     
     const teamsMap = new Map();
 
-    // 1. Agregar los del podio si existen manualmente (Tercero y Cuarto)
     const t3 = Array.isArray(picksObj.tercero) ? picksObj.tercero : (picksObj.tercero ? [picksObj.tercero] : []);
     const t4 = Array.isArray(picksObj.cuarto) ? picksObj.cuarto : (picksObj.cuarto ? [picksObj.cuarto] : []);
     [...t3, ...t4].forEach(t => {
         if (t && t.name) teamsMap.set(t.name, t);
     });
 
-    // 2. Deducirlos automáticamente (Semifinalistas que NO llegaron a la final)
-    const semifinalistas = picksObj.cuartos || []; // Los 4 que juegan las semis
-    const finalistas = picksObj.semis || [];       // Los 2 que pasaron a la final
+    const semifinalistas = picksObj.cuartos || []; 
+    const finalistas = picksObj.semis || [];       
     
     if (semifinalistas.length > 0 && finalistas.length > 0) {
         const deductedTeams = semifinalistas.filter(semiTeam => 
@@ -169,7 +168,7 @@ const WorldCupMyReport = ({ currentUser }) => {
     
     const [reportTab, setReportTab] = useState('partidos'); 
     const [matchFilter, setMatchFilter] = useState('ALL'); 
-    const [selectedSubTab, setSelectedSubTab] = useState('ALL'); 
+    const [selectedSubTab, setSelectedSubTab] = useState(''); 
 
     const subTabsRef = useRef(null);
 
@@ -203,6 +202,8 @@ const WorldCupMyReport = ({ currentUser }) => {
                         else if (match.stage === 'SEMI_FINALS') ko.SEMI_FINALS.push(match);
                         else if (match.stage === 'FINAL' || match.stage === 'THIRD_PLACE') ko.FINALS.push(match);
                     });
+                    
+                    Object.keys(ko).forEach(key => ko[key].sort((a, b) => Number(a.id) - Number(b.id)));
                     setKnockoutMatches(ko);
                 }
             } catch (err) {
@@ -243,6 +244,13 @@ const WorldCupMyReport = ({ currentUser }) => {
         };
     }, [currentUser]);
 
+    // 🟢 INICIAMOS DIRECTO EN EL GRUPO A
+    useEffect(() => {
+        if (Object.keys(matchesByGroup).length > 0 && selectedSubTab === '') {
+            setSelectedSubTab(Object.keys(matchesByGroup).sort()[0]);
+        }
+    }, [matchesByGroup, selectedSubTab]);
+
     const allTeams = useMemo(() => {
         const teamsMap = new Map();
         matches.forEach(m => {
@@ -257,9 +265,9 @@ const WorldCupMyReport = ({ currentUser }) => {
     }, [matches]);
 
     const displayedMatches = useMemo(() => {
-        let filtered = matches;
+        let filtered = [];
 
-        if (selectedSubTab !== 'ALL') {
+        if (selectedSubTab) {
             if (selectedSubTab.startsWith('Grupo')) {
                 filtered = matchesByGroup[selectedSubTab] || [];
             } else {
@@ -286,7 +294,7 @@ const WorldCupMyReport = ({ currentUser }) => {
         }
         
         return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-    }, [matches, matchesByGroup, knockoutMatches, matchFilter, adminResults, selectedSubTab]);
+    }, [matchesByGroup, knockoutMatches, matchFilter, adminResults, selectedSubTab]);
 
     const handleSubTabScroll = (direction) => {
         if (subTabsRef.current) {
@@ -446,43 +454,65 @@ const WorldCupMyReport = ({ currentUser }) => {
 
     }, [matchesByGroup]);
 
+    // 🟢 ESTADO QUE CONFIRMA SI EL USUARIO LLENÓ TODOS SUS GRUPOS
+    const isUserGroupStageComplete = useMemo(() => {
+        const allGroupMatches = Object.values(matchesByGroup).flat();
+        if (allGroupMatches.length === 0) return false;
+        
+        return allGroupMatches.every(m => 
+            predictions?.[m.id]?.home !== undefined && predictions?.[m.id]?.home !== '' && 
+            predictions?.[m.id]?.away !== undefined && predictions?.[m.id]?.away !== ''
+        );
+    }, [matchesByGroup, predictions]);
+
+    // 🟢 LEY DE HIERRO: CANDADO QUE VERIFICA SI EL ADMIN LLENÓ TODO
+    const isAdminGroupStageComplete = useMemo(() => {
+        const allGroupMatches = Object.values(matchesByGroup).flat();
+        if (allGroupMatches.length === 0) return false;
+        return allGroupMatches.every(m => 
+            adminResults?.predictions?.[m.id]?.home !== undefined && adminResults?.predictions?.[m.id]?.home !== '' && 
+            adminResults?.predictions?.[m.id]?.away !== undefined && adminResults?.predictions?.[m.id]?.away !== ''
+        );
+    }, [matchesByGroup, adminResults]);
+
+
     const qualifiedRoundOf32 = useMemo(() => {
+        if (!isUserGroupStageComplete) return { all32: [] }; 
         let top2 = [];
         let thirds = [];
         Object.keys(matchesByGroup).forEach(groupName => {
-            const groupMatches = matchesByGroup[groupName];
-            let predictedCount = 0;
-            groupMatches.forEach(m => {
-                const p = predictions?.[m.id];
-                if (p && p.home !== '' && p.home !== undefined && p.away !== '' && p.away !== undefined) {
-                    predictedCount++;
-                }
-            });
-
-            if (predictedCount > 0) { 
-                const standings = calculateStandings(groupName, predictions, manualTiebreakers);
-                if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
-                if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
-                if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
-            }
+            const standings = calculateStandings(groupName, predictions, manualTiebreakers);
+            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, predictions, manualTiebreakers, calculateStandings]);
+    }, [matchesByGroup, predictions, manualTiebreakers, calculateStandings, isUserGroupStageComplete]);
 
+    // 🟢 CÁLCULO DE LOS 32 DEL ADMIN CON EL CANDADO ACTIVO
     const adminQualifiedRoundOf32 = useMemo(() => {
+        if (!isAdminGroupStageComplete) return { all32: [] }; 
         if (!adminResults?.predictions) return { all32: [] };
+        
         let top2 = [];
         let thirds = [];
         Object.keys(matchesByGroup).forEach(groupName => {
             const standings = calculateStandings(groupName, adminResults.predictions, adminResults.manualTiebreakers);
-            if (standings.length > 0) top2.push({ ...standings[0], group: groupName });
-            if (standings.length > 1) top2.push({ ...standings[1], group: groupName });
-            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName });
+            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
         });
         thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
         return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, adminResults, calculateStandings]);
+    }, [matchesByGroup, adminResults, calculateStandings, isAdminGroupStageComplete]);
+
+    // 🟢 ÁRBOL OFICIAL DEL ADMIN CON CANDADO
+    const adminFullBracket = useMemo(() => {
+        if (!isAdminGroupStageComplete || !adminQualifiedRoundOf32 || adminQualifiedRoundOf32.all32.length < 32) return null;
+        return generateFullBracket(adminQualifiedRoundOf32.all32, adminResults?.knockoutPicks || {});
+    }, [isAdminGroupStageComplete, adminQualifiedRoundOf32, adminResults?.knockoutPicks]);
+
 
     const calculateMatchPoints = (hasOfficialResult, userPred, realHome, realAway) => {
         if (!hasOfficialResult || !userPred || userPred.home === '' || userPred.away === '') return null;
@@ -570,7 +600,6 @@ const WorldCupMyReport = ({ currentUser }) => {
             if (adminResults?.knockoutPicks?.semis?.some(at => at.name === ut.name)) total += 6;
         });
 
-        // 🟢 CÁLCULO SEGURO DEL 3ER PUESTO (Con Magia Deductiva)
         const uThirds = getThirdPlaceTeams(knockoutPicks);
         const aThirds = getThirdPlaceTeams(adminResults?.knockoutPicks);
         
@@ -609,7 +638,6 @@ const WorldCupMyReport = ({ currentUser }) => {
             let answer = eventPicks?.[e.id];
             let officialAnswer = adminResults?.eventPicks?.[e.id];
             
-            // 🟢 LIMPIEZA FORZADA PARA EVITAR ERRORES DE ESPACIOS O MAYÚSCULAS
             if (answer && officialAnswer) {
                 answer = String(answer).toUpperCase().trim();
                 officialAnswer = String(officialAnswer).toUpperCase().trim();
@@ -624,7 +652,7 @@ const WorldCupMyReport = ({ currentUser }) => {
     }, [matches, predictions, matchesByGroup, manualTiebreakers, knockoutPicks, extraPicks, eventPicks, adminResults, qualifiedRoundOf32, adminQualifiedRoundOf32, groupStatus, calculateStandings]);
 
     const subTabPoints = useMemo(() => {
-        if (selectedSubTab === 'ALL') return null;
+        if (!selectedSubTab) return 0;
 
         let pts = 0;
         const matchesInTab = selectedSubTab.startsWith('Grupo') 
@@ -715,16 +743,6 @@ const WorldCupMyReport = ({ currentUser }) => {
                         </button>
 
                         <div ref={subTabsRef} className="flex overflow-x-auto hide-scrollbar gap-2 sm:gap-3 pb-4 pt-2 px-2 md:px-10 snap-x scroll-smooth items-center w-full">
-                            <button 
-                                onClick={() => setSelectedSubTab('ALL')} 
-                                className={`snap-center shrink-0 flex items-center justify-center px-4 sm:px-6 h-14 sm:h-16 rounded-[1rem] font-black transition-all border ${
-                                    selectedSubTab === 'ALL' ? 'bg-gradient-to-b from-foreground to-foreground/80 text-background border-transparent scale-105 z-10' : 'bg-card text-foreground-muted hover:bg-background-offset'
-                                }`}
-                            >
-                                <span className="text-[10px] sm:text-xs uppercase tracking-widest">Todos</span>
-                            </button>
-
-                            <div className="w-px h-10 bg-gradient-to-b from-transparent via-border to-transparent mx-1 sm:mx-2 shrink-0"></div>
 
                             {Object.keys(matchesByGroup).sort((a,b)=>a.localeCompare(b)).map(gn => {
                                 const isSelected = selectedSubTab === gn;
@@ -764,7 +782,7 @@ const WorldCupMyReport = ({ currentUser }) => {
                     </div>
 
                     {/* INSIGNIA DE PUNTOS TOTALES PARA LA SUB-PESTAÑA */}
-                    {selectedSubTab !== 'ALL' && (
+                    {selectedSubTab && (
                         <div className="flex justify-center mb-6 animate-fade-in">
                             <div className="bg-primary/10 border border-primary/30 px-6 py-2 rounded-2xl flex items-center gap-3 shadow-sm">
                                 <span className="text-xl">🏆</span>
@@ -794,7 +812,7 @@ const WorldCupMyReport = ({ currentUser }) => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                        {displayedMatches.map(match => {
+                        {displayedMatches.map((match, index) => {
                             const pred = predictions[match.id];
                             const hasPred = pred && pred.home !== '' && pred.away !== '';
                             const isFinished = match.status === 'FINISHED';
@@ -807,20 +825,71 @@ const WorldCupMyReport = ({ currentUser }) => {
                             const hasOfficialResult = (adminPred && adminPred.home !== '' && adminPred.away !== '') || isFinished;
                             const points = calculateMatchPoints(hasOfficialResult, pred, realHome, realAway);
 
+                            // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
+                            const isKnockout = match.stage !== 'GROUP_STAGE';
                             const homeOriginal = match.homeTeam?.name || '';
                             const awayOriginal = match.awayTeam?.name || '';
-                            
-                            const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                            const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
                             const customHome = adminPred?.customHomeTeam || '';
                             const customAway = adminPred?.customAwayTeam || '';
 
-                            const finalHomeName = isUnknownHome ? (customHome || 'Por Definir') : homeOriginal;
-                            const finalAwayName = isUnknownAway ? (customAway || 'Por Definir') : awayOriginal;
+                            let finalHomeName = '';
+                            let finalAwayName = '';
+                            let isTeamDrawnFromBracket = false;
 
-                            const homeCrest = isUnknownHome && customHome ? allTeams.find(t => t.name === customHome)?.crest : match.homeTeam?.crest;
-                            const awayCrest = isUnknownAway && customAway ? allTeams.find(t => t.name === customAway)?.crest : match.awayTeam?.crest;
+                            if (isKnockout) {
+                                let roundKey = '';
+                                let currentStageArray = [];
+
+                                if (match.stage === 'LAST_32' || match.stage === 'ROUND_OF_32') { roundKey = 'dieciseisavos'; currentStageArray = knockoutMatches.LAST_32; }
+                                else if (match.stage === 'LAST_16') { roundKey = 'octavos'; currentStageArray = knockoutMatches.LAST_16; }
+                                else if (match.stage === 'QUARTER_FINALS') { roundKey = 'cuartos'; currentStageArray = knockoutMatches.QUARTER_FINALS; }
+                                else if (match.stage === 'SEMI_FINALS') { roundKey = 'semis'; currentStageArray = knockoutMatches.SEMI_FINALS; }
+                                else if (match.stage === 'FINAL') { roundKey = 'final'; currentStageArray = knockoutMatches.FINALS; }
+                                else if (match.stage === 'THIRD_PLACE') { roundKey = 'tercero'; currentStageArray = knockoutMatches.FINALS; }
+
+                                let bracketHome = null;
+                                let bracketAway = null;
+
+                                if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
+                                    let bMatch;
+                                    if (roundKey === 'final' || roundKey === 'tercero') {
+                                        bMatch = Object.values(adminFullBracket[roundKey])[0];
+                                    } else {
+                                        // 🟢 Calculamos el index absoluto para no desordenar al filtrar
+                                        const absoluteIndex = currentStageArray.findIndex(m => m.id === match.id);
+                                        const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
+                                            .sort((a, b) => {
+                                                const numA = parseInt(a.replace(/\D/g, '')) || 0;
+                                                const numB = parseInt(b.replace(/\D/g, '')) || 0;
+                                                return numA - numB;
+                                            })
+                                            .map(k => adminFullBracket[roundKey][k]);
+                                        
+                                        bMatch = bracketMatchValues[absoluteIndex >= 0 ? absoluteIndex : 0]; 
+                                    }
+                                    
+                                    if (bMatch) {
+                                        bracketHome = bMatch.home?.name;
+                                        bracketAway = bMatch.away?.name;
+                                    }
+                                }
+
+                                finalHomeName = customHome || bracketHome || '';
+                                finalAwayName = customAway || bracketAway || '';
+                                if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
+
+                            } else {
+                                // Para Grupos, la API o el Custom manual manda
+                                const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                                const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+                                
+                                finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
+                                finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
+                            }
+
+                            const homeCrest = allTeams.find(t => t.name === finalHomeName)?.crest || (!isKnockout && finalHomeName ? match.homeTeam?.crest : null);
+                            const awayCrest = allTeams.find(t => t.name === finalAwayName)?.crest || (!isKnockout && finalAwayName ? match.awayTeam?.crest : null);
 
                             return (
                                 <div key={match.id} className="bg-card border border-card-border rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden flex flex-col">
@@ -860,9 +929,14 @@ const WorldCupMyReport = ({ currentUser }) => {
                                                     <div className="w-6 h-4 sm:w-8 sm:h-5 bg-background rounded-[2px] overflow-hidden border border-border/50 shrink-0 flex items-center justify-center">
                                                         {homeCrest ? <img src={homeCrest} className="w-full h-full object-cover" alt="" /> : <span className="opacity-30 text-[10px]">🛡️</span>}
                                                     </div>
-                                                    <span className={`font-bold text-sm sm:text-base truncate ${isUnknownHome && !customHome ? 'text-foreground-muted italic' : 'text-foreground'}`}>
-                                                        {translateTeam(finalHomeName)}
-                                                    </span>
+                                                    <div className="flex flex-col truncate">
+                                                        <span className={`font-bold text-sm sm:text-base truncate ${!finalHomeName ? 'text-foreground-muted italic' : 'text-foreground'}`}>
+                                                            {finalHomeName ? translateTeam(finalHomeName) : 'Por Definir'}
+                                                        </span>
+                                                        {isTeamDrawnFromBracket && finalHomeName && (
+                                                            <span className="text-[8px] font-bold text-amber-500 uppercase opacity-90 tracking-widest mt-0.5">Dato Oficial</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className="flex gap-2 sm:gap-6 shrink-0">
                                                     <div className="w-10 sm:w-16 flex justify-center"><span className="font-black text-lg sm:text-xl text-primary">{hasPred ? pred.home : '-'}</span></div>
@@ -875,9 +949,14 @@ const WorldCupMyReport = ({ currentUser }) => {
                                                     <div className="w-6 h-4 sm:w-8 sm:h-5 bg-background rounded-[2px] overflow-hidden border border-border/50 shrink-0 flex items-center justify-center">
                                                         {awayCrest ? <img src={awayCrest} className="w-full h-full object-cover" alt="" /> : <span className="opacity-30 text-[10px]">🛡️</span>}
                                                     </div>
-                                                    <span className={`font-bold text-sm sm:text-base truncate ${isUnknownAway && !customAway ? 'text-foreground-muted italic' : 'text-foreground'}`}>
-                                                        {translateTeam(finalAwayName)}
-                                                    </span>
+                                                    <div className="flex flex-col truncate">
+                                                        <span className={`font-bold text-sm sm:text-base truncate ${!finalAwayName ? 'text-foreground-muted italic' : 'text-foreground'}`}>
+                                                            {finalAwayName ? translateTeam(finalAwayName) : 'Por Definir'}
+                                                        </span>
+                                                        {isTeamDrawnFromBracket && finalAwayName && (
+                                                            <span className="text-[8px] font-bold text-amber-500 uppercase opacity-90 tracking-widest mt-0.5">Dato Oficial</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className="flex gap-2 sm:gap-6 shrink-0">
                                                     <div className="w-10 sm:w-16 flex justify-center"><span className="font-black text-lg sm:text-xl text-primary">{hasPred ? pred.away : '-'}</span></div>
@@ -1109,7 +1188,6 @@ const WorldCupMyReport = ({ currentUser }) => {
                                     officialRoundTeams = adminResults?.knockoutPicks?.semis || [];
                                     hasOfficialData = officialRoundTeams.length > 0;
                                 } else if (round.id === 'tercer_puesto') {
-                                    // 🟢 MAGIA DEDUCTIVA 
                                     roundTeams = getThirdPlaceTeams(knockoutPicks);
                                     officialRoundTeams = getThirdPlaceTeams(adminResults?.knockoutPicks);
                                     hasOfficialData = officialRoundTeams.length > 0;

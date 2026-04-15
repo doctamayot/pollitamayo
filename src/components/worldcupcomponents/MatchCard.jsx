@@ -19,15 +19,13 @@ const MatchCard = ({
     
     const isKnockout = match.stage !== 'GROUP_STAGE';
 
-    // 1. 🟢 DATOS DE LA API OFICIAL (Nuestra prioridad #1)
+    // 1. DATOS DE LA API (Solo valen en Fase de Grupos)
     const homeOriginal = match.homeTeam?.name;
     const awayOriginal = match.awayTeam?.name;
-    
-    // Verificamos si la API no sabe quién juega todavía
     const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
     const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
     
-    // 2. 🟢 EL RESPALDO: Árbol de Clasificados del Admin (Nuestra prioridad #2)
+    // 2. 🟢 EXTRACCIÓN OBLIGATORIA DEL ÁRBOL DE CLASIFICADOS DEL ADMIN
     const getAdminBracketTeam = (side) => {
         if (!adminFullBracket) return null;
         
@@ -41,7 +39,7 @@ const MatchCard = ({
 
         if (!roundKey || !adminFullBracket[roundKey]) return null;
 
-        // Ordenamos las llaves numéricamente (M1, M2, M3...) para que coincidan exacto con la tarjeta
+        // Ordenamos las llaves numéricamente (M1, M2, M3...)
         const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
             .sort((a, b) => {
                 const numA = parseInt(a.replace(/\D/g, '')) || 0;
@@ -50,7 +48,9 @@ const MatchCard = ({
             })
             .map(k => adminFullBracket[roundKey][k]);
         
-        const bMatch = bracketMatchValues[index]; 
+        // 🟢 EL FIX: La final y el 3er puesto siempre son el único partido (índice 0) de su categoría interna.
+        const actualIndex = (roundKey === 'final' || roundKey === 'tercero') ? 0 : index;
+        const bMatch = bracketMatchValues[actualIndex]; 
         
         if (bMatch && bMatch[side]) {
             return bMatch[side].name;
@@ -61,15 +61,14 @@ const MatchCard = ({
     const bracketHome = getAdminBracketTeam('home');
     const bracketAway = getAdminBracketTeam('away');
 
-    // 3. 🟢 LA LEY PERFECTA (API -> Bracket -> Vacío)
-    // Si la API tiene al equipo real, ¡lo usamos! 
-    // Si la API dice "TBD", usamos el que calculó el Admin en Clasificados.
-    const displayHome = !isUnknownHome ? homeOriginal : (bracketHome || '');
-    const displayAway = !isUnknownAway ? awayOriginal : (bracketAway || '');
+    // 3. 🟢 LEY DE HIERRO:
+    // Si es ronda final (isKnockout), la tarjeta SOLO muestra lo que diga el Árbol (Bracket).
+    const displayHome = isKnockout ? (bracketHome || '') : (!isUnknownHome ? homeOriginal : '');
+    const displayAway = isKnockout ? (bracketAway || '') : (!isUnknownAway ? awayOriginal : '');
 
     // Escudos
-    const homeCrest = allTeams.find(t => t.name === displayHome)?.crest || (!isUnknownHome ? match.homeTeam?.crest : null);
-    const awayCrest = allTeams.find(t => t.name === displayAway)?.crest || (!isUnknownAway ? match.awayTeam?.crest : null);
+    const homeCrest = allTeams.find(t => t.name === displayHome)?.crest || (!isKnockout && !isUnknownHome ? match.homeTeam?.crest : null);
+    const awayCrest = allTeams.find(t => t.name === displayAway)?.crest || (!isKnockout && !isUnknownAway ? match.awayTeam?.crest : null);
 
     const formatMatchDate = (utcStr) => {
         if (!utcStr) return '';
@@ -86,7 +85,6 @@ const MatchCard = ({
     return (
         <div className={`bg-card border ${isLocked ? 'border-border/50 opacity-80' : 'border-card-border hover:border-primary/50'} rounded-2xl shadow-sm relative overflow-hidden flex flex-col transition-all`}>
             
-            {/* 🔒 BOTÓN DE CANDADO PARA EL ADMIN */}
             {isAdmin && isKnockout && (
                 <button
                     onClick={(e) => { e.preventDefault(); handleToggleLockMatch(match.id); }}
@@ -128,10 +126,6 @@ const MatchCard = ({
                             <span className={`font-bold text-sm sm:text-base truncate ${!displayHome ? 'text-foreground-muted italic' : 'text-foreground'}`}>
                                 {displayHome ? translateTeam(displayHome) : 'Por Definir'}
                             </span>
-                            {/* Pequeño aviso visual si la API ya trajo el equipo oficial */}
-                            {isAdmin && !isUnknownHome && isKnockout && (
-                                <span className="text-[8px] font-bold text-green-500 uppercase opacity-90 tracking-widest mt-0.5">Dato API Oficial</span>
-                            )}
                         </div>
                     </div>
                     <input 
@@ -151,10 +145,6 @@ const MatchCard = ({
                             <span className={`font-bold text-sm sm:text-base truncate ${!displayAway ? 'text-foreground-muted italic' : 'text-foreground'}`}>
                                 {displayAway ? translateTeam(displayAway) : 'Por Definir'}
                             </span>
-                            {/* Pequeño aviso visual si la API ya trajo el equipo oficial */}
-                            {isAdmin && !isUnknownAway && isKnockout && (
-                                <span className="text-[8px] font-bold text-green-500 uppercase opacity-90 tracking-widest mt-0.5">Dato API Oficial</span>
-                            )}
                         </div>
                     </div>
                     <input 
