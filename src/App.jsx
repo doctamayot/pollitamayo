@@ -28,6 +28,7 @@ import WorldCupPot from './components/WorldCupPot';
 import WorldCupGrid from './components/WorldCupGrid';
 import WorldCupRanking from './components/WorldCupRanking';
 import WorldCupAllPollas from './components/WorldCupAllPollas';
+import WorldCupGridOthers from './components/WorldCupGridOthers';
 
 // Config
 import { ADMIN_EMAIL, USERS_COLLECTION } from './config';
@@ -321,6 +322,12 @@ function App() {
                                 <span className="text-xl">📡</span> Grilla Live
                             </button>
                         )}
+
+                        {(liveMenuMode || user.email === 'doctamayot@gmail.com') && (
+                            <button onClick={() => navigateTo('worldCup_grid_others')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_grid_others' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
+                                <span className="text-xl">📊</span> Grilla (Otros)
+                            </button>
+)}
                         
                         <button onClick={() => navigateTo('worldCup_myReport')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_myReport' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                             <span className="text-xl">👁️</span> Mi Polla
@@ -401,8 +408,8 @@ function App() {
             // ELIMINAMOS "Ver Pollas" DEL MENÚ INFERIOR PARA MANTENERLO LIMPIO
             if (liveMenuMode) {
                 navItems = [
-                    { id: 'worldCup_grid', label: 'Grilla', icon: '📡' },
-                    { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Ajustes' : 'Predicción', icon: '🎯' },
+                    { id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' },
+                    { id: 'worldCup_grid_others', label: 'Grilla Otros', icon: '📊' },
                     { id: 'worldCup_ranking', label: 'Ranking', icon: '🏆' },
                     { id: 'worldCup_rules', label: 'Reglas', icon: '📜' },
                 ];
@@ -665,6 +672,13 @@ function App() {
                     {mainView === 'worldCup_grid' && (
                         <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
                             <WorldCupGrid currentUser={user} />
+                        </div>
+                    )}
+
+                    {/* 🟢 NUEVA VISTA: OTROS ACIERTOS (Solo modo Live) */}
+                    {mainView === 'worldCup_grid_others' && (
+                        <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
+                            <WorldCupGridOthers currentUser={user} />
                         </div>
                     )}
 
