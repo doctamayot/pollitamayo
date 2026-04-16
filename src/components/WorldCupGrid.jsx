@@ -94,11 +94,18 @@ const WorldCupGrid = ({ currentUser }) => {
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
         try {
             if (!isBackgroundUpdate) setIsApiLoading(true);
-            const data = await getWorldCupMatches();
-            if (data && data.matches) {
-                setMatches(data.matches);
+
+            if (isAdmin) {
+                // 👑 1. EL ADMIN LLAMA A LA API DE LA FIFA
+                const data = await getWorldCupMatches();
                 console.log("llamando api")
-                if (isAdmin) {
+                if (data && data.matches) {
+                    setMatches(data.matches);
+                    
+                    // 👑 2. EL ADMIN GUARDA LA "FOTO" EN FIREBASE PARA LOS JUGADORES
+                    await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
+
+                    // Lógica del Admin para actualizar marcadores oficiales automáticamente
                     const adminRef = doc(db, 'worldCupAdmin', 'results');
                     const adminDoc = await getDoc(adminRef);
                     let currentAdminPreds = adminDoc.exists() ? adminDoc.data().predictions || {} : {};
@@ -132,15 +139,27 @@ const WorldCupGrid = ({ currentUser }) => {
                         await setDoc(adminRef, { predictions: currentAdminPreds }, { merge: true });
                     }
                 }
+            } else {
+                // 👥 3. LOS JUGADORES LEEN DEL CACHÉ DE FIREBASE (¡Sin tocar la API!)
+                const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+                
+                if (cacheDoc.exists() && cacheDoc.data().matches) {
+                    setMatches(cacheDoc.data().matches);
+                } else {
+                    // Respaldo de emergencia: Si el caché no existe, llama a la API una vez
+                    const data = await getWorldCupMatches();
+                    if (data && data.matches) setMatches(data.matches);
+                }
             }
         } catch (err) { 
-            console.error(err); 
+            console.error("Error obteniendo partidos:", err); 
         } finally { 
             if (!isBackgroundUpdate) setIsApiLoading(false); 
         }
     }, [isAdmin]);
 
-    useEffect(() => {
+   useEffect(() => {
+        // 🔒 Candado de React 18: Evita el doble llamado al montar el componente
         if (!apiFetchedRef.current) {
             fetchApiMatches();
             apiFetchedRef.current = true;
@@ -163,7 +182,6 @@ const WorldCupGrid = ({ currentUser }) => {
 
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, [fetchApiMatches]);
-
     useEffect(() => {
         if (!isAdmin) return;
 

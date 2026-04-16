@@ -136,17 +136,19 @@ function App() {
                 const isLive = !!docSnap.data().liveMenuMode;
                 setLiveMenuMode(isLive);
                 
-                // Si el modo live se apaga y el usuario está en vistas bloqueadas, lo devolvemos a predicciones (EXCEPTO AL ADMIN)
-                if (!isLive && (mainView === 'worldCup_grid' || mainView === 'worldCup_allPollas') && user?.email !== 'doctamayot@gmail.com') {
-                    setMainView('worldCup_predictions');
-                }
+                // Si el admin apaga el mundial y estaban en la grilla, los devolvemos a predicciones
+                setMainView((currentView) => {
+                    if (!isLive && (currentView === 'worldCup_grid' || currentView === 'worldCup_allPollas') && user?.email !== 'doctamayot@gmail.com') {
+                        return 'worldCup_predictions';
+                    }
+                    return currentView;
+                });
             } else {
                 setLiveMenuMode(false);
-                if ((mainView === 'worldCup_grid' || mainView === 'worldCup_allPollas') && user?.email !== 'doctamayot@gmail.com') setMainView('worldCup_predictions');
             }
         });
         return () => unsubscribeSettings();
-    }, [mainView, user]);
+    }, [user]);
     
     useEffect(() => {
         if (isAdmin) {
@@ -201,7 +203,8 @@ function App() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 w-full max-w-5xl">
                 
                 <div 
-                    onClick={() => navigateTo('worldCup_predictions')}
+                    // 🟢 NUEVO: Si el modo live está activo, los manda a la grilla directamente
+                    onClick={() => navigateTo(liveMenuMode ? 'worldCup_grid' : 'worldCup_predictions')}
                     className="bg-gradient-to-b from-card to-background-offset border border-primary/30 hover:border-primary rounded-[2.5rem] p-8 lg:p-10 cursor-pointer transition-all duration-500 transform hover:-translate-y-2 group shadow-xl hover:shadow-[0_20px_50px_-15px_rgba(245,158,11,0.4)] flex flex-col items-center text-center relative overflow-hidden"
                 >
                     <img 

@@ -65,8 +65,26 @@ const WorldCupPredictions = ({ currentUser }) => {
     useEffect(() => {
         const fetchMatchesAndData = async () => {
             try {
-                const data = await getWorldCupMatches();
-                console.log("llamando")
+                let data = null;
+
+                if (isAdmin) {
+                    // 👑 EL ADMIN LLAMA A LA API DE LA FIFA Y GUARDA EL CACHÉ
+                    data = await getWorldCupMatches();
+                    console.log("llamando api")
+                    if (data && data.matches) {
+                        await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
+                    }
+                } else {
+                    // 👥 LOS JUGADORES LEEN DEL CACHÉ DE FIREBASE (¡Cero llamadas a la API!)
+                    const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+                    if (cacheDoc.exists() && cacheDoc.data().matches) {
+                        data = { matches: cacheDoc.data().matches };
+                    } else {
+                        // Respaldo de emergencia por si el caché aún no se ha creado
+                        data = await getWorldCupMatches();
+                    }
+                }
+
                 if (!data || !data.matches) return;
 
                 const groupedGroups = {};
@@ -112,6 +130,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 setLoading(false);
             }
         };
+
         if (!apiFetchedRef.current) {
             apiFetchedRef.current = true;
             fetchMatchesAndData();
