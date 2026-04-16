@@ -45,6 +45,7 @@ function App() {
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [liveMenuMode, setLiveMenuMode] = useState(false);
+    const [showLegalModal, setShowLegalModal] = useState(false);
 
     const activeQuinielas = useMemo(() => 
         allQuinielas.filter(q => q.isActive && !q.isClosed),
@@ -369,10 +370,14 @@ function App() {
                         </button>
                     )}
 
-                    <div className="hidden lg:flex  items-center justify-center gap-4 bg-background-offset/80 p-2 rounded-full border border-border shadow-inner">
+                    <div className="hidden lg:flex  items-center justify-center gap-4 bg-background-offset/80 p-2 rounded-full border border-border shadow-inner">
+                        <button onClick={() => setShowLegalModal(true)} className="flex items-center justify-center rounded-full mt-1 w-8 h-8 text-foreground-muted hover:text-primary border-2 border-foreground-muted hover:border-primary transition-colors" title="Términos y Privacidad">
+                            <span className="text-sm font-black">?</span>
+                        </button>
+                        <div className="w-px h-6 bg-border"></div>
                         <button onClick={() => setTheme('light')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'light' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Claro">☀️</button>
                         <div className="w-px h-6 bg-border"></div>
-                        <button onClick={() => setTheme('dark')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'dark' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Oscuro">🌙</button>
+                        <button onClick={() => setTheme('dark')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'dark' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Oscuro">🌙</button>
                     </div>
 
                     <button onClick={handleLogout} className="w-full flex items-center justify-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors duration-200 border border-red-500/20 shadow-inner">
@@ -447,6 +452,52 @@ function App() {
         );
     };
 
+    // --- MODAL DE TÉRMINOS Y PRIVACIDAD ---
+    const renderLegalModal = () => {
+        if (!showLegalModal) return null;
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-card border border-border rounded-3xl w-full max-w-3xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
+                    <div className="flex justify-between items-center p-4 sm:p-6 border-b border-border bg-background-offset">
+                        <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tighter flex items-center gap-2">
+                            <span className="text-primary">⚖️</span> Políticas y Condiciones
+                        </h2>
+                        <button onClick={() => setShowLegalModal(false)} className="text-foreground-muted hover:text-red-500 transition-colors bg-background rounded-full w-8 h-8 flex items-center justify-center border border-border shadow-sm">✖</button>
+                    </div>
+                    
+                    <div className="p-4 sm:p-8 overflow-y-auto hide-scrollbar text-sm sm:text-base text-foreground-muted space-y-8">
+                        <section>
+                            <h3 className="text-lg font-black text-foreground mb-3 uppercase tracking-widest text-primary border-l-4 border-primary pl-3">Términos y Condiciones</h3>
+                            <ul className="space-y-3">
+                                <li><strong className="text-foreground">1. Participación:</strong> Para participar y ser elegible para la bolsa de premios (Pot), el usuario debe haber completado el pago de la inscripción (cuota de participación) acordada con el Administrador.</li>
+                                <li><strong className="text-foreground">2. Distribución del Pot:</strong> El 90% del recaudo total se destinará a la bolsa de premios. El 10% restante corresponde a gastos de administración de la plataforma.</li>
+                                <li><strong className="text-foreground">3. Premios:</strong> El Pot neto se distribuirá de la siguiente manera: 70% al 1er lugar, 20% al 2do lugar, 5% al 3er lugar y 5% a la posición media exacta del ranking. En caso de empate en puntos, el premio de las posiciones involucradas se sumará y dividirá en partes iguales.</li>
+                                <li><strong className="text-foreground">4. Sistema de Puntos:</strong> Los puntos se otorgan estrictamente según el reglamento oficial publicado en la plataforma (aciertos exactos, tendencias, diferencias de gol, rondas y eventos).</li>
+                                <li><strong className="text-foreground">5. Resultados y Tiempos:</strong> Los marcadores se sincronizan con la API de la FIFA y contemplan únicamente los 90 minutos reglamentarios + adición. La plataforma bloquea automáticamente las predicciones al iniciar cada encuentro. Cualquier intento de alteración resultará en la descalificación.</li>
+                            </ul>
+                        </section>
+                        
+                        <section>
+                            <h3 className="text-lg font-black text-foreground mb-3 uppercase tracking-widest text-primary border-l-4 border-primary pl-3">Políticas de Privacidad</h3>
+                            <ul className="space-y-3">
+                                <li><strong className="text-foreground">1. Recopilación de Datos:</strong> Al iniciar sesión mediante Google, PolliTamayo recopila únicamente tu Nombre, Correo Electrónico y Foto de Perfil.</li>
+                                <li><strong className="text-foreground">2. Uso de la Información:</strong> Tus datos se utilizan única y exclusivamente para identificarte dentro de la plataforma, personalizar tu experiencia y mostrarte en el Ranking/Leaderboard.</li>
+                                <li><strong className="text-foreground">3. Transparencia:</strong> Por la naturaleza del juego, tu nombre, foto de perfil y predicciones son públicos para todos los demás participantes de la polla. Esto garantiza el espionaje táctico y la transparencia de la competencia.</li>
+                                <li><strong className="text-foreground">4. Seguridad:</strong> No vendemos, alquilamos ni compartimos tus datos con terceros. Toda la información está almacenada de forma segura bajo la infraestructura global de Firebase y Google Cloud.</li>
+                            </ul>
+                        </section>
+                    </div>
+
+                    <div className="p-4 border-t border-border bg-background-offset flex justify-center">
+                        <button onClick={() => setShowLegalModal(false)} className="bg-primary text-primary-foreground font-black px-10 py-3 rounded-full hover:scale-105 transition-transform shadow-[0_10px_20px_-5px_rgba(245,158,11,0.4)] uppercase tracking-widest text-sm">
+                            Acepto y Entiendo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-background flex flex-col lg:flex-row text-foreground relative">
             
@@ -460,6 +511,9 @@ function App() {
     
     {/* Contenedor Derecho: Botón de Tema + Menú */}
     <div className="flex items-center gap-3">
+        <button onClick={() => setShowLegalModal(true)} className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-foreground-muted text-foreground-muted hover:text-primary hover:border-primary transition-colors" aria-label="Información Legal">
+            <span className="text-xs font-black">?</span>
+        </button>
         {/* Botón Switch Premium (Animado) */}
         {/* Botón Switch Premium (Estilo Píldora con Texto) */}
         {/* Botón Switch Premium (Muestra Modo Actual con animación "Slot Machine") */}
@@ -622,8 +676,11 @@ function App() {
         />
             {/* SE RENDERIZA EL NUEVO MENÚ DINÁMICO */}
             {renderMobileBottomNav()}
+            {renderLegalModal()}
         </div>
     );
 }
 
 export default App;
+
+
