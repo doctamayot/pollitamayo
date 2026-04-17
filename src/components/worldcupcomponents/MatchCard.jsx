@@ -14,7 +14,8 @@ const MatchCard = ({
     isAdmin, 
     handleScoreChange, 
     lockedMatches, 
-    handleToggleLockMatch 
+    handleToggleLockMatch,
+    stageMatches // 🟢 RECIBIMOS LA LISTA DE PARTIDOS DE ESTA FASE
 }) => {
     
     const isKnockout = match.stage !== 'GROUP_STAGE';
@@ -27,7 +28,7 @@ const MatchCard = ({
     
     // 2. 🟢 EXTRACCIÓN OBLIGATORIA DEL ÁRBOL DE CLASIFICADOS DEL ADMIN
     const getAdminBracketTeam = (side) => {
-        if (!adminFullBracket) return null;
+        if (!adminFullBracket || !stageMatches) return null;
         
         let roundKey = '';
         if (match.stage === 'LAST_32' || match.stage === 'ROUND_OF_32') roundKey = 'dieciseisavos';
@@ -39,6 +40,10 @@ const MatchCard = ({
 
         if (!roundKey || !adminFullBracket[roundKey]) return null;
 
+        // 🟢 Calculamos la posición matemática original del partido ignorando el orden visual por fechas
+        const currentStageSorted = [...stageMatches].sort((a, b) => Number(a.id) - Number(b.id));
+        const absoluteIndex = currentStageSorted.findIndex(m => m.id === match.id);
+
         // Ordenamos las llaves numéricamente (M1, M2, M3...)
         const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
             .sort((a, b) => {
@@ -48,11 +53,11 @@ const MatchCard = ({
             })
             .map(k => adminFullBracket[roundKey][k]);
         
-        // 🟢 EL FIX: La final y el 3er puesto siempre son el único partido (índice 0) de su categoría interna.
-        const actualIndex = (roundKey === 'final' || roundKey === 'tercero') ? 0 : index;
+        const actualIndex = (roundKey === 'final' || roundKey === 'tercero') ? 0 : (absoluteIndex >= 0 ? absoluteIndex : 0);
         const bMatch = bracketMatchValues[actualIndex]; 
         
-        if (bMatch && bMatch[side]) {
+        // 🟢 Ignoramos a los "fantasmas" (isPlaceholder) para que la tarjeta diga "Por Definir"
+        if (bMatch && bMatch[side] && !bMatch[side].isPlaceholder) {
             return bMatch[side].name;
         }
         return null;

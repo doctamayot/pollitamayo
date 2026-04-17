@@ -23,7 +23,7 @@ const extraQuestions = [
 const specialEvents = [
     { id: 'gol_olimpico', label: '¿Habrá un Gol Olímpico?' },
     { id: 'remontada_epica', label: '¿Remontada tras ir perdiendo por 2 goles?' },
-    { id: 'el_festival', label: '¿Algún partido tendrá 7 o más goles?' },
+    { id: 'el_festival', label: '¿Algún partido tendrá 8 o más goles?' },
     { id: 'muralla_final', label: '¿La final terminará 0-0 en los 90 mins?' },
     { id: 'hat_trick_hero', label: '¿Algún jugador anotará un Hat-Trick?' },
     { id: 'roja_banquillo', label: '¿Expulsarán a alguien del banquillo?' },
@@ -184,22 +184,44 @@ const WorldCupGridOthers = ({ currentUser }) => {
         });
     }, [groupStageMatches, adminResults]);
 
+    // 🟢 MOTOR PROGRESIVO: Verifica grupo por grupo y extrae a los clasificados a medida que se completan
     const adminQualified32 = useMemo(() => {
-        if (!isGroupStageFinished) return []; 
-        
-        let top2 = []; let thirds = [];
+        let top2 = []; 
+        let thirds = [];
+        let allGroupsFinished = true;
+
         const byGroup = groupStageMatches.reduce((acc, m) => {
             let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
             if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
         }, {});
         
         Object.keys(byGroup).forEach(g => {
-            const st = getStandings(byGroup[g], adminResults?.predictions, g, adminResults?.manualTiebreakers);
-            if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
+            const groupMatches = byGroup[g];
+            // Verificamos si ESTE grupo está completo
+            const isGroupFinished = groupMatches.length > 0 && groupMatches.every(m => 
+                adminResults?.predictions?.[m.id]?.home !== undefined && 
+                adminResults?.predictions?.[m.id]?.home !== ''
+            );
+
+            if (!isGroupFinished) allGroupsFinished = false;
+
+            if (isGroupFinished) {
+                const st = getStandings(groupMatches, adminResults?.predictions, g, adminResults?.manualTiebreakers);
+                if (st[0]) top2.push(st[0]); 
+                if (st[1]) top2.push(st[1]); 
+                if (st[2]) thirds.push(st[2]);
+            }
         });
-        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-        return [...top2, ...thirds.slice(0, 8)];
-    }, [groupStageMatches, adminResults, getStandings, isGroupStageFinished]);
+
+        // Solo saca a los 3eros de la sala de espera si TODOS los grupos terminaron
+        if (allGroupsFinished && top2.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            return [...top2, ...thirds.slice(0, 8)];
+        }
+        
+        // Retorna parcialmente los primeros y segundos confirmados
+        return top2;
+    }, [groupStageMatches, adminResults, getStandings]);
 
     const validUsers = useMemo(() => {
         return Object.keys(allPredictions)
@@ -398,7 +420,8 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                                 uThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
                                                 uTeams = [...uTop2, ...uThirds.slice(0, 8)];
 
-                                                if (isGroupStageFinished && aTeamsCurrentRound.length > 0) {
+                                                // 🟢 PUNTOS PROGRESIVOS PARA 16VOS: Ya no esperamos a isGroupStageFinished
+                                                if (aTeamsCurrentRound.length > 0) {
                                                     hits = uTeams.filter(ut => aTeamsCurrentRound.some(at => at.name === ut.name)).length;
                                                 }
                                             } else if (selectedRound === 'tercer_puesto_match') {
@@ -428,11 +451,9 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                                     <div className="flex flex-wrap gap-1.5 w-full sm:w-3/4 justify-start sm:justify-end">
                                                         {uTeams.map(ut => {
                                                             const hit = aTeamsCurrentRound.some(at => at.name === ut.name);
-                                                            // Condición ajustada para colorear de verde solo si aplica
-                                                            const shouldHighlight = hit && (selectedRound !== 'clasificados32' || isGroupStageFinished);
-
+                                                            
                                                             return (
-                                                                <span key={ut.name} className={`px-2 py-1 rounded text-[9px] sm:text-[10px] font-bold border transition-colors ${shouldHighlight ? 'bg-green-500/20 text-green-500 border-green-500/40' : 'bg-background text-foreground-muted border-border/50'}`}>
+                                                                <span key={ut.name} className={`px-2 py-1 rounded text-[9px] sm:text-[10px] font-bold border transition-colors ${hit ? 'bg-green-500/20 text-green-500 border-green-500/40' : 'bg-background text-foreground-muted border-border/50'}`}>
                                                                     {translateTeam(ut.name)}
                                                                 </span>
                                                             );

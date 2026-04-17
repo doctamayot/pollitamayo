@@ -4,19 +4,32 @@ import { collection, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore'
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 import toast from 'react-hot-toast';
+import { generateFullBracket } from '../services/bracketEngine';
 
 // --- TRADUCCIONES Y CONSTANTES ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
 
-const teamTranslations = {
+export const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
-    "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Brazil": "Brasil", 
-    "Cameroon": "Camerún", "Canada": "Canadá", "Chile": "Chile", "Colombia": "Colombia",  "Cape Verde Islands": "Cabo Verde",
-    "Costa Rica": "Costa Rica", "Croatia": "Croacia", "Denmark": "Dinamarca", "Ecuador": "Ecuador", 
-    "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Japan": "Japón", 
-    "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", "Peru": "Perú", 
-    "Portugal": "Portugal", "Senegal": "Senegal", "South Korea": "Corea del Sur", "Spain": "España", 
-    "United States": "Estados Unidos", "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Por definir": "Por definir", "TBD": "Por definir"
+    "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Bosnia and Herzegovina": "Bosnia y Herzegovina",
+    "Brazil": "Brasil", "Bulgaria": "Bulgaria", "Cameroon": "Camerún", "Canada": "Canadá", "Cape Verde Islands": "Cabo Verde",
+    "Chile": "Chile", "China": "China", "Colombia": "Colombia", "Costa Rica": "Costa Rica", 
+    "Croatia": "Croacia", "Czechia": "República Checa", "Czech Republic": "República Checa", 
+    "Denmark": "Dinamarca", "Ecuador": "Ecuador", "Egypt": "Egipto", "El Salvador": "El Salvador", 
+    "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Ghana": "Ghana", 
+    "Greece": "Grecia", "Guatemala": "Guatemala", "Honduras": "Honduras", "Hungary": "Hungría", 
+    "Iceland": "Islandia", "Iran": "Irán", "Ireland": "Irlanda", "Italy": "Italia", 
+    "Ivory Coast": "Costa de Marfil", "Cote d'Ivoire": "Costa de Marfil", "Jamaica": "Jamaica", 
+    "Japan": "Japón", "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", 
+    "New Zealand": "Nueva Zelanda", "Nigeria": "Nigeria", "North Korea": "Corea del Norte", 
+    "Norway": "Noruega", "Panama": "Panamá", "Paraguay": "Paraguay", "Peru": "Perú", 
+    "Poland": "Polonia", "Portugal": "Portugal", "Qatar": "Catar", "Republic of Ireland": "República de Irlanda", 
+    "Romania": "Rumania", "Russia": "Rusia", "Saudi Arabia": "Arabia Saudita", "Scotland": "Escocia", 
+    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovaquia", 
+    "South Africa": "Sudáfrica", "South Korea": "Corea del Sur", "Spain": "España", "Sweden": "Suecia", 
+    "Switzerland": "Suiza", "Tunisia": "Túnez", "Turkey": "Turquía", "Ukraine": "Ucrania", 
+    "United Arab Emirates": "Emiratos Árabes Unidos", "United States": "Estados Unidos", 
+    "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Wales": "Gales", "Por definir": "Por definir", "TBD": "Por definir"
 };
 
 const matchStatusTranslations = {
@@ -88,7 +101,7 @@ const WorldCupGrid = ({ currentUser }) => {
     const scrollContainerRef = useRef(null);
     const lastSyncTime = useRef(0);
     const prevSimDateRef = useRef(''); 
-    const apiFetchedRef = useRef(false); // <--- 1. AGREGA ESTA LÍNEA
+    const apiFetchedRef = useRef(false); 
     const autoSyncTimeRef = useRef(0);
 
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
@@ -96,16 +109,12 @@ const WorldCupGrid = ({ currentUser }) => {
             if (!isBackgroundUpdate) setIsApiLoading(true);
 
             if (isAdmin) {
-                // 👑 1. EL ADMIN LLAMA A LA API DE LA FIFA
                 const data = await getWorldCupMatches();
                 console.log("llamando api")
                 if (data && data.matches) {
                     setMatches(data.matches);
-                    
-                    // 👑 2. EL ADMIN GUARDA LA "FOTO" EN FIREBASE PARA LOS JUGADORES
                     await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
 
-                    // Lógica del Admin para actualizar marcadores oficiales automáticamente
                     const adminRef = doc(db, 'worldCupAdmin', 'results');
                     const adminDoc = await getDoc(adminRef);
                     let currentAdminPreds = adminDoc.exists() ? adminDoc.data().predictions || {} : {};
@@ -140,13 +149,11 @@ const WorldCupGrid = ({ currentUser }) => {
                     }
                 }
             } else {
-                // 👥 3. LOS JUGADORES LEEN DEL CACHÉ DE FIREBASE (¡Sin tocar la API!)
                 const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
                 
                 if (cacheDoc.exists() && cacheDoc.data().matches) {
                     setMatches(cacheDoc.data().matches);
                 } else {
-                    // Respaldo de emergencia: Si el caché no existe, llama a la API una vez
                     const data = await getWorldCupMatches();
                     if (data && data.matches) setMatches(data.matches);
                 }
@@ -159,7 +166,6 @@ const WorldCupGrid = ({ currentUser }) => {
     }, [isAdmin]);
 
    useEffect(() => {
-        // 🔒 Candado de React 18: Evita el doble llamado al montar el componente
         if (!apiFetchedRef.current) {
             fetchApiMatches();
             apiFetchedRef.current = true;
@@ -182,6 +188,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, [fetchApiMatches]);
+
     useEffect(() => {
         if (!isAdmin) return;
 
@@ -211,7 +218,7 @@ const WorldCupGrid = ({ currentUser }) => {
         return () => clearInterval(pollInterval);
     }, [matches, isAdmin, fetchApiMatches, isAutoSyncActive]);
 
-    // 🟢 ROBOT AUTO-SYNC: Sincroniza la API con la Base de Datos automáticamente
+    // 🟢 ROBOT AUTO-SYNC
     useEffect(() => {
         if (!isAdmin || !isAutoSyncActive) return;
 
@@ -440,11 +447,78 @@ const WorldCupGrid = ({ currentUser }) => {
         }, {});
     }, [effectiveMatches]);
 
+    // 🟢 ADMIN CLASIFICADOS PROGRESIVOS PARA EL BRACKET
+    const adminQualified32 = useMemo(() => {
+        let top2 = []; let thirds = []; let allFinished = true;
+        Object.keys(groupMatchesMap).forEach(g => {
+            const groupMatches = groupMatchesMap[g];
+            const isGroupFinished = groupMatches.every(m => mergedAdminPreds[m.id]?.home !== undefined && mergedAdminPreds[m.id]?.home !== '');
+            if (!isGroupFinished) allFinished = false;
+            if (isGroupFinished) {
+                const st = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
+                if (st[0]) top2.push({ ...st[0], qualReason: '1º', group: g });
+                if (st[1]) top2.push({ ...st[1], qualReason: '2º', group: g });
+                if (st[2]) thirds.push({ ...st[2], qualReason: '3º', group: g });
+            }
+        });
+        if (allFinished && top2.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            return [...top2, ...thirds.slice(0, 8)];
+        }
+        return top2;
+    }, [groupMatchesMap, mergedAdminPreds, adminResults, getStandings]);
+
+    // 🟢 GENERAMOS EL BRACKET OFICIAL DEL ADMIN UNA VEZ PARA TODA LA GRILLA
+    const adminFullBracket = useMemo(() => {
+        let teams = adminQualified32 || [];
+        const tempTeams = [...teams];
+        for (let i = tempTeams.length; i < 32; i++) {
+            tempTeams.push({ name: `Por Definir ${i}`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
+        }
+        try { 
+            return generateFullBracket(tempTeams, adminResults?.knockoutPicks || {}); 
+        } 
+        catch (e) { 
+            console.error("Error armando bracket en Grilla Live", e); 
+            return null; 
+        }
+    }, [adminQualified32, adminResults]);
+
     // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
     const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
         const pastMatches = effectiveMatches.filter(m => new Date(m.utcDate) <= targetDate);
+
+        // ADMIN CLASIFICADOS PROGRESIVOS HASTA targetDate
+        let adminProgTop2 = []; 
+        let adminProgThirds = [];
+        let allGroupsFinishedUpToDate = true;
+
+        Object.keys(groupMatchesMap).forEach(g => {
+            const groupMatches = groupMatchesMap[g];
+            const lastMatchOfGroup = [...groupMatches].sort((a,b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
+            
+            if (lastMatchOfGroup && new Date(lastMatchOfGroup.utcDate) <= targetDate) {
+                const isGroupFinished = groupMatches.every(m => (mergedAdminPreds[m.id]?.home !== undefined && mergedAdminPreds[m.id]?.home !== '') || m.status === 'FINISHED');
+                if (isGroupFinished) {
+                    const st = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
+                    if (st[0]) adminProgTop2.push(st[0]); 
+                    if (st[1]) adminProgTop2.push(st[1]); 
+                    if (st[2]) adminProgThirds.push(st[2]);
+                } else {
+                    allGroupsFinishedUpToDate = false;
+                }
+            } else {
+                allGroupsFinishedUpToDate = false;
+            }
+        });
+
+        let adminProgQual32 = [...adminProgTop2];
+        if (allGroupsFinishedUpToDate && adminProgTop2.length > 0) {
+            adminProgThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            adminProgQual32 = [...adminProgTop2, ...adminProgThirds.slice(0, 8)];
+        }
 
         Object.keys(allPredictions).forEach(uid => {
             const userData = allPredictions[uid];
@@ -452,7 +526,6 @@ const WorldCupGrid = ({ currentUser }) => {
 
             let total = 0;
 
-            // 1. Puntos por Marcadores Progresivos
             pastMatches.forEach(m => {
                 const p = userData.predictions?.[m.id]; 
                 const rH = mergedAdminPreds[m.id]?.home;
@@ -464,7 +537,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     const realH = parseInt(rH, 10);
                     const realA = parseInt(rA, 10);
                     
-                    // CANDADO: Solo suma si hay números reales
                     if (!isNaN(realH) && !isNaN(realA)) {
                         const pH = parseInt(p.home, 10); const pA = parseInt(p.away, 10);
                         if (pH === realH && pA === realA) total += 5;
@@ -478,7 +550,6 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
             });
 
-            // 2. Plenos de Grupo (Solo si el grupo terminó antes o en la fecha del targetDate)
             Object.keys(groupMatchesMap).forEach(g => {
                 const groupMatches = groupMatchesMap[g];
                 const lastMatchOfGroup = [...groupMatches].sort((a,b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
@@ -493,7 +564,22 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
             });
 
-            // 3. Clasificados a Rondas
+            let userTop2 = []; let userThirds = [];
+            Object.keys(groupMatchesMap).forEach(g => {
+                const uT = getStandings(groupMatchesMap[g], userData.predictions, g, userData.manualTiebreakers);
+                if (uT[0]) userTop2.push(uT[0]); 
+                if (uT[1]) userTop2.push(uT[1]); 
+                if (uT[2]) userThirds.push(uT[2]);
+            });
+            userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            const userProgQual32 = [...userTop2, ...userThirds.slice(0, 8)];
+
+            if (adminProgQual32.length > 0) {
+                userProgQual32.forEach(ut => {
+                    if (adminProgQual32.some(at => at.name === ut.name)) total += 2;
+                });
+            }
+
             const koRounds = [
                 { id: 'dieciseisavos', pts: 3, stage: 'LAST_32' }, { id: 'octavos', pts: 4, stage: 'LAST_16' },
                 { id: 'cuartos', pts: 5, stage: 'QUARTER_FINALS' }, { id: 'semis', pts: 6, stage: 'SEMI_FINALS' }
@@ -507,7 +593,17 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
             });
 
-            // 4. Podio y Super Bono
+            const thirdMatch = effectiveMatches.find(m => m.stage === 'THIRD_PLACE');
+            if (thirdMatch && new Date(thirdMatch.utcDate) <= targetDate) {
+                const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
+                const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+                if (aThirdsList.length > 0) {
+                    uThirdsList.forEach(ut => {
+                        if (ut && aThirdsList.some(at => at && at.name === ut.name)) total += 4;
+                    });
+                }
+            }
+
             const finalMatch = effectiveMatches.find(m => m.stage === 'FINAL');
             if (finalMatch && new Date(finalMatch.utcDate) <= targetDate) {
                 const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
@@ -521,7 +617,6 @@ const WorldCupGrid = ({ currentUser }) => {
                 if (isSuperBono) total += 10;
             }
 
-            // 5. Extras y Eventos
             extraQuestions.forEach(q => {
                 const answer = userData.extraPicks?.[q.id];
                 const officialAnswer = adminResults?.extraPicks?.[q.id];
@@ -576,30 +671,8 @@ const WorldCupGrid = ({ currentUser }) => {
     }, [effectiveMatches]);
 
     const sortedDates = useMemo(() => {
-        const rawDates = Object.keys(matchesByDate).sort(); 
-        const activePhase = adminResults?.activePhase || 'GROUP_STAGE';
-
-        if (activePhase === 'GROUP_STAGE' || activePhase === 'ALL_OPEN') {
-            return rawDates; 
-        }
-
-        const knockoutDates = [];
-        const groupDates = [];
-
-        rawDates.forEach(d => {
-            const hasKnockoutMatch = matchesByDate[d].some(m => m.stage !== 'GROUP_STAGE');
-            if (hasKnockoutMatch) {
-                knockoutDates.push(d);
-            } else {
-                groupDates.push(d);
-            }
-        });
-
-        knockoutDates.sort((a, b) => new Date(a) - new Date(b));
-        groupDates.sort((a, b) => new Date(a) - new Date(b));
-
-        return [...knockoutDates, ...groupDates];
-    }, [matchesByDate, adminResults]);
+        return Object.keys(matchesByDate).sort((a, b) => new Date(a) - new Date(b));
+    }, [matchesByDate]);
 
     useEffect(() => {
         if (sortedDates.length === 0) return;
@@ -871,20 +944,72 @@ const WorldCupGrid = ({ currentUser }) => {
                         return { ...user, uP, pts };
                     });
 
+                    // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
+                    const isKnockout = match.stage !== 'GROUP_STAGE';
                     const homeOriginal = match.homeTeam?.name || '';
                     const awayOriginal = match.awayTeam?.name || '';
-                    
-                    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
-                    const customHome = a?.customHomeTeam || '';
-                    const customAway = a?.customAwayTeam || '';
+                    const adminPred = adminResults?.predictions?.[match.id];
+                    const customHome = adminPred?.customHomeTeam || '';
+                    const customAway = adminPred?.customAwayTeam || '';
 
-                    const finalHomeName = customHome || (isUnknownHome ? 'Por Definir' : homeOriginal);
-                    const finalAwayName = customAway || (isUnknownAway ? 'Por Definir' : awayOriginal);
+                    let finalHomeName = '';
+                    let finalAwayName = '';
+                    let isTeamDrawnFromBracket = false;
 
-                    const homeCrest = customHome ? allTeams.find(t => t.name === customHome)?.crest : match.homeTeam?.crest;
-                    const awayCrest = customAway ? allTeams.find(t => t.name === customAway)?.crest : match.awayTeam?.crest;
+                    if (isKnockout) {
+                        let roundKey = '';
+                        if (match.stage === 'LAST_32' || match.stage === 'ROUND_OF_32') roundKey = 'dieciseisavos';
+                        else if (match.stage === 'LAST_16') roundKey = 'octavos';
+                        else if (match.stage === 'QUARTER_FINALS') roundKey = 'cuartos';
+                        else if (match.stage === 'SEMI_FINALS') roundKey = 'semis';
+                        else if (match.stage === 'FINAL') roundKey = 'final';
+                        else if (match.stage === 'THIRD_PLACE') roundKey = 'tercero';
+
+                        let bracketHome = null;
+                        let bracketAway = null;
+
+                        // Extraemos los nombres de la caja exacta usando el bracket oficial del Admin
+                        if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
+                            const currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
+
+                            let bMatch;
+                            if (roundKey === 'final' || roundKey === 'tercero') {
+                                bMatch = Object.values(adminFullBracket[roundKey])[0];
+                            } else {
+                                const absoluteIndex = currentStageArray.findIndex(m => m.id === match.id);
+                                const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
+                                    .sort((a, b) => {
+                                        const numA = parseInt(a.replace(/\D/g, '')) || 0;
+                                        const numB = parseInt(b.replace(/\D/g, '')) || 0;
+                                        return numA - numB;
+                                    })
+                                    .map(k => adminFullBracket[roundKey][k]);
+                                
+                                bMatch = bracketMatchValues[absoluteIndex >= 0 ? absoluteIndex : 0]; 
+                            }
+                            
+                            if (bMatch) {
+                                // Si es un fantasma, devuelve null para que diga "Por Definir". Si es real, saca el nombre.
+                                bracketHome = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                                bracketAway = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                            }
+                        }
+
+                        finalHomeName = customHome || bracketHome || '';
+                        finalAwayName = customAway || bracketAway || '';
+                        if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
+
+                    } else {
+                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+                        
+                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
+                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
+                    }
+
+                    const homeCrest = allTeams.find(t => t.name === finalHomeName)?.crest || match.homeTeam?.crest;
+                    const awayCrest = allTeams.find(t => t.name === finalAwayName)?.crest || match.awayTeam?.crest;
 
                     const mainReferee = match.referees && match.referees.length > 0 
                         ? match.referees.find(r => r.type === 'REFEREE' || r.role === 'REFEREE') || match.referees[0] 
@@ -894,7 +1019,7 @@ const WorldCupGrid = ({ currentUser }) => {
                         <div key={match.id} className={`bg-card border ${isLive ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
                             {isAdmin && (
-                                <div className="absolute top-3 right-3 z-50">
+                                <div className="absolute top-3 right-3 z-50 mt-[-10px]">
                                     <select 
                                         className="bg-purple-900 text-purple-100 text-[9px] font-bold p-1 rounded-lg outline-none border border-purple-500/50 shadow-md cursor-pointer hover:bg-purple-800 transition-colors"
                                         value={adminResults?.simulation?.matchStatuses?.[match.id] || ''}

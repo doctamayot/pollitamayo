@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; // 🟢 getDoc agregado
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 
@@ -66,7 +66,31 @@ const isSmartMatch = (userText, adminText) => {
     return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
 };
 
-const WorldCupRanking = () => {
+// 🧠 FUNCIÓN HELPER CON MAGIA DEDUCTIVA PARA EL TERCER PUESTO (Añadida para coherencia con Mi Polla)
+const getThirdPlaceTeams = (picksObj) => {
+    if (!picksObj) return [];
+    const teamsMap = new Map();
+    const t3 = Array.isArray(picksObj.tercero) ? picksObj.tercero : (picksObj.tercero ? [picksObj.tercero] : []);
+    const t4 = Array.isArray(picksObj.cuarto) ? picksObj.cuarto : (picksObj.cuarto ? [picksObj.cuarto] : []);
+    [...t3, ...t4].forEach(t => {
+        if (t && t.name) teamsMap.set(t.name, t);
+    });
+    const semifinalistas = picksObj.cuartos || []; 
+    const finalistas = picksObj.semis || [];       
+    if (semifinalistas.length > 0 && finalistas.length > 0) {
+        const deductedTeams = semifinalistas.filter(semiTeam => 
+            !finalistas.some(finTeam => finTeam.name === semiTeam.name)
+        );
+        deductedTeams.forEach(t => { 
+            if (t && t.name) teamsMap.set(t.name, t);
+        });
+    }
+    return Array.from(teamsMap.values());
+};
+
+const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser para saber si es Admin
+    const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
+
     const [matches, setMatches] = useState([]);
     const [allPredictions, setAllPredictions] = useState({});
     const [usersInfo, setUsersInfo] = useState({});
@@ -79,10 +103,26 @@ const WorldCupRanking = () => {
    useEffect(() => {
         const fetchMatches = async () => {
             try {
-                const data = await getWorldCupMatches();
+                let data = null;
+
+                // 🟢 BLINDAJE DE API
+                if (isAdmin) {
+                    data = await getWorldCupMatches();
+                } else {
+                    const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+                    if (cacheDoc.exists() && cacheDoc.data().matches) {
+                        data = { matches: cacheDoc.data().matches };
+                    } else {
+                        data = await getWorldCupMatches();
+                    }
+                }
+
                 if (data && data.matches) setMatches(data.matches);
-            } catch (err) { console.error(err); }
-            finally { setLoadingStatus(prev => ({ ...prev, api: true })); }
+            } catch (err) { 
+                console.error(err); 
+            } finally { 
+                setLoadingStatus(prev => ({ ...prev, api: true })); 
+            }
         };
         fetchMatches();
 
@@ -104,7 +144,7 @@ const WorldCupRanking = () => {
         });
 
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
-    }, []);
+    }, [isAdmin]);
 
     const effectiveMatches = useMemo(() => {
         return matches.map(m => {
@@ -137,8 +177,39 @@ const WorldCupRanking = () => {
         return preds;
     }, [adminResults, effectiveMatches]);
 
-    const getStandings = useCallback((groupMatches, preds, groupName, tiebreakers) => {
+    const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
+
+    const byGroup = useMemo(() => {
+        return groupStageMatches.reduce((acc, m) => {
+            let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
+            if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
+        }, {});
+    }, [groupStageMatches]);
+
+    const groupStatus = useMemo(() => {
+        const status = {};
+        let allFinished = true;
+        Object.keys(byGroup).forEach(g => {
+            const groupMatches = byGroup[g];
+            const isGroupFinished = groupMatches.every(m => {
+                const aPred = mergedAdminPreds?.[m.id];
+                const hasAdminRes = aPred && aPred.home !== '' && aPred.away !== '' && aPred.home !== undefined && aPred.away !== undefined;
+                return hasAdminRes || m.status === 'FINISHED';
+            });
+            status[g] = isGroupFinished;
+            if (!isGroupFinished) allFinished = false;
+        });
+        return { groups: status, allFinished }; 
+    }, [byGroup, mergedAdminPreds]);
+
+    const isGroupStageFinished = groupStatus.allFinished;
+
+    // 🟢 CALCULADORA AVANZADA UNIFICADA (Para resolver empates igual que las otras pantallas)
+    const computeStandings = useCallback((groupName, predsToUse, tiesToUse) => {
+        if (!groupName || !byGroup[groupName]) return [];
+        const groupMatches = byGroup[groupName];
         const teams = {};
+
         groupMatches.forEach(m => {
             const h = m.homeTeam?.name || 'Por definir';
             const a = m.awayTeam?.name || 'Por definir';
@@ -147,17 +218,19 @@ const WorldCupRanking = () => {
         });
 
         groupMatches.forEach(m => {
-            const pr = preds?.[m.id];
-            if (pr && pr.home !== '' && pr.home !== undefined && pr.away !== '' && pr.away !== undefined) {
-                const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
+            const pred = predsToUse?.[m.id];
+            if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
+                const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
                 const h = m.homeTeam.name; const a = m.awayTeam.name;
+
                 teams[h].pj++; teams[a].pj++;
-                teams[h].gf += gh; teams[a].gf += ga;
-                teams[h].gc += ga; teams[a].gc += gh;
+                teams[h].gf += hG; teams[a].gf += aG;
+                teams[h].gc += aG; teams[a].gc += hG;
                 teams[h].dg = teams[h].gf - teams[h].gc;
                 teams[a].dg = teams[a].gf - teams[a].gc;
-                if (gh > ga) { teams[h].pts += 3; teams[h].pg++; teams[a].pp++; } 
-                else if (gh < ga) { teams[a].pts += 3; teams[a].pg++; teams[h].pp++; } 
+
+                if (hG > aG) { teams[h].pts += 3; teams[h].pg++; teams[a].pp++; } 
+                else if (hG < aG) { teams[a].pts += 3; teams[a].pg++; teams[h].pp++; } 
                 else { teams[h].pts += 1; teams[a].pts += 1; teams[h].pe++; teams[a].pe++; }
             }
         });
@@ -171,14 +244,15 @@ const WorldCupRanking = () => {
 
             groupMatches.forEach(m => {
                 if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
-                    const pr = preds?.[m.id];
-                    if (pr && pr.home !== '' && pr.away !== '') {
-                        const hG = parseInt(pr.home, 10); const aG = parseInt(pr.away, 10);
+                    const pred = predsToUse?.[m.id];
+                    if (pred && pred.home !== '' && pred.away !== '') {
+                        const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
                         const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        
                         h2hStats[h].gf += hG; h2hStats[a].gf += aG;
                         h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
-                        if (hG > aG) h2hStats[h].pts += 3;
-                        else if (hG < aG) h2hStats[a].pts += 3;
+                        if (hG > aG) { h2hStats[h].pts += 3; }
+                        else if (hG < aG) { h2hStats[a].pts += 3; }
                         else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
                     }
                 }
@@ -201,39 +275,46 @@ const WorldCupRanking = () => {
             });
 
             let finalSorted = [];
+
             sortedH2HKeys.forEach(key => {
                 const subGroup = h2hGroups[key];
+                
                 if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
                     finalSorted.push(...resolveTie(subGroup));
-                } else if (subGroup.length > 1) {
+                } 
+                else if (subGroup.length > 1) {
                     const groupedByOverall = {};
                     subGroup.forEach(t => {
                         const oKey = `${t.dg}_${t.gf}`;
                         if (!groupedByOverall[oKey]) groupedByOverall[oKey] = [];
                         groupedByOverall[oKey].push(t);
                     });
+                    
                     const sortedOverallKeys = Object.keys(groupedByOverall).sort((a, b) => {
                         const [dgA, gfA] = a.split('_').map(Number);
                         const [dgB, gfB] = b.split('_').map(Number);
                         if (dgB !== dgA) return dgB - dgA;
                         return gfB - gfA;
                     });
+
                     sortedOverallKeys.forEach(oKey => {
                         const finalTied = groupedByOverall[oKey];
                         if (finalTied.length > 1) {
                             finalTied.sort((a, b) => {
-                                const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
-                                const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
+                                const tieA = tiesToUse?.[groupName]?.[a.name] || 99;
+                                const tieB = tiesToUse?.[groupName]?.[b.name] || 99;
                                 if (tieA !== tieB) return tieA - tieB; 
                                 return translateTeam(a.name).localeCompare(translateTeam(b.name));
                             });
                         }
                         finalSorted.push(...finalTied);
                     });
-                } else {
+                } 
+                else {
                     finalSorted.push(subGroup[0]);
                 }
             });
+
             return finalSorted;
         };
 
@@ -244,44 +325,41 @@ const WorldCupRanking = () => {
         });
 
         const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+
         let finalFlattenedStandings = [];
+
         sortedPtsKeys.forEach(pts => {
-            finalFlattenedStandings.push(...resolveTie(groupedByPts[pts]));
+            const groupTeams = groupedByPts[pts];
+            finalFlattenedStandings.push(...resolveTie(groupTeams));
         });
+
         return finalFlattenedStandings;
-    }, []);
+    }, [byGroup]);
 
-    const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
-
-    const isGroupStageFinished = useMemo(() => {
-        if (groupStageMatches.length === 0) return false;
-        return groupStageMatches.every(m => {
-            const p = mergedAdminPreds[m.id];
-            return p && p.home !== '' && p.home !== undefined;
-        });
-    }, [groupStageMatches, mergedAdminPreds]);
-
+    // 🟢 MOTOR PROGRESIVO DE CLASIFICADOS PARA EL RANKING (Alineado con Mi Polla)
     const adminQualified32 = useMemo(() => {
         let top2 = []; let thirds = [];
-        const byGroup = groupStageMatches.reduce((acc, m) => {
-            let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
-            if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
-        }, {});
+        let allGroupsFinished = true;
         
         Object.keys(byGroup).forEach(g => {
-            const st = getStandings(byGroup[g], mergedAdminPreds, g, adminResults?.manualTiebreakers);
-            if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
+            const isGroupFinished = groupStatus.groups[g];
+            if (!isGroupFinished) allGroupsFinished = false;
+
+            if (isGroupFinished) {
+                const st = computeStandings(g, mergedAdminPreds, adminResults?.manualTiebreakers);
+                if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
+            }
         });
-        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-        return [...top2, ...thirds.slice(0, 8)];
-    }, [groupStageMatches, mergedAdminPreds, adminResults, getStandings]);
+        
+        if (allGroupsFinished && top2.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            return [...top2, ...thirds.slice(0, 8)];
+        }
+        return top2;
+    }, [byGroup, mergedAdminPreds, adminResults, groupStatus, computeStandings]);
 
     const ranking = useMemo(() => {
         const ranks = [];
-        const byGroup = groupStageMatches.reduce((acc, m) => {
-            let g = m.group?.replace('GROUP_', 'Grupo ') || 'Fase de Grupos';
-            if (!acc[g]) acc[g] = []; acc[g].push(m); return acc;
-        }, {});
 
         Object.keys(allPredictions).forEach(uid => {
             const userData = allPredictions[uid];
@@ -295,7 +373,6 @@ const WorldCupRanking = () => {
                 const rA = mergedAdminPreds[m.id]?.away;
                 const matchStatus = m.status || '';
                 
-                // 🟢 FIX: Asegurarse de que el resultado oficial existe y no está vacío
                 const hasOfficialAdminResult = (rH !== undefined && rH !== '' && rH !== null) && (rA !== undefined && rA !== '' && rA !== null);
                 const isMatchActiveOrFinished = matchStatus === 'FINISHED' || matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
                 
@@ -330,16 +407,14 @@ const WorldCupRanking = () => {
 
                 if (predictedCount === 0) return;
 
-                const isGroupFinished = groupMatches.every(m => {
-                    const p = mergedAdminPreds[m.id];
-                    return p && p.home !== '' && p.home !== undefined && p.home !== null;
-                });
+                const isGroupFinished = groupStatus.groups[g];
                 
-                const uT = getStandings(groupMatches, userData.predictions, g, userData.manualTiebreakers);
+                const uT = computeStandings(g, userData.predictions, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
                 
+                // 🟢 PLENO DE GRUPO PROGRESIVO
                 if (isGroupFinished && predictedCount === groupMatches.length) {
-                    const aT = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
+                    const aT = computeStandings(g, mergedAdminPreds, adminResults?.manualTiebreakers);
                     if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
                         stats.ptsHonorYBonos += 8;
                     }
@@ -349,7 +424,8 @@ const WorldCupRanking = () => {
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            if (isGroupStageFinished && adminQualified32.length > 0) {
+            // 🟢 PUNTOS POR CLASIFICADOS A 16VOS PROGRESIVOS
+            if (adminQualified32.length > 0) {
                 userQualified32.forEach(ut => {
                     if (adminQualified32.some(at => at.name === ut.name)) stats.ptsRondas += 2;
                 });
@@ -372,8 +448,8 @@ const WorldCupRanking = () => {
                 }
             });
 
-            const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
-            const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
+            const uThirdsList = getThirdPlaceTeams(userData.knockoutPicks);
+            const aThirdsList = getThirdPlaceTeams(adminResults?.knockoutPicks);
             if (aThirdsList.length > 0) {
                 uThirdsList.forEach(ut => {
                     if (ut && aThirdsList.some(at => at && at.name === ut.name)) stats.ptsRondas += 4;
@@ -418,10 +494,10 @@ const WorldCupRanking = () => {
             r.position = currentRank;
         });
         return ranks;
-    }, [allPredictions, effectiveMatches, groupStageMatches, adminResults, usersInfo, isGroupStageFinished, adminQualified32, getStandings, mergedAdminPreds]);
+    }, [allPredictions, effectiveMatches, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus]);
 
     const premiosRepartidos = useMemo(() => {
-        if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, r1: 1, r2: 0, r3: 0 };
+        if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, netPot: 0, r1: 1, r2: 0, r3: 0 };
         
         const netPot = (ranking.length * ENTRY_FEE) * (1 - ADMIN_FEE_PERCENT);
         const bolsa1 = netPot * PORCENTAJES.p1;

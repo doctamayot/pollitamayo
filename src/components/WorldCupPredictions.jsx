@@ -53,7 +53,7 @@ const WorldCupPredictions = ({ currentUser }) => {
     const subTabsRef = useRef(null);
     const roundTabsRef = useRef(null);
     const lastSyncTime = useRef(0);
-    const apiFetchedRef = useRef(false); // <--- LÍNEA NUEVA
+    const apiFetchedRef = useRef(false); 
 
     const tabs = [
         { id: 'partidos', label: 'Marcadores', icon: '⚽', linkedPhase: 'GROUP_STAGE' },
@@ -68,19 +68,16 @@ const WorldCupPredictions = ({ currentUser }) => {
                 let data = null;
 
                 if (isAdmin) {
-                    // 👑 EL ADMIN LLAMA A LA API DE LA FIFA Y GUARDA EL CACHÉ
                     data = await getWorldCupMatches();
                     console.log("llamando api")
                     if (data && data.matches) {
                         await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
                     }
                 } else {
-                    // 👥 LOS JUGADORES LEEN DEL CACHÉ DE FIREBASE (¡Cero llamadas a la API!)
                     const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
                     if (cacheDoc.exists() && cacheDoc.data().matches) {
                         data = { matches: cacheDoc.data().matches };
                     } else {
-                        // Respaldo de emergencia por si el caché aún no se ha creado
                         data = await getWorldCupMatches();
                     }
                 }
@@ -105,7 +102,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 });
 
                 Object.keys(groupedGroups).forEach(key => groupedGroups[key].sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)));
-                Object.keys(ko).forEach(key => ko[key].sort((a, b) => Number(a.id) - Number(b.id)));
+                Object.keys(ko).forEach(key => ko[key].sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)));
 
                 setMatchesByGroup(groupedGroups);
                 setKnockoutMatches(ko);
@@ -278,7 +275,9 @@ const WorldCupPredictions = ({ currentUser }) => {
         return Array.from(teamsMap.values()).sort((a, b) => translateTeam(a.name).localeCompare(translateTeam(b.name)));
     }, [matchesByGroup]);
 
-    const calculateStandings = useCallback((groupName) => {
+
+    // 🟢 SUPER CALCULADORA UNIFICADA: Esta función ahora sirve para Usuarios y para el Admin
+    const computeStandings = useCallback((groupName, currentPreds, currentTies) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
@@ -291,7 +290,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
 
         groupMatches.forEach(m => {
-            const pred = predictions[m.id];
+            const pred = currentPreds[m.id];
             if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
                 const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
                 const h = m.homeTeam.name; const a = m.awayTeam.name;
@@ -317,7 +316,7 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             groupMatches.forEach(m => {
                 if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
-                    const pred = predictions[m.id];
+                    const pred = currentPreds[m.id];
                     if (pred && pred.home !== '' && pred.away !== '') {
                         const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
                         const h = m.homeTeam.name; const a = m.awayTeam.name;
@@ -380,8 +379,8 @@ const WorldCupPredictions = ({ currentUser }) => {
                             });
                             
                             finalTied.sort((a, b) => {
-                                const tieA = manualTiebreakers[groupName]?.[a.name] || 99;
-                                const tieB = manualTiebreakers[groupName]?.[b.name] || 99;
+                                const tieA = currentTies[groupName]?.[a.name] || 99;
+                                const tieB = currentTies[groupName]?.[b.name] || 99;
                                 if (tieA !== tieB) return tieA - tieB; 
                                 return translateTeam(a.name).localeCompare(translateTeam(b.name));
                             });
@@ -440,12 +439,12 @@ const WorldCupPredictions = ({ currentUser }) => {
         });
 
         return finalFlattenedStandings;
-    }, [matchesByGroup, predictions, manualTiebreakers]);
+    }, [matchesByGroup]);
 
     const currentGroupStandings = useMemo(() => {
         if (!selectedSubTab || !selectedSubTab.startsWith('Grupo')) return [];
-        return calculateStandings(selectedSubTab);
-    }, [calculateStandings, selectedSubTab]);
+        return computeStandings(selectedSubTab, predictions, manualTiebreakers);
+    }, [computeStandings, selectedSubTab, predictions, manualTiebreakers]);
 
     const hasTiesInGroup = useMemo(() => currentGroupStandings.some(t => t.isTied), [currentGroupStandings]);
 
@@ -458,34 +457,6 @@ const WorldCupPredictions = ({ currentUser }) => {
         );
     }, [matchesByGroup, predictions]);
 
-    function getStandingsForAdmin(groupMatches, preds, groupName, tiebreakers) {
-        const teams = {};
-        groupMatches.forEach(m => {
-            const h = m.homeTeam?.name || 'Por definir'; const a = m.awayTeam?.name || 'Por definir';
-            if (!teams[h]) teams[h] = { name: h, pts: 0, dg: 0, gf: 0 };
-            if (!teams[a]) teams[a] = { name: a, pts: 0, dg: 0, gf: 0 };
-        });
-        groupMatches.forEach(m => {
-            const pr = preds?.[m.id];
-            if (pr && pr.home !== '' && pr.away !== '') {
-                const gh = parseInt(pr.home, 10); const ga = parseInt(pr.away, 10);
-                teams[m.homeTeam.name].pts += gh > ga ? 3 : gh === ga ? 1 : 0;
-                teams[m.awayTeam.name].pts += ga > gh ? 3 : gh === ga ? 1 : 0;
-                teams[m.homeTeam.name].dg += (gh - ga); teams[m.awayTeam.name].dg += (ga - gh);
-                teams[m.homeTeam.name].gf += gh; teams[m.awayTeam.name].gf += ga;
-            }
-        });
-        return Object.values(teams).sort((a, b) => {
-            if (b.pts !== a.pts) return b.pts - a.pts;
-            if (b.dg !== a.dg) return b.dg - a.dg;
-            if (b.gf !== a.gf) return b.gf - a.gf;
-            const tieA = tiebreakers?.[groupName]?.[a.name] || 99;
-            const tieB = tiebreakers?.[groupName]?.[b.name] || 99;
-            if (tieA !== tieB) return tieA - tieB; 
-            return translateTeam(a.name).localeCompare(translateTeam(b.name));
-        });
-    }
-
     const isAdminGroupStageComplete = useMemo(() => {
         const allGroupMatches = Object.values(matchesByGroup).flat();
         if (allGroupMatches.length === 0) return false;
@@ -495,42 +466,97 @@ const WorldCupPredictions = ({ currentUser }) => {
         );
     }, [matchesByGroup, adminResults]);
 
+    // 🟢 MOTOR PROGRESIVO DEL ADMIN PARA CLASIFICADOS A 16VOS
     const adminQualified32 = useMemo(() => {
-        if (!isAdminGroupStageComplete) return [];
-        
         const adminPreds = adminResults?.predictions || {};
         const adminTies = adminResults?.manualTiebreakers || {};
         
-        let top2 = []; let thirds = [];
-        Object.keys(matchesByGroup).forEach(groupName => {
-            const standings = getStandingsForAdmin(matchesByGroup[groupName], adminPreds, groupName, adminTies);
-            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
-            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
-            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
-        });
-        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-        return [...top2, ...thirds.slice(0, 8)];
-    }, [matchesByGroup, adminResults, isAdminGroupStageComplete]);
+        let top2 = []; 
+        let thirds = [];
+        let allGroupsFinished = true;
 
+        Object.keys(matchesByGroup).forEach(groupName => {
+            const groupMatches = matchesByGroup[groupName] || [];
+            
+            const isThisGroupComplete = groupMatches.length > 0 && groupMatches.every(m =>
+                adminPreds[m.id]?.home !== undefined && adminPreds[m.id]?.home !== '' &&
+                adminPreds[m.id]?.away !== undefined && adminPreds[m.id]?.away !== ''
+            );
+
+            if (!isThisGroupComplete) {
+                allGroupsFinished = false; 
+            }
+
+            if (isThisGroupComplete) {
+                const standings = computeStandings(groupName, adminPreds, adminTies);
+                if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+                if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+                if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
+            }
+        });
+
+        if (allGroupsFinished && top2.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            return [...top2, ...thirds.slice(0, 8)];
+        } else {
+            return top2; 
+        }
+    }, [matchesByGroup, adminResults, computeStandings]);
+
+    // 🟢 MOTOR PROGRESIVO DE LAS PREDICCIONES DEL USUARIO
     const qualifiedRoundOf32 = useMemo(() => {
-        if (!isGroupStageComplete) return { all32: [] }; 
-        let top2 = []; let thirds = [];
-        Object.keys(matchesByGroup).forEach(groupName => {
-            const standings = calculateStandings(groupName);
-            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
-            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
-            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
-        });
-        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-        return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, calculateStandings, isGroupStageComplete]);
+        let top2 = []; 
+        let thirds = [];
+        let allGroupsFinished = true;
 
+        Object.keys(matchesByGroup).forEach(groupName => {
+            const groupMatches = matchesByGroup[groupName] || [];
+            
+            const isThisGroupComplete = groupMatches.length > 0 && groupMatches.every(m =>
+                predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== '' &&
+                predictions[m.id]?.away !== undefined && predictions[m.id]?.away !== ''
+            );
+
+            if (!isThisGroupComplete) {
+                allGroupsFinished = false;
+            }
+
+            if (isThisGroupComplete) {
+                const standings = computeStandings(groupName, predictions, manualTiebreakers);
+                if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+                if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+                if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
+            }
+        });
+
+        if (allGroupsFinished && top2.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            return { all32: [...top2, ...thirds.slice(0, 8)] };
+        } else {
+            return { all32: top2 }; 
+        }
+    }, [matchesByGroup, predictions, manualTiebreakers, computeStandings]);
+
+    // 🟢 BRACKET OFICIAL DEL ADMIN CON FANTASMAS (Evita el error en octavos)
     const adminFullBracket = useMemo(() => {
-        if (!isAdminGroupStageComplete || adminQualified32?.length < 32) return null;
+        let teams = adminQualified32 || [];
         
+        if (teams.length < 32) {
+            const tempTeams = [...teams];
+            for (let i = tempTeams.length; i < 32; i++) {
+                tempTeams.push({ name: `Por Definir ${i}`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
+            }
+            teams = tempTeams;
+        }
+
         const currentKOPicks = adminResults?.knockoutPicks || {};
-        return generateFullBracket(adminQualified32, currentKOPicks);
-    }, [isAdminGroupStageComplete, adminQualified32, adminResults?.knockoutPicks]);
+        try {
+            return generateFullBracket(teams, currentKOPicks);
+        } catch (e) {
+            console.error("Error armando bracket admin:", e);
+            return null;
+        }
+    }, [adminQualified32, adminResults?.knockoutPicks]);
 
     const getAvailableTeamsForRound = useCallback((roundId) => {
         switch(roundId) {
@@ -662,7 +688,7 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             const assignedValues = tiedTeamNames.map(t => groupTies[t]).filter(v => tieOptions.includes(v));
             if (assignedValues.length === tieOptions.length - 1) {
-                const missingOption = tieOptions.find(opt => !assignedValues.includes(opt));
+                const missingOption = tieOptions.find(opt => !assignedValues.includes(assignedValues));
                 const missingTeam = tiedTeamNames.find(t => !tieOptions.includes(groupTies[t]));
                 if (missingOption && missingTeam) groupTies[missingTeam] = missingOption;
             }
@@ -1021,6 +1047,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                                             allowTbdInput={activePhase === 'ALL_OPEN'} predictions={predictions} adminResults={adminResults} 
                                             allTeams={allTeams} isAdmin={isAdmin} handleScoreChange={handleScoreChange} handleCustomTeamChange={handleCustomTeamChange} 
                                             lockedMatches={lockedMatches} handleToggleLockMatch={handleToggleLockMatch} 
+                                            stageMatches={knockoutMatches[selectedSubTab]}
                                         />
                                     ))}
                                 </div>

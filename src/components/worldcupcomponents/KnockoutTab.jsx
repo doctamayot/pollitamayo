@@ -17,11 +17,30 @@ const KnockoutTab = ({
 }) => {
     const [isCleaning, setIsCleaning] = useState(false);
 
+    // 🟢 EL MOTOR PROGRESIVO BLINDADO
+    // Rellenamos con equipos falsos "bien formados" para que el bracketEngine.js 
+    // no haga crash al intentar leer sus grupos, y logre armar el cuadro mixto.
     const fullBracket = useMemo(() => {
-        if (isGroupStageComplete && qualifiedRoundOf32?.all32?.length === 32) {
-            return generateFullBracket(qualifiedRoundOf32.all32, knockoutPicks);
+        let teams = qualifiedRoundOf32?.all32 || [];
+        
+        if (!isGroupStageComplete && teams.length < 32) {
+            const tempTeams = [...teams];
+            for (let i = tempTeams.length; i < 32; i++) {
+                tempTeams.push({ 
+                    name: `Por Definir`, 
+                    isPlaceholder: true,
+                    group: 'Grupo TBD', // 🛠️ ESTO EVITA EL CRASH DE .replace()
+                    qualReason: '-'
+                });
+            }
+            try {
+                return generateFullBracket(tempTeams, knockoutPicks);
+            } catch(e) {
+                console.error("Error armando llaves parciales:", e);
+            }
         }
-        return null;
+        
+        return generateFullBracket(teams, knockoutPicks);
     }, [qualifiedRoundOf32, knockoutPicks, isGroupStageComplete]);
 
     const getLimitForTab = (tabId) => roundTabs.find(r => r.id === tabId)?.limit || 1;
@@ -39,7 +58,7 @@ const KnockoutTab = ({
 
     const getTabInfo = (tabId) => {
         switch(tabId) {
-            case 'dieciseisavos': return { title: '16vos de Final', desc: 'Según tus marcadores en la fase de Grupos, estos son los enfrentamientos oficiales de los 32 equipos clasificados en 16avos por los cuales ganas puntos. Ahora Elige a los 16 equipos que avanzarán a Octavos.' };
+            case 'dieciseisavos': return { title: '16vos de Final', desc: 'Según tus marcadores en la fase de Grupos, estos son los enfrentamientos oficiales. Elige a los 16 equipos que avanzarán a Octavos.' };
             case 'octavos': return { title: 'Octavos de Final', desc: 'Haz clic en el equipo ganador de cada llave para enviarlo a Cuartos de Final.' };
             case 'cuartos': return { title: 'Cuartos de Final', desc: 'Selecciona a los 4 equipos que llegarán a las Semifinales.' };
             case 'semis': return { title: 'Semifinales', desc: 'Elige a los 2 equipos que disputarán la Gran Final.' };
@@ -59,8 +78,8 @@ const KnockoutTab = ({
         const validNames = new Set();
         
         Object.values(currentBracket).forEach(match => {
-            if (match.home) validNames.add(match.home.name);
-            if (match.away) validNames.add(match.away.name);
+            if (match.home && !match.home.isPlaceholder) validNames.add(match.home.name);
+            if (match.away && !match.away.isPlaceholder) validNames.add(match.away.name);
         });
 
         return picks.filter(p => !validNames.has(p.name));
@@ -82,47 +101,38 @@ const KnockoutTab = ({
     };
 
     const renderMatchups = (matchesObj, currentTabId) => {
-        if (!isGroupStageComplete) {
-            return (
-                <div className="col-span-full text-center py-16 text-foreground-muted animate-fade-in bg-background-offset border border-border rounded-3xl shadow-inner mt-4">
-                    <span className="text-6xl mb-4 block opacity-50 drop-shadow-md">🛡️</span>
-                    <h3 className="font-black text-foreground text-xl sm:text-2xl mb-2 uppercase tracking-widest text-primary">Equipos por Definir</h3>
-                    <p className="text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
-                        Aún te faltan marcadores por predecir en la <strong>Fase de Grupos</strong>.<br/><br/> 
-                        Complétalos todos para que el motor pueda calcular con exactitud a tus 32 clasificados y armar tu árbol de llaves.
-                    </p>
-                </div>
-            );
+        
+        // 🟢 PLAN B VISUAL: Si el motor devuelve vacío, armamos las 16 cajas para que nunca se vea en negro
+        let safeMatchesObj = matchesObj;
+        
+        if (!safeMatchesObj || Object.keys(safeMatchesObj).length === 0) {
+            safeMatchesObj = {};
+            const limits = { 'dieciseisavos': 16, 'octavos': 8, 'cuartos': 4, 'semis': 2, 'campeon': 1, 'tercero': 1 };
+            const count = limits[currentTabId] || 1;
+            for(let i=1; i<=count; i++) {
+                safeMatchesObj[`M_TEMP_${i}`] = { home: { isPlaceholder: true }, away: { isPlaceholder: true }, label: `Llave ${i}` };
+            }
         }
-
-        if (!matchesObj) return null;
 
         const limit = getLimitForTab(currentTabId);
 
-        return Object.entries(matchesObj).map(([matchId, match]) => {
-            const homeIsSelected = match.home && knockoutPicks[currentTabId]?.some(t => t.name === match.home.name);
-            const awayIsSelected = match.away && knockoutPicks[currentTabId]?.some(t => t.name === match.away.name);
+        return Object.entries(safeMatchesObj).map(([matchId, match]) => {
+            const homeValid = match.home && !match.home.isPlaceholder;
+            const awayValid = match.away && !match.away.isPlaceholder;
 
-            // 🚀 INTERCAMBIO BLINDADO CONTRA CHOQUES DE TRENES
+            const homeIsSelected = homeValid && knockoutPicks[currentTabId]?.some(t => t.name === match.home.name);
+            const awayIsSelected = awayValid && knockoutPicks[currentTabId]?.some(t => t.name === match.away.name);
+
             const handlePick = (teamToSelect, isThisTeamSelected, isOpponentSelected, opponentTeam) => {
-                
-                // 1. SI EL EQUIPO YA ESTABA SELECCIONADO, LO APAGAMOS. 
-                // (Esto soluciona el bug cuando dos equipos quedan seleccionados a la vez)
                 if (isThisTeamSelected) {
                     toggleKnockoutPick(currentTabId, teamToSelect, limit);
                     return;
                 }
-
-                // 2. Si estamos eligiendo la Final o el Tercer Puesto, NO heredamos, solo asignamos
                 if (currentTabId === 'campeon' || currentTabId === 'tercero') {
                     toggleKnockoutPick(currentTabId, teamToSelect, limit);
-                } 
-                // 3. Si es cualquier otra ronda Y cambiamos de opinión (el oponente estaba seleccionado), heredamos
-                else if (isOpponentSelected) {
+                } else if (isOpponentSelected) {
                     replaceKnockoutPick(currentTabId, opponentTeam, teamToSelect);
-                } 
-                // 4. Si era una selección nueva (ambos vacíos), solo seleccionamos normal
-                else {
+                } else {
                     toggleKnockoutPick(currentTabId, teamToSelect, limit);
                 }
             };
@@ -135,19 +145,19 @@ const KnockoutTab = ({
                     </span>
                     
                     <div className="flex items-center justify-between mt-5 w-full gap-2">
-                        {/* BOTÓN EQUIPO LOCAL */}
+                        {/* EQUIPO LOCAL */}
                         <button 
-                            onClick={() => match.home && handlePick(match.home, homeIsSelected, awayIsSelected, match.away)}
-                            disabled={isCurrentMainTabLocked || !match.home}
-                            className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
+                            onClick={() => homeValid && handlePick(match.home, homeIsSelected, awayIsSelected, match.away)}
+                            disabled={isCurrentMainTabLocked || !homeValid}
+                            className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 disabled:cursor-not-allowed ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
                             <div className="w-10 h-7 bg-background rounded shrink-0 overflow-hidden border border-border/50 mb-1.5 shadow-sm flex items-center justify-center">
-                                {match.home?.crest ? <img src={match.home.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
+                                {homeValid && match.home?.crest ? <img src={match.home.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
                             </div>
                             <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${homeIsSelected ? 'text-primary' : 'text-foreground'}`}>
-                                {match.home ? translateTeam(match.home.name) : match.placeholderHome}
+                                {homeValid ? translateTeam(match.home.name) : match.placeholderHome || 'Por Definir'}
                             </span>
-                            {match.home?.qualReason && currentTabId === 'dieciseisavos' && (
+                            {homeValid && match.home?.qualReason && currentTabId === 'dieciseisavos' && (
                                 <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase mt-0.5">
                                     {match.home.qualReason} {match.home.group?.replace('Grupo ', '')}
                                 </span>
@@ -158,19 +168,19 @@ const KnockoutTab = ({
                             <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">VS</span>
                         </div>
 
-                        {/* BOTÓN EQUIPO VISITANTE */}
+                        {/* EQUIPO VISITANTE */}
                         <button 
-                            onClick={() => match.away && handlePick(match.away, awayIsSelected, homeIsSelected, match.home)}
-                            disabled={isCurrentMainTabLocked || !match.away}
-                            className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
+                            onClick={() => awayValid && handlePick(match.away, awayIsSelected, homeIsSelected, match.home)}
+                            disabled={isCurrentMainTabLocked || !awayValid}
+                            className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 disabled:cursor-not-allowed ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
                         >
                             <div className="w-10 h-7 bg-background rounded shrink-0 overflow-hidden border border-border/50 mb-1.5 shadow-sm flex items-center justify-center">
-                                {match.away?.crest ? <img src={match.away.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
+                                {awayValid && match.away?.crest ? <img src={match.away.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
                             </div>
                             <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${awayIsSelected ? 'text-primary' : 'text-foreground'}`}>
-                                {match.away ? translateTeam(match.away.name) : match.placeholderAway}
+                                {awayValid ? translateTeam(match.away.name) : match.placeholderAway || 'Por Definir'}
                             </span>
-                            {match.away?.qualReason && currentTabId === 'dieciseisavos' && (
+                            {awayValid && match.away?.qualReason && currentTabId === 'dieciseisavos' && (
                                 <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase mt-0.5">
                                     {match.away.qualReason} {match.away.group?.replace('Grupo ', '')}
                                 </span>
@@ -236,6 +246,21 @@ const KnockoutTab = ({
                     </div>
                 </div>
 
+                {/* AVISO DE PROGRESIÓN */}
+                {activeRoundTab === 'dieciseisavos' && !isGroupStageComplete && (
+                    <div className="flex items-start gap-3 sm:gap-4 bg-amber-500/10 border border-amber-500/20 p-4 sm:p-5 rounded-2xl shadow-sm animate-fade-in">
+                        <div className="text-2xl shrink-0 drop-shadow-md">⏳</div>
+                        <div>
+                            <h4 className="text-xs sm:text-sm font-black text-amber-500 uppercase tracking-widest mb-1">
+                                Llaves Parciales
+                            </h4>
+                            <p className="text-[10px] sm:text-xs text-foreground-muted leading-relaxed">
+                                Estás viendo las llaves armadas de forma progresiva. Los espacios con <strong>❓ Por Definir</strong> se llenarán automáticamente cuando finalicen los demás grupos y se defina la tabla de Mejores Terceros.
+                            </p>
+                        </div>
+                    </div>
+                )}
+                
                 {activeRoundTab === 'dieciseisavos' && isGroupStageComplete && (
                     <div className="flex items-start gap-3 sm:gap-4 bg-blue-500/10 border border-blue-500/20 p-4 sm:p-5 rounded-2xl shadow-sm animate-fade-in">
                         <div className="text-2xl shrink-0 drop-shadow-md">⚖️</div>
@@ -244,16 +269,15 @@ const KnockoutTab = ({
                                 Criterio de Desempate: Mejores Terceros
                             </h4>
                             <p className="text-[10px] sm:text-xs text-foreground-muted leading-relaxed">
-                                Según el reglamento de la FIFA (Art. 13), el desempate para los mejores terceros se define por: <strong className="text-foreground">1. Puntos, 2. Diferencia de Goles y 3. Goles a Favor</strong>. 
+                                Según el reglamento de la FIFA, el desempate se define por: <strong className="text-foreground">1. Puntos, 2. Diferencia de Goles y 3. Goles a Favor</strong>. 
                                 <br className="hidden sm:block" />
-                                Como en esta Polla es imposible predecir el <em>Juego Limpio (Fair Play)</em>, si la igualdad persiste, el sistema ordenará a los equipos <strong>aleatoriamente</strong> como criterio final.
+                                Si la igualdad persiste, el sistema ordenará a los equipos <strong>aleatoriamente</strong> como criterio final en lugar de usar tarjetas amarillas (Fair Play).
                             </p>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* --- ALERTA DE INCONSISTENCIA (FANTASMAS) EXPLICADA --- */}
             {invalidPicks.length > 0 && isGroupStageComplete && (
                 <div className="mx-4 mb-6 bg-red-500/10 border border-red-500/30 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in shadow-sm">
                     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -279,10 +303,10 @@ const KnockoutTab = ({
             )}
 
             <div className="bg-background-offset border border-border p-6 sm:p-10 rounded-3xl shadow-sm">
-                <div className={`grid gap-4 ${activeRoundTab === 'campeon' || activeRoundTab === 'tercero' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+                <div className={`grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`}>
                     
                     {activeRoundTab === 'subcampeon' || activeRoundTab === 'cuarto' ? (
-                        knockoutPicks[activeRoundTab] && knockoutPicks[activeRoundTab].length > 0 && isGroupStageComplete ? (
+                        knockoutPicks[activeRoundTab] && knockoutPicks[activeRoundTab].length > 0 ? (
                             <div className="col-span-full flex flex-col items-center justify-center py-8 animate-fade-in">
                                 <span className="text-4xl mb-3 drop-shadow-md">{activeRoundTab === 'subcampeon' ? '🥈' : '🎖️'}</span>
                                 <div className="bg-primary/10 border-2 border-primary p-6 rounded-3xl flex flex-col items-center text-center shadow-[0_0_20px_rgba(245,158,11,0.15)] sm:scale-110">

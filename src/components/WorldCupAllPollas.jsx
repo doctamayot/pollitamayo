@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; // 🟢 getDoc añadido
 import { getWorldCupMatches } from '../services/apiFootball';
 import html2pdf from 'html2pdf.js';
-import SearchBar from './SearchBar'; // Asegúrate de que la ruta sea correcta
+import SearchBar from './SearchBar'; 
 
 const teamTranslations = {
     "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
@@ -45,7 +45,9 @@ const roundTranslations = {
     'cuarto': 'Cuarto Puesto'
 };
 
-const WorldCupAllPollas = () => {
+const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
+    const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
+
     const [participants, setParticipants] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -65,7 +67,20 @@ const WorldCupAllPollas = () => {
 
         const fetchMatches = async () => {
             try {
-                const data = await getWorldCupMatches();
+                let data = null;
+
+                // 🟢 BLINDAJE DE API: Lee de caché si no es admin
+                if (isAdmin) {
+                    data = await getWorldCupMatches();
+                } else {
+                    const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+                    if (cacheDoc.exists() && cacheDoc.data().matches) {
+                        data = { matches: cacheDoc.data().matches };
+                    } else {
+                        data = await getWorldCupMatches();
+                    }
+                }
+
                 if (data && data.matches) {
                     const grouped = {};
                     const ko = { LAST_32: [], LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINALS: [] };
@@ -96,7 +111,7 @@ const WorldCupAllPollas = () => {
         fetchMatches();
 
         return () => unsubscribe();
-    }, []);
+    }, [isAdmin]);
 
     const filteredParticipants = useMemo(() => {
         if (!searchTerm) return participants;
@@ -105,6 +120,7 @@ const WorldCupAllPollas = () => {
         );
     }, [participants, searchTerm]);
 
+    // 🟢 SÚPER CALCULADORA APLICADA AL DOSSIER (Idéntica a Predictions y Mi Polla)
     const calculateUserStandings = useCallback((groupMatches, preds, manualTiebreakers, groupName) => {
         if (!groupMatches) return [];
         const teams = {};
@@ -136,15 +152,105 @@ const WorldCupAllPollas = () => {
             }
         });
 
-        return Object.values(teams).sort((a, b) => {
-            if (b.pts !== a.pts) return b.pts - a.pts;
-            if (b.dg !== a.dg) return b.dg - a.dg;
-            if (b.gf !== a.gf) return b.gf - a.gf;
-            const tieA = manualTiebreakers?.[groupName]?.[a.name] || 99;
-            const tieB = manualTiebreakers?.[groupName]?.[b.name] || 99;
-            if (tieA !== tieB) return tieA - tieB;
-            return translateTeam(a.name).localeCompare(translateTeam(b.name));
+        const resolveTie = (tiedTeams) => {
+            if (tiedTeams.length <= 1) return tiedTeams;
+
+            const h2hStats = {};
+            tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
+            const tiedNames = tiedTeams.map(t => t.name);
+
+            groupMatches.forEach(m => {
+                if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
+                    const pred = preds?.[m.id];
+                    if (pred && pred.home !== '' && pred.away !== '') {
+                        const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
+                        const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        
+                        h2hStats[h].gf += hG; h2hStats[a].gf += aG;
+                        h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
+                        if (hG > aG) { h2hStats[h].pts += 3; }
+                        else if (hG < aG) { h2hStats[a].pts += 3; }
+                        else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
+                    }
+                }
+            });
+
+            const h2hGroups = {};
+            tiedTeams.forEach(t => {
+                const stats = h2hStats[t.name];
+                const key = `${stats.pts}_${stats.dg}_${stats.gf}`;
+                if (!h2hGroups[key]) h2hGroups[key] = [];
+                h2hGroups[key].push(t);
+            });
+
+            const sortedH2HKeys = Object.keys(h2hGroups).sort((a, b) => {
+                const [ptsA, dgA, gfA] = a.split('_').map(Number);
+                const [ptsB, dgB, gfB] = b.split('_').map(Number);
+                if (ptsB !== ptsA) return ptsB - ptsA;
+                if (dgB !== dgA) return dgB - dgA;
+                return gfB - gfA;
+            });
+
+            let finalSorted = [];
+
+            sortedH2HKeys.forEach(key => {
+                const subGroup = h2hGroups[key];
+                
+                if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
+                    finalSorted.push(...resolveTie(subGroup));
+                } 
+                else if (subGroup.length > 1) {
+                    const groupedByOverall = {};
+                    subGroup.forEach(t => {
+                        const oKey = `${t.dg}_${t.gf}`;
+                        if (!groupedByOverall[oKey]) groupedByOverall[oKey] = [];
+                        groupedByOverall[oKey].push(t);
+                    });
+                    
+                    const sortedOverallKeys = Object.keys(groupedByOverall).sort((a, b) => {
+                        const [dgA, gfA] = a.split('_').map(Number);
+                        const [dgB, gfB] = b.split('_').map(Number);
+                        if (dgB !== dgA) return dgB - dgA;
+                        return gfB - gfA;
+                    });
+
+                    sortedOverallKeys.forEach(oKey => {
+                        const finalTied = groupedByOverall[oKey];
+                        if (finalTied.length > 1) {
+                            finalTied.sort((a, b) => {
+                                const tieA = manualTiebreakers?.[groupName]?.[a.name] || 99;
+                                const tieB = manualTiebreakers?.[groupName]?.[b.name] || 99;
+                                if (tieA !== tieB) return tieA - tieB; 
+                                return translateTeam(a.name).localeCompare(translateTeam(b.name));
+                            });
+                        }
+                        finalSorted.push(...finalTied);
+                    });
+                } 
+                else {
+                    finalSorted.push(subGroup[0]);
+                }
+            });
+
+            return finalSorted;
+        };
+
+        const groupedByPts = {};
+        Object.values(teams).forEach(t => {
+            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
+            groupedByPts[t.pts].push(t);
         });
+
+        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+
+        let finalFlattenedStandings = [];
+
+        sortedPtsKeys.forEach(pts => {
+            const groupTeams = groupedByPts[pts];
+            finalFlattenedStandings.push(...resolveTie(groupTeams));
+        });
+
+        return finalFlattenedStandings;
     }, []);
 
     // 🟢 NUEVO CANDADO: ¿Este usuario específico ya llenó todos sus grupos?

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 import { generateFullBracket } from '../services/bracketEngine';
@@ -152,6 +152,7 @@ const getThirdPlaceTeams = (picksObj) => {
 };
 
 const WorldCupMyReport = ({ currentUser }) => {
+    const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
     const [matches, setMatches] = useState([]);
     const [matchesByGroup, setMatchesByGroup] = useState({});
     const [knockoutMatches, setKnockoutMatches] = useState({
@@ -178,7 +179,24 @@ const WorldCupMyReport = ({ currentUser }) => {
 
         const fetchApiData = async () => {
             try {
-                const data = await getWorldCupMatches();
+                let data = null;
+
+                if (isAdmin) {
+                    // El admin llama a la API y actualiza el caché (por si acaso entra directo aquí)
+                    data = await getWorldCupMatches();
+                    /* (Opcional) No guardamos el caché aquí porque el Grid o Predictions ya lo hacen, 
+                       pero usamos la API fresca para el admin */
+                } else {
+                    // Los usuarios mortales leen el caché de Firebase GRATIS
+                    const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+                    if (cacheDoc.exists() && cacheDoc.data().matches) {
+                        data = { matches: cacheDoc.data().matches };
+                    } else {
+                        // Solo si por algún milagro no hay caché, llaman a la API como emergencia
+                        data = await getWorldCupMatches();
+                    }
+                }
+
                 if (data && data.matches) {
                     setMatches(data.matches);
 
@@ -207,7 +225,7 @@ const WorldCupMyReport = ({ currentUser }) => {
                     setKnockoutMatches(ko);
                 }
             } catch (err) {
-                console.error(err);
+                console.error("Error al obtener partidos en Mi Polla:", err);
             } finally {
                 setLoading(false);
             }
@@ -244,7 +262,6 @@ const WorldCupMyReport = ({ currentUser }) => {
         };
     }, [currentUser]);
 
-    // 🟢 INICIAMOS DIRECTO EN EL GRUPO A
     useEffect(() => {
         if (Object.keys(matchesByGroup).length > 0 && selectedSubTab === '') {
             setSelectedSubTab(Object.keys(matchesByGroup).sort()[0]);
@@ -263,38 +280,6 @@ const WorldCupMyReport = ({ currentUser }) => {
         });
         return Array.from(teamsMap.values());
     }, [matches]);
-
-    const displayedMatches = useMemo(() => {
-        let filtered = [];
-
-        if (selectedSubTab) {
-            if (selectedSubTab.startsWith('Grupo')) {
-                filtered = matchesByGroup[selectedSubTab] || [];
-            } else {
-                filtered = knockoutMatches[selectedSubTab] || [];
-            }
-        }
-
-        if (matchFilter === 'FINISHED') {
-            filtered = filtered.filter(m => {
-                const adminPred = adminResults?.predictions?.[m.id];
-                const hasAdminResult = adminPred && adminPred.home !== '' && adminPred.away !== '';
-                return hasAdminResult || m.status === 'FINISHED';
-            });
-            return filtered.sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate));
-        }
-        
-        if (matchFilter === 'PENDING') {
-            filtered = filtered.filter(m => {
-                const adminPred = adminResults?.predictions?.[m.id];
-                const hasAdminResult = adminPred && adminPred.home !== '' && adminPred.away !== '';
-                return !hasAdminResult && m.status !== 'FINISHED';
-            });
-            return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-        }
-        
-        return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-    }, [matchesByGroup, knockoutMatches, matchFilter, adminResults, selectedSubTab]);
 
     const handleSubTabScroll = (direction) => {
         if (subTabsRef.current) {
@@ -318,46 +303,39 @@ const WorldCupMyReport = ({ currentUser }) => {
         return { groups: status, allFinished }; 
     }, [matchesByGroup, adminResults]);
 
+    // 🟢 LA CALCULADORA PODEROSA: Ahora Mi Polla también desempata perfectamente
     const calculateStandings = useCallback((groupName, predsToUse, tiesToUse) => {
         if (!groupName || !matchesByGroup[groupName]) return [];
         const groupMatches = matchesByGroup[groupName];
         const teams = {};
 
         groupMatches.forEach(m => {
-            const home = m.homeTeam?.name || 'Por definir';
-            const away = m.awayTeam?.name || 'Por definir';
-            if (!teams[home]) teams[home] = { name: home, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
-            if (!teams[away]) teams[away] = { name: away, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0 };
+            const h = m.homeTeam?.name || 'Por definir';
+            const a = m.awayTeam?.name || 'Por definir';
+            if (!teams[h]) teams[h] = { name: h, crest: m.homeTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
+            if (!teams[a]) teams[a] = { name: a, crest: m.awayTeam?.crest, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, dg: 0, pts: 0, isTied: false, tieOptions: [], tiedTeamNames: [] };
         });
 
         groupMatches.forEach(m => {
             const pred = predsToUse?.[m.id];
             if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
-                const homeGoals = parseInt(pred.home, 10);
-                const awayGoals = parseInt(pred.away, 10);
+                const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
+                const h = m.homeTeam.name; const a = m.awayTeam.name;
 
-                teams[m.homeTeam.name].gf += homeGoals; teams[m.awayTeam.name].gf += awayGoals;
-                teams[m.homeTeam.name].gc += awayGoals; teams[m.awayTeam.name].gc += homeGoals;
-                teams[m.homeTeam.name].dg = teams[m.homeTeam.name].gf - teams[m.homeTeam.name].gc;
-                teams[m.awayTeam.name].dg = teams[m.awayTeam.name].gf - teams[m.awayTeam.name].gc;
+                teams[h].pj++; teams[a].pj++;
+                teams[h].gf += hG; teams[a].gf += aG;
+                teams[h].gc += aG; teams[a].gc += hG;
+                teams[h].dg = teams[h].gf - teams[h].gc;
+                teams[a].dg = teams[a].gf - teams[a].gc;
 
-                if (homeGoals > awayGoals) teams[m.homeTeam.name].pts += 3;
-                else if (homeGoals < awayGoals) teams[m.awayTeam.name].pts += 3;
-                else { teams[m.homeTeam.name].pts += 1; teams[m.awayTeam.name].pts += 1; }
+                if (hG > aG) { teams[h].pts += 3; teams[h].pg++; teams[a].pp++; } 
+                else if (hG < aG) { teams[a].pts += 3; teams[a].pg++; teams[h].pp++; } 
+                else { teams[h].pts += 1; teams[a].pts += 1; teams[h].pe++; teams[a].pe++; }
             }
         });
 
-        const teamsArray = Object.values(teams);
-        const groupedByPts = {};
-        teamsArray.forEach(t => {
-            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
-            groupedByPts[t.pts].push(t);
-        });
-
-        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
-
         const resolveTie = (tiedTeams) => {
-            if (tiedTeams.length <= 1) return [tiedTeams];
+            if (tiedTeams.length <= 1) return tiedTeams;
 
             const h2hStats = {};
             tiedTeams.forEach(t => h2hStats[t.name] = { pts: 0, dg: 0, gf: 0 });
@@ -366,114 +344,138 @@ const WorldCupMyReport = ({ currentUser }) => {
             groupMatches.forEach(m => {
                 if (tiedNames.includes(m.homeTeam?.name) && tiedNames.includes(m.awayTeam?.name)) {
                     const pred = predsToUse?.[m.id];
-                    if (pred && pred.home !== '' && pred.home !== undefined && pred.away !== '' && pred.away !== undefined) {
-                        const hG = parseInt(pred.home, 10);
-                        const aG = parseInt(pred.away, 10);
-                        const home = m.homeTeam.name;
-                        const away = m.awayTeam.name;
-
-                        h2hStats[home].gf += hG; h2hStats[away].gf += aG;
-                        h2hStats[home].dg += (hG - aG); h2hStats[away].dg += (aG - hG);
-
-                        if (hG > aG) h2hStats[home].pts += 3;
-                        else if (hG < aG) h2hStats[away].pts += 3;
-                        else { h2hStats[home].pts += 1; h2hStats[away].pts += 1; }
+                    if (pred && pred.home !== '' && pred.away !== '') {
+                        const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
+                        const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        
+                        h2hStats[h].gf += hG; h2hStats[a].gf += aG;
+                        h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
+                        if (hG > aG) { h2hStats[h].pts += 3; }
+                        else if (hG < aG) { h2hStats[a].pts += 3; }
+                        else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
                     }
                 }
             });
 
-            const sortedByH2H = [...tiedTeams].sort((a, b) => {
-                const sA = h2hStats[a.name];
-                const sB = h2hStats[b.name];
-                if (sB.pts !== sA.pts) return sB.pts - sA.pts;
-                if (sB.dg !== sA.dg) return sB.dg - sA.dg;
-                return sB.gf - sA.gf;
+            const h2hGroups = {};
+            tiedTeams.forEach(t => {
+                const stats = h2hStats[t.name];
+                const key = `${stats.pts}_${stats.dg}_${stats.gf}`;
+                if (!h2hGroups[key]) h2hGroups[key] = [];
+                h2hGroups[key].push(t);
             });
 
-            const subGroups = [];
-            let currGroup = [sortedByH2H[0]];
-            for (let i = 1; i < sortedByH2H.length; i++) {
-                const prev = h2hStats[sortedByH2H[i-1].name];
-                const curr = h2hStats[sortedByH2H[i].name];
-                if (prev.pts === curr.pts && prev.dg === curr.dg && prev.gf === curr.gf) {
-                    currGroup.push(sortedByH2H[i]);
-                } else {
-                    subGroups.push(currGroup); 
-                    currGroup = [sortedByH2H[i]];
-                }
-            }
-            subGroups.push(currGroup);
+            const sortedH2HKeys = Object.keys(h2hGroups).sort((a, b) => {
+                const [ptsA, dgA, gfA] = a.split('_').map(Number);
+                const [ptsB, dgB, gfB] = b.split('_').map(Number);
+                if (ptsB !== ptsA) return ptsB - ptsA;
+                if (dgB !== dgA) return dgB - dgA;
+                return gfB - gfA;
+            });
 
-            if (subGroups.length === 1) {
-                const sortedByOverall = [...tiedTeams].sort((a, b) => {
-                    if (b.dg !== a.dg) return b.dg - a.dg;
-                    return b.gf - a.gf;
-                });
+            let finalSorted = [];
+
+            sortedH2HKeys.forEach(key => {
+                const subGroup = h2hGroups[key];
                 
-                const overallGroups = [];
-                let currOverallGroup = [sortedByOverall[0]];
-                for (let i = 1; i < sortedByOverall.length; i++) {
-                    const prev = sortedByOverall[i-1];
-                    const curr = sortedByOverall[i];
-                    if (prev.dg === curr.dg && prev.gf === curr.gf) {
-                        currOverallGroup.push(sortedByOverall[i]);
-                    } else {
-                        overallGroups.push(currOverallGroup);
-                        currOverallGroup = [sortedByOverall[i]];
-                    }
-                }
-                overallGroups.push(currOverallGroup);
-                return overallGroups; 
-            }
+                if (subGroup.length > 1 && subGroup.length < tiedTeams.length) {
+                    finalSorted.push(...resolveTie(subGroup));
+                } 
+                else if (subGroup.length > 1) {
+                    const groupedByOverall = {};
+                    subGroup.forEach(t => {
+                        const oKey = `${t.dg}_${t.gf}`;
+                        if (!groupedByOverall[oKey]) groupedByOverall[oKey] = [];
+                        groupedByOverall[oKey].push(t);
+                    });
+                    
+                    const sortedOverallKeys = Object.keys(groupedByOverall).sort((a, b) => {
+                        const [dgA, gfA] = a.split('_').map(Number);
+                        const [dgB, gfB] = b.split('_').map(Number);
+                        if (dgB !== dgA) return dgB - dgA;
+                        return gfB - gfA;
+                    });
 
-            let finalGroups = [];
-            for (const sg of subGroups) {
-                finalGroups.push(...resolveTie(sg));
-            }
-            return finalGroups;
+                    sortedOverallKeys.forEach(oKey => {
+                        const finalTied = groupedByOverall[oKey];
+                        if (finalTied.length > 1) {
+                            const tNames = finalTied.map(t => t.name);
+                            finalTied.forEach(t => {
+                                t.isTrulyTied = true; 
+                                t.tiedTeamNamesArray = tNames;
+                            });
+                            
+                            finalTied.sort((a, b) => {
+                                const tieA = tiesToUse?.[groupName]?.[a.name] || 99;
+                                const tieB = tiesToUse?.[groupName]?.[b.name] || 99;
+                                if (tieA !== tieB) return tieA - tieB; 
+                                return translateTeam(a.name).localeCompare(translateTeam(b.name));
+                            });
+                        }
+                        finalSorted.push(...finalTied);
+                    });
+                } 
+                else {
+                    finalSorted.push(subGroup[0]);
+                }
+            });
+
+            return finalSorted;
         };
 
-        let finalRankedGroups = [];
-        sortedPtsKeys.forEach(pts => {
-            const groupTeams = groupedByPts[pts];
-            finalRankedGroups.push(...resolveTie(groupTeams)); 
+        const groupedByPts = {};
+        Object.values(teams).forEach(t => {
+            if (!groupedByPts[t.pts]) groupedByPts[t.pts] = [];
+            groupedByPts[t.pts].push(t);
         });
 
+        const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
+
         let finalFlattenedStandings = [];
-        finalRankedGroups.forEach(groupTeams => {
-            const sortedGroup = [...groupTeams].sort((a, b) => {
-                const tieA = tiesToUse?.[groupName]?.[a.name] || 99;
-                const tieB = tiesToUse?.[groupName]?.[b.name] || 99;
-                if (tieA !== tieB) return tieA - tieB; 
-                return translateTeam(a.name).localeCompare(translateTeam(b.name));
-            });
-            finalFlattenedStandings.push(...sortedGroup);
+        let currentRank = 1;
+
+        sortedPtsKeys.forEach(pts => {
+            const groupTeams = groupedByPts[pts];
+            const resolved = resolveTie(groupTeams);
+
+            let i = 0;
+            while(i < resolved.length) {
+                const t = resolved[i];
+                if (t.isTrulyTied) {
+                    const tiedBlockSize = t.tiedTeamNamesArray.length;
+                    const availablePositions = [];
+                    for(let k=0; k<tiedBlockSize; k++) { availablePositions.push(currentRank + k); }
+                    
+                    for(let k=0; k<tiedBlockSize; k++) {
+                        const currT = resolved[i+k];
+                        currT.isTied = currT.pj > 0; 
+                        currT.tieOptions = currT.pj > 0 ? availablePositions : [];
+                        currT.tiedTeamNames = currT.pj > 0 ? t.tiedTeamNamesArray : [];
+                    }
+                    currentRank += tiedBlockSize;
+                    i += tiedBlockSize;
+                } else {
+                    t.isTied = false;
+                    t.tieOptions = [];
+                    t.tiedTeamNames = [];
+                    currentRank += 1;
+                    i++;
+                }
+            }
+            finalFlattenedStandings.push(...resolved);
         });
 
         return finalFlattenedStandings;
-
     }, [matchesByGroup]);
 
-    // 🟢 ESTADO QUE CONFIRMA SI EL USUARIO LLENÓ TODOS SUS GRUPOS
     const isUserGroupStageComplete = useMemo(() => {
         const allGroupMatches = Object.values(matchesByGroup).flat();
         if (allGroupMatches.length === 0) return false;
-        
         return allGroupMatches.every(m => 
             predictions?.[m.id]?.home !== undefined && predictions?.[m.id]?.home !== '' && 
             predictions?.[m.id]?.away !== undefined && predictions?.[m.id]?.away !== ''
         );
     }, [matchesByGroup, predictions]);
-
-    // 🟢 LEY DE HIERRO: CANDADO QUE VERIFICA SI EL ADMIN LLENÓ TODO
-    const isAdminGroupStageComplete = useMemo(() => {
-        const allGroupMatches = Object.values(matchesByGroup).flat();
-        if (allGroupMatches.length === 0) return false;
-        return allGroupMatches.every(m => 
-            adminResults?.predictions?.[m.id]?.home !== undefined && adminResults?.predictions?.[m.id]?.home !== '' && 
-            adminResults?.predictions?.[m.id]?.away !== undefined && adminResults?.predictions?.[m.id]?.away !== ''
-        );
-    }, [matchesByGroup, adminResults]);
 
 
     const qualifiedRoundOf32 = useMemo(() => {
@@ -490,29 +492,55 @@ const WorldCupMyReport = ({ currentUser }) => {
         return { all32: [...top2, ...thirds.slice(0, 8)] };
     }, [matchesByGroup, predictions, manualTiebreakers, calculateStandings, isUserGroupStageComplete]);
 
-    // 🟢 CÁLCULO DE LOS 32 DEL ADMIN CON EL CANDADO ACTIVO
     const adminQualifiedRoundOf32 = useMemo(() => {
-        if (!isAdminGroupStageComplete) return { all32: [] }; 
-        if (!adminResults?.predictions) return { all32: [] };
-        
         let top2 = [];
         let thirds = [];
+        let allGroupsFinished = true;
+
+        if (!adminResults?.predictions) return { all32: [] };
+
         Object.keys(matchesByGroup).forEach(groupName => {
-            const standings = calculateStandings(groupName, adminResults.predictions, adminResults.manualTiebreakers);
-            if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
-            if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
-            if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
+            const groupMatches = matchesByGroup[groupName];
+            const isGroupFinished = groupMatches.every(m => adminResults.predictions[m.id]?.home !== undefined && adminResults.predictions[m.id]?.home !== '');
+
+            if (!isGroupFinished) allGroupsFinished = false;
+
+            if (isGroupFinished) {
+                const standings = calculateStandings(groupName, adminResults.predictions, adminResults.manualTiebreakers);
+                if (standings.length > 0) top2.push({ ...standings[0], group: groupName, qualReason: '1º' });
+                if (standings.length > 1) top2.push({ ...standings[1], group: groupName, qualReason: '2º' });
+                if (standings.length > 2) thirds.push({ ...standings[2], group: groupName, qualReason: 'Mejor 3º' });
+            }
         });
-        thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
-        return { all32: [...top2, ...thirds.slice(0, 8)] };
-    }, [matchesByGroup, adminResults, calculateStandings, isAdminGroupStageComplete]);
 
-    // 🟢 ÁRBOL OFICIAL DEL ADMIN CON CANDADO
+        if (allGroupsFinished && top2.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            return { all32: [...top2, ...thirds.slice(0, 8)] };
+        }
+        
+        return { all32: top2 };
+    }, [matchesByGroup, adminResults, calculateStandings]);
+
+    // 🟢 EL BRACKET OFICIAL DEL ADMIN CON FANTASMAS: Garantiza la misma estructura en ambos lados
     const adminFullBracket = useMemo(() => {
-        if (!isAdminGroupStageComplete || !adminQualifiedRoundOf32 || adminQualifiedRoundOf32.all32.length < 32) return null;
-        return generateFullBracket(adminQualifiedRoundOf32.all32, adminResults?.knockoutPicks || {});
-    }, [isAdminGroupStageComplete, adminQualifiedRoundOf32, adminResults?.knockoutPicks]);
+        let teams = adminQualifiedRoundOf32?.all32 || [];
+        
+        if (teams.length < 32) {
+            const tempTeams = [...teams];
+            for (let i = tempTeams.length; i < 32; i++) {
+                tempTeams.push({ name: `Por Definir ${i}`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
+            }
+            teams = tempTeams;
+        }
 
+        const currentKOPicks = adminResults?.knockoutPicks || {};
+        try {
+            return generateFullBracket(teams, currentKOPicks);
+        } catch (e) {
+            console.error("Error armando bracket admin en mi reporte:", e);
+            return null;
+        }
+    }, [adminQualifiedRoundOf32, adminResults?.knockoutPicks]);
 
     const calculateMatchPoints = (hasOfficialResult, userPred, realHome, realAway) => {
         if (!hasOfficialResult || !userPred || userPred.home === '' || userPred.away === '') return null;
@@ -578,7 +606,7 @@ const WorldCupMyReport = ({ currentUser }) => {
             }
         });
 
-        if (groupStatus.allFinished && adminQualifiedRoundOf32.all32.length > 0) {
+        if (adminQualifiedRoundOf32.all32.length > 0) {
             qualifiedRoundOf32.all32.forEach(ut => {
                 if (adminQualifiedRoundOf32.all32.some(at => at.name === ut.name)) total += 2;
             });
@@ -684,8 +712,47 @@ const WorldCupMyReport = ({ currentUser }) => {
                 if (isPleno) pts += 8;
             }
         }
+
+        if (selectedSubTab === 'LAST_32' && adminQualifiedRoundOf32.all32.length > 0) {
+            qualifiedRoundOf32.all32.forEach(ut => {
+                if (adminQualifiedRoundOf32.all32.some(at => at.name === ut.name)) pts += 2;
+            });
+        }
+
         return pts;
-    }, [selectedSubTab, matchesByGroup, knockoutMatches, predictions, adminResults, groupStatus, calculateStandings, manualTiebreakers]);
+    }, [selectedSubTab, matchesByGroup, knockoutMatches, predictions, adminResults, groupStatus, calculateStandings, manualTiebreakers, qualifiedRoundOf32, adminQualifiedRoundOf32]);
+
+    const displayedMatches = useMemo(() => {
+        let filtered = [];
+
+        if (selectedSubTab) {
+            if (selectedSubTab.startsWith('Grupo')) {
+                filtered = matchesByGroup[selectedSubTab] || [];
+            } else {
+                filtered = knockoutMatches[selectedSubTab] || [];
+            }
+        }
+
+        if (matchFilter === 'FINISHED') {
+            filtered = filtered.filter(m => {
+                const adminPred = adminResults?.predictions?.[m.id];
+                const hasAdminResult = adminPred && adminPred.home !== '' && adminPred.away !== '';
+                return hasAdminResult || m.status === 'FINISHED';
+            });
+            return filtered.sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate));
+        }
+        
+        if (matchFilter === 'PENDING') {
+            filtered = filtered.filter(m => {
+                const adminPred = adminResults?.predictions?.[m.id];
+                const hasAdminResult = adminPred && adminPred.home !== '' && adminPred.away !== '';
+                return !hasAdminResult && m.status !== 'FINISHED';
+            });
+            return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+        }
+        
+        return filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+    }, [matchesByGroup, knockoutMatches, matchFilter, adminResults, selectedSubTab]);
 
     if (loading) {
         return (
@@ -825,7 +892,6 @@ const WorldCupMyReport = ({ currentUser }) => {
                             const hasOfficialResult = (adminPred && adminPred.home !== '' && adminPred.away !== '') || isFinished;
                             const points = calculateMatchPoints(hasOfficialResult, pred, realHome, realAway);
 
-                            // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
                             const isKnockout = match.stage !== 'GROUP_STAGE';
                             const homeOriginal = match.homeTeam?.name || '';
                             const awayOriginal = match.awayTeam?.name || '';
@@ -856,8 +922,9 @@ const WorldCupMyReport = ({ currentUser }) => {
                                     if (roundKey === 'final' || roundKey === 'tercero') {
                                         bMatch = Object.values(adminFullBracket[roundKey])[0];
                                     } else {
-                                        // 🟢 Calculamos el index absoluto para no desordenar al filtrar
-                                        const absoluteIndex = currentStageArray.findIndex(m => m.id === match.id);
+                                        const sortedStageMatches = [...currentStageArray].sort((a, b) => Number(a.id) - Number(b.id));
+                                        const absoluteIndex = sortedStageMatches.findIndex(m => String(m.id) === String(match.id));
+                                        
                                         const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
                                             .sort((a, b) => {
                                                 const numA = parseInt(a.replace(/\D/g, '')) || 0;
@@ -870,8 +937,8 @@ const WorldCupMyReport = ({ currentUser }) => {
                                     }
                                     
                                     if (bMatch) {
-                                        bracketHome = bMatch.home?.name;
-                                        bracketAway = bMatch.away?.name;
+                                        bracketHome = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                                        bracketAway = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
                                     }
                                 }
 
@@ -880,7 +947,6 @@ const WorldCupMyReport = ({ currentUser }) => {
                                 if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
 
                             } else {
-                                // Para Grupos, la API o el Custom manual manda
                                 const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
                                 const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
                                 
@@ -1170,7 +1236,7 @@ const WorldCupMyReport = ({ currentUser }) => {
                                 if (round.id === 'dieciseisavos_partido') {
                                     roundTeams = qualifiedRoundOf32.all32;
                                     officialRoundTeams = adminQualifiedRoundOf32.all32;
-                                    hasOfficialData = groupStatus.allFinished && officialRoundTeams.length > 0;
+                                    hasOfficialData = officialRoundTeams.length > 0; // 🟢 PROGRESIVO: Ya no exige groupStatus.allFinished
                                 } else if (round.id === 'octavos_partido') {
                                     roundTeams = knockoutPicks?.dieciseisavos || [];
                                     officialRoundTeams = adminResults?.knockoutPicks?.dieciseisavos || [];
@@ -1214,19 +1280,23 @@ const WorldCupMyReport = ({ currentUser }) => {
                                                             {hasOfficialData && isHit && (
                                                                 <div className="absolute -top-2 -right-2 bg-green-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md z-10">+{roundPoints}</div>
                                                             )}
-                                                            {hasOfficialData && !isHit && (
+                                                            {hasOfficialData && !isHit && round.id !== 'dieciseisavos_partido' && (
+                                                                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md z-10">❌</div>
+                                                            )}
+                                                            {/* 🟢 Para 16vos progresivo, si no está en la lista oficial pero aún faltan grupos por cerrar, NO pongas la X */}
+                                                            {hasOfficialData && !isHit && round.id === 'dieciseisavos_partido' && groupStatus.allFinished && (
                                                                 <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md z-10">❌</div>
                                                             )}
                                                             
-                                                            <div className={`w-10 h-6 sm:w-12 sm:h-8 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0 ${hasOfficialData && !isHit ? 'grayscale opacity-50' : ''}`}>
+                                                            <div className={`w-10 h-6 sm:w-12 sm:h-8 bg-background rounded-[3px] overflow-hidden shadow-sm border border-border/50 mb-2 shrink-0 ${hasOfficialData && !isHit && (round.id !== 'dieciseisavos_partido' || groupStatus.allFinished) ? 'grayscale opacity-50' : ''}`}>
                                                                 <img src={team.crest} className="w-full h-full object-cover" alt="" />
                                                             </div>
                                                             
-                                                            <span className={`font-bold text-[10px] sm:text-xs leading-tight flex-grow flex items-center justify-center ${hasOfficialData && !isHit ? 'text-foreground-muted line-through' : 'text-foreground'}`}>
+                                                            <span className={`font-bold text-[10px] sm:text-xs leading-tight flex-grow flex items-center justify-center ${hasOfficialData && !isHit && (round.id !== 'dieciseisavos_partido' || groupStatus.allFinished) ? 'text-foreground-muted line-through' : 'text-foreground'}`}>
                                                                 {translateTeam(team.name)}
                                                             </span>
 
-                                                            {!hasOfficialData && (
+                                                            {(!hasOfficialData || (round.id === 'dieciseisavos_partido' && !isHit && !groupStatus.allFinished)) && (
                                                                 <span className="mt-2 text-[8px] sm:text-[9px] font-bold text-amber-500 italic">En Juego</span>
                                                             )}
                                                         </div>
