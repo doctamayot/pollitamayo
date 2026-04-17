@@ -485,6 +485,7 @@ const WorldCupGrid = ({ currentUser }) => {
     }, [adminQualified32, adminResults]);
 
     // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
+    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
     const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
@@ -580,16 +581,53 @@ const WorldCupGrid = ({ currentUser }) => {
                 });
             }
 
+            // 🟢 AQUÍ ESTÁ EL FIX: Búsqueda del partido exacto en el Bracket para asignar puntos al instante
             const koRounds = [
-                { id: 'dieciseisavos', pts: 3, stage: 'LAST_32' }, { id: 'octavos', pts: 4, stage: 'LAST_16' },
-                { id: 'cuartos', pts: 5, stage: 'QUARTER_FINALS' }, { id: 'semis', pts: 6, stage: 'SEMI_FINALS' }
+                { id: 'dieciseisavos', pts: 3, stage: 'LAST_32' }, 
+                { id: 'octavos', pts: 4, stage: 'LAST_16' },
+                { id: 'cuartos', pts: 5, stage: 'QUARTER_FINALS' }, 
+                { id: 'semis', pts: 6, stage: 'SEMI_FINALS' }
             ];
+
             koRounds.forEach(r => {
-                const lastMatchOfStage = effectiveMatches.filter(m => m.stage === r.stage).sort((a,b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
-                if (lastMatchOfStage && new Date(lastMatchOfStage.utcDate) <= targetDate) {
-                    const uTeams = userData.knockoutPicks?.[r.id] || [];
-                    const aTeams = adminResults?.knockoutPicks?.[r.id] || [];
-                    uTeams.forEach(ut => { if (aTeams.some(at => at.name === ut.name)) total += r.pts; });
+                const uTeams = userData.knockoutPicks?.[r.id] || [];
+                const aTeams = adminResults?.knockoutPicks?.[r.id] || [];
+                
+                if (aTeams.length > 0) {
+                    uTeams.forEach(ut => {
+                        if (aTeams.some(at => at.name === ut.name)) {
+                            // Si acertó, buscamos LA FECHA EXACTA en la que este equipo jugó el partido que le dio la clasificación
+                            let matchDateForTeam = null;
+
+                            if (adminFullBracket && adminFullBracket[r.id]) {
+                                // Buscamos los partidos de esta ronda en la API
+                                const apiMatchesForStage = effectiveMatches.filter(m => m.stage === r.stage).sort((a, b) => Number(a.id) - Number(b.id));
+                                
+                                // Buscamos las cajas del bracket correspondientes a esta ronda
+                                const bracketMatchValues = Object.keys(adminFullBracket[r.id])
+                                    .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                                    .map(k => adminFullBracket[r.id][k]);
+
+                                // Cruzamos la caja del bracket con la fecha del partido
+                                apiMatchesForStage.forEach((m, index) => {
+                                    const bMatch = bracketMatchValues[index];
+                                    if (bMatch) {
+                                        const hName = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                                        const aName = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                                        
+                                        if (hName === ut.name || aName === ut.name) {
+                                            matchDateForTeam = new Date(m.utcDate);
+                                        }
+                                    }
+                                });
+                            }
+
+                            // Si encontramos su partido y la fecha ya pasó o está pasando (<= targetDate), soltamos el puntaje HOY
+                            if (matchDateForTeam && matchDateForTeam <= targetDate) {
+                                total += r.pts;
+                            }
+                        }
+                    });
                 }
             });
 
@@ -644,7 +682,7 @@ const WorldCupGrid = ({ currentUser }) => {
             ranks.push({
                 uid,
                 name: usersInfo[uid]?.displayName || userData.displayName || 'Invitado',
-                photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa,
+                photoURL: usersInfo[uid]?.photoURL || logocopa,
                 totalPoints: total
             });
         });
@@ -657,7 +695,7 @@ const WorldCupGrid = ({ currentUser }) => {
         });
 
         return ranks;
-    }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo]);
+    }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo, adminFullBracket]); // 🟢 adminFullBracket añadido a las dependencias
 
     const matchesByDate = useMemo(() => {
         const grouped = {};
