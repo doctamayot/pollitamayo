@@ -165,9 +165,17 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     }, [matchesByGroup, isKnockoutPhaseActive]);
 
-    useEffect(() => {
-        if (isKnockoutPhaseActive) {
-            setSelectedSubTab(activePhase);
+   useEffect(() => {
+        const validKnockoutPhases = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINALS'];
+
+        if (activePhase === 'ALL_OPEN') {
+            setSelectedSubTab('FINALS');
+        } else if (isKnockoutPhaseActive) {
+            if (validKnockoutPhases.includes(activePhase)) {
+                setSelectedSubTab(activePhase);
+            } else {
+                setSelectedSubTab('FINALS');
+            }
         } else if (Object.keys(matchesByGroup).length > 0 && (!selectedSubTab || !selectedSubTab.startsWith('Grupo'))) {
             setSelectedSubTab(Object.keys(matchesByGroup).sort((a, b) => a.localeCompare(b))[0]); 
         }
@@ -801,25 +809,102 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
 
         setSaving(true);
-        const predictionData = { predictions, knockoutPicks, extraPicks, eventPicks, manualTiebreakers, updatedAt: new Date().toISOString() };
-        const docRef = isAdmin ? doc(db, 'worldCupAdmin', 'results') : doc(db, 'worldCupPredictions', currentUser.uid);
 
-        if (!isAdmin) {
+        // 🟢 LÓGICA DE TIEMPO FRANCOTIRADOR: Ancla el evento a la hora EXACTA del último partido calificado
+        let finalTimestamps = adminResults?.timestamps || {};
+        
+        if (isAdmin) {
+            const simDate = adminResults?.simulation?.simulatedDate;
+            let virtualDateIso = new Date().toISOString(); 
+
+            // Recopilamos todos los partidos y buscamos los que ya tienen marcador del Admin
+            const allMatches = [
+                ...Object.values(matchesByGroup).flat(),
+                ...Object.values(knockoutMatches).flat()
+            ];
+            const matchesWithScore = allMatches.filter(m => 
+                predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== ''
+            );
+
+            if (simDate) {
+                // Límite final del día simulado en hora Colombia (UTC-5)
+                const simDateEnd = new Date(`${simDate}T23:59:59-05:00`);
+                
+                // Filtramos los partidos con marcador que se jugaron EN O ANTES de esta fecha
+                const validMatches = matchesWithScore.filter(m => new Date(m.utcDate) <= simDateEnd);
+                
+                if (validMatches.length > 0) {
+                    // 🎯 AQUÍ ESTÁ LA MAGIA: Tomamos la hora exacta del ÚLTIMO partido que llenaste
+                    const lastMatch = validMatches.sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
+                    virtualDateIso = lastMatch.utcDate;
+                } else {
+                    // Si no has llenado ningún partido de ese día, lo mandamos al final del día
+                    virtualDateIso = simDateEnd.toISOString();
+                }
+            } else {
+                // Si no estás simulando (estás en tiempo real), agarra tu último partido llenado
+                if (matchesWithScore.length > 0) {
+                    const lastMatch = matchesWithScore.sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
+                    virtualDateIso = lastMatch.utcDate;
+                }
+            }
+
+            const newTimestamps = { ...finalTimestamps };
+            const oldExtras = adminResults?.extraPicks || {};
+            const oldEvents = adminResults?.eventPicks || {};
+            
+            // Comparamos y sellamos con la hora exacta del partido
+            Object.keys(extraPicks).forEach(key => {
+                if (extraPicks[key]) {
+                    if (extraPicks[key] !== oldExtras[key]) {
+                        newTimestamps[key] = virtualDateIso;
+                    }
+                } else {
+                    delete newTimestamps[key];
+                }
+            });
+            
+            Object.keys(eventPicks).forEach(key => {
+                if (eventPicks[key]) {
+                    if (eventPicks[key] !== oldEvents[key]) {
+                        newTimestamps[key] = virtualDateIso;
+                    }
+                } else {
+                    delete newTimestamps[key];
+                }
+            });
+            
+            finalTimestamps = newTimestamps;
+        }
+
+        const predictionData = { 
+            predictions, 
+            knockoutPicks, 
+            extraPicks, 
+            eventPicks, 
+            manualTiebreakers, 
+            updatedAt: new Date().toISOString() 
+        };
+        
+        if (isAdmin) {
+            predictionData.timestamps = finalTimestamps;
+        } else {
             predictionData.displayName = currentUser.displayName;
             predictionData.email = currentUser.email;
             predictionData.photoURL = currentUser.photoURL;
         }
 
+        const docRef = isAdmin ? doc(db, 'worldCupAdmin', 'results') : doc(db, 'worldCupPredictions', currentUser.uid);
         const saveOp = setDoc(docRef, predictionData, { merge: true });
+        
         toast.promise(saveOp, {
             loading: isAdmin ? 'Guardando Fase Oficial...' : 'Guardando tus marcadores...',
-            success: isAdmin ? '👑 ¡Resultados MAESTROS actualizados!' : '¡Tus predicciones se guardaron! 🏆',
-            error: 'Error de red al guardar. Reintenta.',
-        }, { style: { minWidth: '250px' } });
+            success: isAdmin ? '👑 ¡Resultados guardados y fechados al partido exacto!' : '¡Tus predicciones se guardaron! 🏆',
+            error: 'Error de red al guardar.',
+        });
 
         try { await saveOp; } catch (error) { console.error(error); } finally { setSaving(false); }
     };
-
     const handleClearData = () => {
         if (!window.confirm("⚠️ ¡Atención Admin! Vas a BORRAR TODAS tus respuestas. ¿Continuar?")) return;
         setPredictions({}); setEventPicks({}); setExtraPicks({});

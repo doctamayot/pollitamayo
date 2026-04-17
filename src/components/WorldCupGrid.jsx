@@ -486,6 +486,24 @@ const WorldCupGrid = ({ currentUser }) => {
 
     // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
     // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
+    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
+    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
+    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
+    const getThirdPlaceTeams = (picksObj) => {
+    if (!picksObj) return [];
+    const teamsMap = new Map();
+    const t3 = Array.isArray(picksObj.tercero) ? picksObj.tercero : (picksObj.tercero ? [picksObj.tercero] : []);
+    const t4 = Array.isArray(picksObj.cuarto) ? picksObj.cuarto : (picksObj.cuarto ? [picksObj.cuarto] : []);
+    [...t3, ...t4].forEach(t => { if (t && t.name) teamsMap.set(t.name, t); });
+    
+    const semifinalistas = picksObj.cuartos || []; 
+    const finalistas = picksObj.semis || [];       
+    if (semifinalistas.length > 0 && finalistas.length > 0) {
+        const deductedTeams = semifinalistas.filter(semiTeam => !finalistas.some(finTeam => finTeam.name === semiTeam.name));
+        deductedTeams.forEach(t => { if (t && t.name) teamsMap.set(t.name, t); });
+    }
+    return Array.from(teamsMap.values());
+};
     const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
@@ -581,7 +599,7 @@ const WorldCupGrid = ({ currentUser }) => {
                 });
             }
 
-            // 🟢 AQUÍ ESTÁ EL FIX: Búsqueda del partido exacto en el Bracket para asignar puntos al instante
+            // 🟢 EVALUACIÓN PROGRESIVA DE RONDAS ELIMINATORIAS (Finalistas, Semis, Cuartos, Octavos)
             const koRounds = [
                 { id: 'dieciseisavos', pts: 3, stage: 'LAST_32' }, 
                 { id: 'octavos', pts: 4, stage: 'LAST_16' },
@@ -596,25 +614,19 @@ const WorldCupGrid = ({ currentUser }) => {
                 if (aTeams.length > 0) {
                     uTeams.forEach(ut => {
                         if (aTeams.some(at => at.name === ut.name)) {
-                            // Si acertó, buscamos LA FECHA EXACTA en la que este equipo jugó el partido que le dio la clasificación
                             let matchDateForTeam = null;
 
                             if (adminFullBracket && adminFullBracket[r.id]) {
-                                // Buscamos los partidos de esta ronda en la API
                                 const apiMatchesForStage = effectiveMatches.filter(m => m.stage === r.stage).sort((a, b) => Number(a.id) - Number(b.id));
-                                
-                                // Buscamos las cajas del bracket correspondientes a esta ronda
                                 const bracketMatchValues = Object.keys(adminFullBracket[r.id])
                                     .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
                                     .map(k => adminFullBracket[r.id][k]);
 
-                                // Cruzamos la caja del bracket con la fecha del partido
                                 apiMatchesForStage.forEach((m, index) => {
                                     const bMatch = bracketMatchValues[index];
                                     if (bMatch) {
                                         const hName = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
                                         const aName = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
-                                        
                                         if (hName === ut.name || aName === ut.name) {
                                             matchDateForTeam = new Date(m.utcDate);
                                         }
@@ -622,7 +634,6 @@ const WorldCupGrid = ({ currentUser }) => {
                                 });
                             }
 
-                            // Si encontramos su partido y la fecha ya pasó o está pasando (<= targetDate), soltamos el puntaje HOY
                             if (matchDateForTeam && matchDateForTeam <= targetDate) {
                                 total += r.pts;
                             }
@@ -631,34 +642,88 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
             });
 
+            // 🟢 EVALUACIÓN PROGRESIVA DE CLASIFICADOS A 3ER PUESTO (+4 Pts a los perdedores apenas juegan su Semi)
+            const uThirdsList = getThirdPlaceTeams(userData.knockoutPicks);
+            let officialThirdPlaceContenders = [];
+            let thirdPlaceMatchDates = {};
+
+            if (adminFullBracket && adminFullBracket['semis']) {
+                const adminFinalists = adminResults?.knockoutPicks?.semis || [];
+                const apiMatchesForSemis = effectiveMatches.filter(m => m.stage === 'SEMI_FINALS').sort((a, b) => Number(a.id) - Number(b.id));
+                const bracketMatchValues = Object.keys(adminFullBracket['semis'])
+                    .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                    .map(k => adminFullBracket['semis'][k]);
+
+                bracketMatchValues.forEach((bMatch, index) => {
+                    const hName = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                    const aName = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                    
+                    if (hName && aName) {
+                        const homeAdvanced = adminFinalists.some(f => f.name === hName);
+                        const awayAdvanced = adminFinalists.some(f => f.name === aName);
+                        
+                        const apiMatch = apiMatchesForSemis[index];
+                        const matchDate = apiMatch ? new Date(apiMatch.utcDate) : null;
+
+                        // Si un equipo avanzó a la final y el otro no, el perdedor va al 3er puesto
+                        if (homeAdvanced && !awayAdvanced) {
+                            officialThirdPlaceContenders.push(aName);
+                            if (matchDate) thirdPlaceMatchDates[aName] = matchDate;
+                        }
+                        if (awayAdvanced && !homeAdvanced) {
+                            officialThirdPlaceContenders.push(hName);
+                            if (matchDate) thirdPlaceMatchDates[hName] = matchDate;
+                        }
+                    }
+                });
+            }
+
+            if (officialThirdPlaceContenders.length > 0) {
+                uThirdsList.forEach(ut => {
+                    if (ut && officialThirdPlaceContenders.includes(ut.name)) {
+                        const matchDate = thirdPlaceMatchDates[ut.name];
+                        if (matchDate && matchDate <= targetDate) {
+                            total += 4;
+                        }
+                    }
+                });
+            }
+
+            // 🟢 PUESTOS DE HONOR (Se asignan en la fecha de sus respectivos partidos)
             const thirdMatch = effectiveMatches.find(m => m.stage === 'THIRD_PLACE');
             if (thirdMatch && new Date(thirdMatch.utcDate) <= targetDate) {
-                const uThirdsList = [...(userData.knockoutPicks?.tercero || []), ...(userData.knockoutPicks?.cuarto || [])];
-                const aThirdsList = [...(adminResults?.knockoutPicks?.tercero || []), ...(adminResults?.knockoutPicks?.cuarto || [])];
-                if (aThirdsList.length > 0) {
-                    uThirdsList.forEach(ut => {
-                        if (ut && aThirdsList.some(at => at && at.name === ut.name)) total += 4;
-                    });
-                }
+                const honorSlotsThird = [{ id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
+                honorSlotsThird.forEach(s => {
+                    if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; }
+                });
             }
 
             const finalMatch = effectiveMatches.find(m => m.stage === 'FINAL');
             if (finalMatch && new Date(finalMatch.utcDate) <= targetDate) {
-                const honorSlots = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }, { id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
-                honorSlots.forEach(s => {
+                const honorSlotsFinal = [{ id: 'campeon', pts: 10 }, { id: 'subcampeon', pts: 6 }];
+                honorSlotsFinal.forEach(s => {
                     if (userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults?.knockoutPicks?.[s.id]?.[0]?.name && adminResults?.knockoutPicks?.[s.id]?.[0]?.name) { total += s.pts; }
                 });
+                
                 let isSuperBono = false;
                 if (adminResults?.knockoutPicks) {
-                    isSuperBono = honorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
+                    const allHonorSlots = [{ id: 'campeon' }, { id: 'subcampeon' }, { id: 'tercero' }, { id: 'cuarto' }];
+                    isSuperBono = allHonorSlots.every(s => userData.knockoutPicks?.[s.id]?.[0]?.name === adminResults.knockoutPicks[s.id]?.[0]?.name && adminResults.knockoutPicks[s.id]?.[0]?.name);
                 }
                 if (isSuperBono) total += 10;
             }
 
+            // 🟢 EVALUACIÓN PROGRESIVA DE EXTRAS Y EVENTOS (Con Timestamps Invisibles)
             extraQuestions.forEach(q => {
                 const answer = userData.extraPicks?.[q.id];
                 const officialAnswer = adminResults?.extraPicks?.[q.id];
-                if (officialAnswer && answer) {
+                const timestampStr = adminResults?.timestamps?.[q.id]; // Buscamos el sello invisible
+                
+                // Si es un dato viejo sin sello, asumimos fecha 0. Si tiene sello, usamos la fecha exacta.
+                const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+
+                // 🟢 Solo suma los puntos si la Grilla ya llegó a la fecha en que el Admin lo confirmó
+                if (officialAnswer && answer && eventDate <= targetDate) {
                     if (q.manual) {
                         if (isSmartMatch(answer, officialAnswer)) total += 6;
                     } else {
@@ -670,7 +735,12 @@ const WorldCupGrid = ({ currentUser }) => {
             specialEvents.forEach(e => {
                 let answer = userData.eventPicks?.[e.id];
                 let officialAnswer = adminResults?.eventPicks?.[e.id];
-                if (answer && officialAnswer) {
+                const timestampStr = adminResults?.timestamps?.[e.id]; // Buscamos el sello invisible
+                
+                const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+
+                // 🟢 Solo suma los puntos si la Grilla ya llegó a la fecha en que el Admin lo confirmó
+                if (answer && officialAnswer && eventDate <= targetDate) {
                     answer = String(answer).toUpperCase().trim();
                     officialAnswer = String(officialAnswer).toUpperCase().trim();
                     if (officialAnswer === answer) {

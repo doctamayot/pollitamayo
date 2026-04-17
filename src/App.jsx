@@ -410,8 +410,9 @@ function App() {
                 navItems = [
                     { id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' },
                     { id: 'worldCup_grid_others', label: 'Grilla Otros', icon: '📊' },
+                    { id: 'worldCup_predictions', label: user.email === 'doctamayot@gmail.com' ? 'Resultados' : 'Predicciones', icon: '🎯' },
                     { id: 'worldCup_ranking', label: 'Ranking', icon: '🏆' },
-                    { id: 'worldCup_rules', label: 'Reglas', icon: '📜' },
+                    
                 ];
             } else {
                 navItems = [
