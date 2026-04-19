@@ -753,7 +753,7 @@ const WorldCupGrid = ({ currentUser }) => {
             ranks.push({
                 uid,
                 name: usersInfo[uid]?.displayName || userData.displayName || 'Invitado',
-                photoURL: usersInfo[uid]?.photoURL || logocopa,
+                photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa,
                 totalPoints: total
             });
         });
