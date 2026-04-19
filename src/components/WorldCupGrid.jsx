@@ -5,6 +5,7 @@ import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 import toast from 'react-hot-toast';
 import { generateFullBracket } from '../services/bracketEngine';
+import NewsTicker from '../components/shared/NewsTicker'
 
 // --- TRADUCCIONES Y CONSTANTES ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
@@ -878,7 +879,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
-            
+           
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-[2rem] p-3 sm:p-10 mb-6 sm:mb-8 text-center border border-border shadow-xl relative overflow-hidden flex flex-row items-center justify-center gap-3 sm:gap-6">
                 <div className="absolute top-0 left-0 w-full h-full bg-primary/5 z-0 pointer-events-none"></div>
                 <img src={logocopa} className="w-12 h-12 sm:w-20 sm:h-20 object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] z-10" alt="" />
@@ -894,6 +895,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                 🔄 Auto-Sync
                             </p>
                         )}
+                       
                     </div>
                 </div>
             </div>
@@ -949,11 +951,12 @@ const WorldCupGrid = ({ currentUser }) => {
                     </div>
                 </div>
             )}
-
+            <NewsTicker />
+    
             <div className="relative w-full mb-8 flex items-center group">
+           
                 <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none"></div>
-                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none"></div>
-                
+                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none"></div>                
                 <button 
                     onClick={() => handleScroll('left')} 
                     className="absolute left-0 z-20 bg-card border border-border text-foreground p-1.5 rounded-full shadow-lg hidden md:flex hover:bg-primary hover:text-white transition-all hover:scale-110 ml-1"
@@ -974,6 +977,7 @@ const WorldCupGrid = ({ currentUser }) => {
                         const isKnockout = matchesByDate[d].some(m => m.stage !== 'GROUP_STAGE');
 
                         return (
+                            
                             <button 
                                 key={d} 
                                 id={`date-tab-${d}`} 

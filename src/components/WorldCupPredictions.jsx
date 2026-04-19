@@ -644,7 +644,7 @@ const WorldCupPredictions = ({ currentUser }) => {
             setKnockoutPicks(prev => {
                 const hasPicks = Object.values(prev).some(arr => arr && arr.length > 0);
                 if (hasPicks) {
-                    setTimeout(() => toast('El Árbol de Clasificados se recalculó automáticamente', { icon: '🧹', id: 'reset-bracket' }), 100);
+                    setTimeout(() => toast('Si grabas, El Árbol de Clasificados se Reseteara por cambios en los resultados del grupo', { icon: '🧹', id: 'reset-bracket' }), 500);
                     return { dieciseisavos: [], octavos: [], cuartos: [], semis: [], campeon: [], subcampeon: [], tercero: [], cuarto: [] };
                 }
                 return prev;

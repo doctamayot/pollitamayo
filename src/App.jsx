@@ -30,6 +30,7 @@ import WorldCupRanking from './components/WorldCupRanking';
 import WorldCupAllPollas from './components/WorldCupAllPollas';
 import WorldCupGridOthers from './components/WorldCupGridOthers';
 
+
 // Config
 import { ADMIN_EMAIL, USERS_COLLECTION } from './config';
 
@@ -511,9 +512,9 @@ function App() {
 
     return (
         <div className="min-h-screen bg-background flex flex-col lg:flex-row text-foreground relative">
-            
             <header className="lg:hidden fixed top-0 w-full bg-background-offset/90 dark:bg-card/90 backdrop-blur-md border-b border-border z-40 h-16 flex items-center justify-between px-4 shadow-sm">
     <div className="flex items-center gap-2">
+        
         <div className="w-12 h-12 flex items-center justify-center drop-shadow-sm shrink-0">
             <img src={logoGeneral} alt="PolliTamayo" className="w-full h-full object-contain" />
         </div>
@@ -629,6 +630,8 @@ function App() {
                     
                     {(mainView === 'worldCup' || mainView === 'worldCup_predictions') && (
                         <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
+                            
+                    
                             <WorldCupPredictions currentUser={user} />
                         </div>
                     )}
