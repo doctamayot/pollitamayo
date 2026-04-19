@@ -40,7 +40,7 @@ const NewsTicker = () => {
         <div className="w-full bg-slate-950 border-b border-amber-500/30 overflow-hidden relative flex items-center z-50 h-10 sm:h-12 shadow-md">
             {/* Etiqueta Fija de "ÚLTIMA HORA" */}
             <div className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-amber-600 to-amber-500 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest px-3 sm:px-6 flex items-center justify-center z-20 shadow-[5px_0_15px_rgba(0,0,0,0.5)]">
-                <span className="animate-pulse mr-2">🔴</span> EN VIVO
+                <span className="animate-pulse mr-1 sm:mr-2">🔴</span> EN VIVO
             </div>
 
             {/* Contenedor del texto rodante */}
@@ -79,7 +79,7 @@ const NewsTicker = () => {
                 }
                 .animate-ticker {
                     /* Si sientes que va muy rápido, sube este 40s a 50s o 60s */
-                    animation: ticker 40s linear infinite;
+                    animation: ticker 70s linear infinite;
                     width: max-content;
                 }
                 .animate-ticker:hover {
