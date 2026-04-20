@@ -5,6 +5,7 @@ import { getWorldCupMatches } from '../services/apiFootball';
 import toast from 'react-hot-toast'; 
 import logocopa from '../assets/logocopa.png';
 import StatsBanner from './StatsBanner';
+import NewsTicker from './shared/NewsTicker'
 
 import { generateFullBracket } from '../services/bracketEngine'; 
 
@@ -996,6 +997,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                     {isAdmin ? 'Estás guardando los resultados oficiales del torneo fase por fase.' : 'El Torneo se juega por etapas. Completa tus predicciones en la pestaña que esté activa.'}
                 </p>
                 <WorldCupCountdown />
+                <NewsTicker />
             </div>
 
             <StatusWarnings 
