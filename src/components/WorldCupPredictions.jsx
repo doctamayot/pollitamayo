@@ -21,6 +21,7 @@ import EventsTab from './worldcupcomponents/EventsTab';
 import KnockoutTab from './worldcupcomponents/KnockoutTab';
 import MatchCard from './worldcupcomponents/MatchCard';
 import StatusWarnings from './worldcupcomponents/StatusWarning';
+import WorldCupCountdown from './worldcupcomponents/WorldCupCountdown';
 
 const WorldCupPredictions = ({ currentUser }) => {
     const isAdmin = currentUser.email === 'doctamayot@gmail.com' || currentUser.email === 'admin@polli-tamayo.com';
@@ -994,6 +995,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                 <p className="text-foreground-muted text-sm max-w-2xl mx-auto">
                     {isAdmin ? 'Estás guardando los resultados oficiales del torneo fase por fase.' : 'El Torneo se juega por etapas. Completa tus predicciones en la pestaña que esté activa.'}
                 </p>
+                <WorldCupCountdown />
             </div>
 
             <StatusWarnings 
