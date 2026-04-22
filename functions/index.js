@@ -107,13 +107,14 @@ async function runAiNewsGeneration() {
             - PRÓXIMOS PARTIDOS DEL MUNDIAL: 
             ${upcomingText || 'Aún no hay partidos.'}
 
-            Instrucciones vitales:
-            1. Saca conclusiones cruzadas: Compara los "Resultados Reales" con lo que "Pronosticó" el Top 5. ¿Alguien le atinó al marcador exacto? ¿Un resultado real sorpresivo le arruinó los puntos al líder?
-            2. Analiza los "Próximos partidos" y expón al público qué predicciones hicieron los líderes para esos encuentros. Crea morbo y tensión.
-            3. Tono: Épico, analítico, estadístico, con un toque de sarcasmo deportivo.
-            4. Usa SIEMPRE prefijos como "LIDERATO:", "ALERTA:", "TENDENCIA:", "BATACAZO:", "PRONÓSTICO:", "ANÁLISIS:", "EN VIVO:".
-            5. PROHIBIDO mencionar que eres una IA o usar la palabra "ID".
-            6. Devuelve ÚNICAMENTE un array JSON válido de strings.`;
+           Instrucciones vitales:
+            1. Saca conclusiones cruzadas: Compara los "Resultados Reales" con lo que "Pronosticó" el Top 5. ¿Alguien le atinó al marcador exacto?
+            2. Analiza los "Próximos partidos" y expón al público qué predicciones hicieron los líderes para esos encuentros.
+            3. EL MURO DEL VAR (Salseo en vivo): Dedica al menos 2 de los 5 titulares a simular "El Muro del VAR". Estos deben ser mensajes directos, sarcásticos y picantes como si el VAR estuviera revisando las predicciones y burlándose de quienes perdieron puntos por un gol, o alabando una predicción arriesgada. 
+            4. Tono: Épico, analítico, y sumamente burlón/picante en la sección del VAR.
+            5. Usa SIEMPRE prefijos como "LIDERATO:", "ALERTA:", "BATACAZO:", "PRONÓSTICO:", "EL VAR:", "CHAT:".
+            6. PROHIBIDO mencionar que eres una IA o usar la palabra "ID".
+            7. Devuelve ÚNICAMENTE un array JSON válido de strings.`;
         }
 
         const result = await model.generateContent(prompt);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; // 🟢 getDoc agregado
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 
@@ -66,7 +66,6 @@ const isSmartMatch = (userText, adminText) => {
     return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
 };
 
-// 🧠 FUNCIÓN HELPER CON MAGIA DEDUCTIVA PARA EL TERCER PUESTO (Añadida para coherencia con Mi Polla)
 const getThirdPlaceTeams = (picksObj) => {
     if (!picksObj) return [];
     const teamsMap = new Map();
@@ -88,7 +87,7 @@ const getThirdPlaceTeams = (picksObj) => {
     return Array.from(teamsMap.values());
 };
 
-const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser para saber si es Admin
+const WorldCupRanking = ({ currentUser }) => { 
     const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
 
     const [matches, setMatches] = useState([]);
@@ -96,16 +95,21 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
     const [usersInfo, setUsersInfo] = useState({});
     const [adminResults, setAdminResults] = useState(null);
     const [expandedUser, setExpandedUser] = useState(null);
-
+    const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
     const [loadingStatus, setLoadingStatus] = useState({ api: false, preds: false, users: false, admin: false });
     const isLoading = !loadingStatus.api || !loadingStatus.preds || !loadingStatus.users || !loadingStatus.admin;
+
+    useEffect(() => {
+        if (activeBadgeInfo) {
+            const timer = setTimeout(() => setActiveBadgeInfo(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [activeBadgeInfo]);
 
    useEffect(() => {
         const fetchMatches = async () => {
             try {
                 let data = null;
-
-                // 🟢 BLINDAJE DE API
                 if (isAdmin) {
                     data = await getWorldCupMatches();
                 } else {
@@ -116,7 +120,6 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
                         data = await getWorldCupMatches();
                     }
                 }
-
                 if (data && data.matches) setMatches(data.matches);
             } catch (err) { 
                 console.error(err); 
@@ -177,6 +180,62 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
         return preds;
     }, [adminResults, effectiveMatches]);
 
+    // 🟢 1. OBTENER PARTIDOS OFICIALES EN ORDEN CRONOLÓGICO PARA INSIGNIAS HISTÓRICAS
+    const officialMatches = useMemo(() => {
+        return effectiveMatches.filter(m => {
+            const rH = mergedAdminPreds[m.id]?.home;
+            const rA = mergedAdminPreds[m.id]?.away;
+            const matchStatus = m.status || '';
+            const hasOfficialAdminResult = (rH !== undefined && rH !== '' && rH !== null) && (rA !== undefined && rA !== '' && rA !== null);
+            const isMatchActiveOrFinished = matchStatus === 'FINISHED' || matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
+            return hasOfficialAdminResult || isMatchActiveOrFinished;
+        }).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+    }, [effectiveMatches, mergedAdminPreds]);
+
+    // 🟢 2. CALCULAR EL HISTORIAL DE POSICIONES (Para "El Dictador" y "El Ancla")
+    const historicalRanks = useMemo(() => {
+        const userScores = {};
+        Object.keys(allPredictions).forEach(uid => userScores[uid] = 0);
+        const history = [];
+
+        officialMatches.forEach(m => {
+            const rH = parseInt(mergedAdminPreds[m.id]?.home);
+            const rA = parseInt(mergedAdminPreds[m.id]?.away);
+            const validResult = !isNaN(rH) && !isNaN(rA);
+
+            if (validResult) {
+                Object.keys(allPredictions).forEach(uid => {
+                    const userData = allPredictions[uid];
+                    if (!userData || !userData.hasPaid || EXCLUDED_EMAILS.includes(userData.email)) return;
+
+                    const p = userData.predictions?.[m.id];
+                    if (p && p.home !== '' && p.away !== '') {
+                        const pH = parseInt(p.home); const pA = parseInt(p.away);
+                        if (pH === rH && pA === rA) userScores[uid] += 5;
+                        else {
+                            const pR = Math.sign(pH - pA); const rR = Math.sign(rH - rA);
+                            if (pR === rR && (pH === rH || pA === rA)) userScores[uid] += 3;
+                            else if (pR === rR) userScores[uid] += 2;
+                            else if (pH === rH || pA === rA) userScores[uid] += 1;
+                        }
+                    }
+                });
+
+                let max = -1; let min = 999999;
+                Object.keys(userScores).forEach(uid => {
+                    const userData = allPredictions[uid];
+                    if (!userData || !userData.hasPaid || EXCLUDED_EMAILS.includes(userData.email)) return;
+                    const s = userScores[uid];
+                    if (s > max) max = s;
+                    if (s < min) min = s;
+                });
+
+                history.push({ topScore: max, bottomScore: min, scores: { ...userScores } });
+            }
+        });
+        return history;
+    }, [officialMatches, allPredictions, mergedAdminPreds]);
+
     const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
 
     const byGroup = useMemo(() => {
@@ -204,7 +263,6 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
 
     const isGroupStageFinished = groupStatus.allFinished;
 
-    // 🟢 CALCULADORA AVANZADA UNIFICADA (Para resolver empates igual que las otras pantallas)
     const computeStandings = useCallback((groupName, predsToUse, tiesToUse) => {
         if (!groupName || !byGroup[groupName]) return [];
         const groupMatches = byGroup[groupName];
@@ -336,7 +394,6 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
         return finalFlattenedStandings;
     }, [byGroup]);
 
-    // 🟢 MOTOR PROGRESIVO DE CLASIFICADOS PARA EL RANKING (Alineado con Mi Polla)
     const adminQualified32 = useMemo(() => {
         let top2 = []; let thirds = [];
         let allGroupsFinished = true;
@@ -367,6 +424,32 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
 
             const stats = { plenosCount: 0, ptsPlenos: 0, ptsOtrosAciertos: 0, ptsHonorYBonos: 0, ptsRondas: 0, ptsExtras: 0, ptsEventos: 0, total: 0 };
 
+            // 🟢 LÓGICA DE INSIGNIAS HISTÓRICAS
+            let consecutivePlenos = 0;
+            let maxConsecutivePlenos = 0;
+
+            officialMatches.forEach(m => {
+                const p = userData.predictions?.[m.id];
+                const rH = mergedAdminPreds[m.id]?.home;
+                const rA = mergedAdminPreds[m.id]?.away;
+                if (p && p.home !== '' && p.away !== '' && rH !== undefined && rA !== undefined) {
+                    const pH = parseInt(p.home); const pA = parseInt(p.away);
+                    const realH = parseInt(rH); const realA = parseInt(rA);
+                    if (pH === realH && pA === realA) {
+                        consecutivePlenos++;
+                        if (consecutivePlenos > maxConsecutivePlenos) maxConsecutivePlenos = consecutivePlenos;
+                    } else { consecutivePlenos = 0; }
+                } else { consecutivePlenos = 0; }
+            });
+
+            let isDictador = false;
+            let isColero = false;
+            if (historicalRanks.length >= 7) {
+                const last7 = historicalRanks.slice(-7);
+                isDictador = last7.every(step => step.scores[uid] === step.topScore && step.topScore > 0);
+                isColero = last7.every(step => step.scores[uid] === step.bottomScore);
+            }
+
             effectiveMatches.forEach(m => {
                 const p = userData.predictions?.[m.id]; 
                 const rH = mergedAdminPreds[m.id]?.home;
@@ -375,7 +458,6 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
                 
                 const hasOfficialAdminResult = (rH !== undefined && rH !== '' && rH !== null) && (rA !== undefined && rA !== '' && rA !== null);
                 const isMatchActiveOrFinished = matchStatus === 'FINISHED' || matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
-                
                 const canSumPoints = hasOfficialAdminResult || isMatchActiveOrFinished;
 
                 if (canSumPoints && p && p.home !== '' && p.away !== '') {
@@ -391,6 +473,15 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
                     }
                 }
             });
+
+            const isSeco = officialMatches.length >= 5 && stats.plenosCount === 0;
+            const isFrancotirador = maxConsecutivePlenos >= 3;
+
+            // Guardamos las insignias en el objeto
+            stats.isDictador = isDictador;
+            stats.isColero = isColero;
+            stats.isSeco = isSeco;
+            stats.isFrancotirador = isFrancotirador;
 
             let userTop2 = []; let userThirds = [];
             
@@ -412,7 +503,6 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
                 const uT = computeStandings(g, userData.predictions, userData.manualTiebreakers);
                 if (uT[0]) userTop2.push(uT[0]); if (uT[1]) userTop2.push(uT[1]); if (uT[2]) userThirds.push(uT[2]);
                 
-                // 🟢 PLENO DE GRUPO PROGRESIVO
                 if (isGroupFinished && predictedCount === groupMatches.length) {
                     const aT = computeStandings(g, mergedAdminPreds, adminResults?.manualTiebreakers);
                     if (uT.length >= 4 && aT.length >= 4 && uT[0].name === aT[0].name && uT[1].name === aT[1].name && uT[2].name === aT[2].name && uT[3].name === aT[3].name) {
@@ -424,7 +514,6 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
             userThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             const userQualified32 = [...userTop2, ...userThirds.slice(0, 8)];
 
-            // 🟢 PUNTOS POR CLASIFICADOS A 16VOS PROGRESIVOS
             if (adminQualified32.length > 0) {
                 userQualified32.forEach(ut => {
                     if (adminQualified32.some(at => at.name === ut.name)) stats.ptsRondas += 2;
@@ -494,7 +583,7 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
             r.position = currentRank;
         });
         return ranks;
-    }, [allPredictions, effectiveMatches, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus]);
+    }, [allPredictions, effectiveMatches, officialMatches, historicalRanks, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus]);
 
     const premiosRepartidos = useMemo(() => {
         if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, netPot: 0, r1: 1, r2: 0, r3: 0 };
@@ -596,11 +685,13 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
 
     return (
         <div className="max-w-4xl mx-auto pb-24 animate-fade-in px-3 sm:px-0">
-            <div className="text-center mb-10 pt-6">
+            <div className="text-center mb-6 pt-6">
                 <span className="text-primary font-black tracking-widest uppercase text-xs bg-primary/10 px-4 py-1 rounded-full border border-primary/20">Leaderboard Oficial</span>
                 <h2 className="text-4xl sm:text-5xl font-extrabold text-foreground tracking-tighter mt-4 mb-2">Ranking Oficial 🏆</h2>
                 <p className="text-foreground-muted font-medium text-sm">Bolsa Real (90%): <strong className="text-green-500 font-black">{formatMoney(premiosRepartidos.netPot)}</strong></p>
             </div>
+
+            
 
             {ranking.length >= 2 && (
                 <div className="flex justify-center items-end h-[280px] sm:h-[380px] mb-12 relative">
@@ -612,7 +703,7 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
             )}
 
             <div className="space-y-4">
-                {ranking.map((user, idx) => {
+                {ranking.map((user) => {
                     const isExpanded = expandedUser === user.uid;
                     const isMiddle = user.uid === middlePlayerUid;
                     
@@ -629,13 +720,43 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
                                 {user.position === premiosRepartidos.r3 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-600"></div>}
                                 
                                 <div className="w-8 sm:w-14 flex justify-center shrink-0 font-black text-lg sm:text-2xl text-foreground-muted/30">{user.position}</div>
-                                <img src={user.photoURL} className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover shadow-sm mr-3 sm:mr-5 border shrink-0 border-border`} alt="" />
+                                
+                                {/* 🟢 AVATAR CON ICONOS SOBREPUESTOS SEGÚN POSICIÓN */}
+                                <div className="relative shrink-0 mr-3 sm:mr-5">
+                                    <img src={user.photoURL} className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover shadow-sm border ${
+                                        user.position === premiosRepartidos.r1 ? 'border-yellow-400' : 
+                                        user.position === premiosRepartidos.r2 ? 'border-slate-300' : 
+                                        user.position === premiosRepartidos.r3 ? 'border-amber-600' : 
+                                        user.position === ranking[ranking.length - 1]?.position ? 'border-red-500/50' : 
+                                        isMiddle ? 'border-blue-400/50' : 'border-border'
+                                    }`} alt="" />
+                                    
+                                    {user.position === premiosRepartidos.r1 ? (
+                                        <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="El Rey">👑</span>
+                                    ) : user.position === premiosRepartidos.r2 ? (
+                                        <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="Segundo">🥈</span>
+                                    ) : user.position === premiosRepartidos.r3 ? (
+                                        <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="Tercero">🥉</span>
+                                    ) : user.position === ranking[ranking.length - 1]?.position ? (
+                                        <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="El Colero Actual">🐢</span>
+                                    ) : isMiddle ? (
+                                        <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="En toda la mitad">🥪</span>
+                                    ) : null}
+                                </div>
                                 
                                 <div className="flex flex-col flex-1 min-w-0 pr-2">
                                     <span className="font-bold text-sm sm:text-lg text-foreground leading-tight truncate">{formatShortName(user.name)}</span>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                        {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full">🎯 MITAD: {formatMoney(premiosRepartidos.mitad)}</span>}
-                                        {rewardLabel && rewardLabel !== "$0" && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full">GANANDO: {rewardLabel}</span>}
+                                    
+                                    {/* 🟢 RENDERIZADO DE LAS NUEVAS INSIGNIAS */}
+                                 
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                        {user.isDictador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Dictador', desc: 'Líder por 7 partidos seguidos. ¡Intocable!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🗿</span>}
+                                        {user.isFrancotirador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'Francotirador', desc: 'Acertó 3 marcadores exactos consecutivos.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🎯</span>}
+                                        {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: 'Colero general por 7 partidos. Hundiendo la tabla.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
+                                        {user.isSeco && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Seco', desc: 'Ningún pleno hasta el momento. ¡Cero puntería!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">🌵</span>}
+
+                                        {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full ml-1">⚖️ MITAD: {formatMoney(premiosRepartidos.mitad)}</span>}
+                                        {rewardLabel && rewardLabel !== "$0" && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full ml-1">GANANDO: {rewardLabel}</span>}
                                     </div>
                                 </div>
 
@@ -684,9 +805,37 @@ const WorldCupRanking = ({ currentUser }) => { // 🟢 Recibimos currentUser par
                                 </div>
                             )}
                         </div>
+                        
                     );
                 })}
+                {/* 🟢 SECCIÓN: GUÍA DE INSIGNIAS */}
+            <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-10 shadow-sm">
+                <h3 className="text-foreground font-black text-xs sm:text-sm uppercase tracking-widest mb-3 opacity-60 text-center">Guía de Insignias y Logros</h3>
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs text-foreground-muted">
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🎯</span> <b>Francotirador:</b> 3 plenos consecutivos</div>
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🗿</span> <b>El Dictador:</b> Líder por 7 partidos seguidos</div>
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">⚓</span> <b>El Ancla:</b> Colero por 7 partidos seguidos</div>
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🌵</span> <b>El Seco:</b> Ningún pleno hasta el momento</div>
+                </div>
             </div>
+            </div>
+            {/* 🟢 POP-UP / MODAL DE INSIGNIAS PARA MÓVILES */}
+            {activeBadgeInfo && (
+                <div 
+                    className="fixed z-[100] bg-slate-800 border border-slate-600 text-white p-2 rounded-xl shadow-2xl flex flex-col items-center pointer-events-none animate-fade-in w-40 text-center"
+                    style={{
+                        top: activeBadgeInfo.y - 15, // Un poco más arriba del dedo
+                        left: Math.min(Math.max(activeBadgeInfo.x, 85), window.innerWidth - 85), // Evita que se salga de los bordes
+                        transform: 'translate(-50%, -100%)'
+                    }}
+                >
+                    <span className="font-black text-[11px] text-yellow-400 leading-tight mb-1">{activeBadgeInfo.title}</span>
+                    <span className="text-[10px] leading-tight text-slate-200">{activeBadgeInfo.desc}</span>
+                    
+                    {/* Triangulito de globo de cómic */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
+                </div>
+            )}
         </div>
     );
 };
