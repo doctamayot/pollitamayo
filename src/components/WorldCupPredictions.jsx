@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import logocopa from '../assets/logocopa.png';
 import StatsBanner from './StatsBanner';
 import NewsTicker from './shared/NewsTicker'
+import wapIcon from '../assets/wap.png';
 
 import { generateFullBracket } from '../services/bracketEngine'; 
 
@@ -1174,8 +1175,19 @@ const WorldCupPredictions = ({ currentUser }) => {
 
             {/* BOTÓN FLOTANTE GUARDAR */}
             {!(activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) && (
-                <div className="fixed bottom-28 md:bottom-10 right-4 sm:right-10 z-30 flex flex-col gap-3 items-end animate-slide-up">
-                    <button onClick={handleSavePredictions} disabled={saving} className="bg-primary text-primary-foreground font-black py-3 px-5 sm:py-4 sm:px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-2 sm:gap-3 disabled:opacity-50 uppercase tracking-tighter text-xs sm:text-base">
+                <div>
+                <a 
+                    href="https://wa.me/573144261190?text=Hola,%20estoy%20llenando%20mi%20Polla%20Mundialista%20y%20necesito%20ayuda." 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="fixed bottom-28 md:bottom-10 right-4 md:right-10 z-30 w-14 h-14 bg-[#25D366] rounded-full shadow-[0_0_15px_rgba(37,211,102,0.4)] hover:scale-110 transition-transform flex items-center justify-center border-2 border-white/20 animate-bounce group"
+                >
+                    <img src={wapIcon} alt="Soporte WhatsApp" className="w-8 h-8 object-contain drop-shadow-md group-hover:rotate-12 transition-transform" />
+                </a>
+
+                {/* 🟢 BOTÓN GUARDAR (CENTRO EN MÓVIL, DERECHA EN PC) */}
+                <div className="fixed bottom-28 md:bottom-10 left-1/2 -translate-x-1/2 z-30 flex flex-col gap-3 items-center animate-slide-up w-max">
+                    <button onClick={handleSavePredictions} disabled={saving} className="bg-primary text-primary-foreground font-black py-3 px-6 sm:py-4 sm:px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-2 sm:gap-3 disabled:opacity-50 uppercase tracking-tighter text-xs sm:text-base">
                         {saving ? (
                             <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>...</span></>
                         ) : (
@@ -1186,6 +1198,7 @@ const WorldCupPredictions = ({ currentUser }) => {
                             </>
                         )}
                     </button>
+                </div>
                 </div>
             )}
         </div>

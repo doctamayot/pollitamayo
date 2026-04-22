@@ -187,7 +187,9 @@ const WorldCupAdmin = () => {
                                             </div>
                                         </td>
                                         <td className="p-4 sm:p-6 text-center text-foreground-muted">
-                                            {p.updatedAt ? new Date(p.updatedAt.toDate ? p.updatedAt.toDate() : p.updatedAt).toLocaleDateString('es-ES') : 'N/A'}
+                                            {p.createdAt || p.updatedAt 
+                                                ? new Date((p.createdAt || p.updatedAt).toDate ? (p.createdAt || p.updatedAt).toDate() : (p.createdAt || p.updatedAt)).toLocaleDateString('es-ES') 
+                                                : 'N/A'}
                                         </td>
                                         <td className="p-4 sm:p-6 text-center">
                                             <button 

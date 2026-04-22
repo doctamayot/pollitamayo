@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import './App.css';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
 // Imágenes / Assets
@@ -10,6 +10,7 @@ import logoMundial from './assets/logomundial.png';
 import logoQuinielas from './assets/logoquinielas.png';
 import logoGeneral from './assets/logogeneral.png';
 import logocopa from './assets/logocopa.png';
+import wapIcon from './assets/wap.png';
 
 // Componentes
 import AuthScreen from './components/AuthScreen';
@@ -87,13 +88,35 @@ function App() {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
             if (currentUser) {
-                setIsAdmin(currentUser.email === ADMIN_EMAIL || currentUser.email === 'doctamayot@gmail.com');
+                const isAdminUser = currentUser.email === ADMIN_EMAIL || currentUser.email === 'doctamayot@gmail.com';
+                setIsAdmin(isAdminUser);
+                
                 const userDocRef = doc(db, USERS_COLLECTION, currentUser.uid);
                 const docSnap = await getDoc(userDocRef);
+                
                 if (docSnap.exists() && docSnap.data().isBlocked === true) {
                     setAuthReason('blocked');
                     signOut(auth);
+                    return; // Detenemos la ejecución si está bloqueado
                 }
+
+                // 🟢 AUTO-REGISTRO (EXCLUYENDO AL ADMINISTRADOR)
+                if (!isAdminUser) {
+                    const wcRef = doc(db, 'worldCupPredictions', currentUser.uid);
+                    const wcSnap = await getDoc(wcRef);
+                    
+                    if (!wcSnap.exists()) {
+                        await setDoc(wcRef, {
+                            displayName: currentUser.displayName || 'Jugador',
+                            email: currentUser.email,
+                            photoURL: currentUser.photoURL || '',
+                            hasPaid: false,
+                            totalPoints: 0,
+                            createdAt: new Date().toISOString()
+                        }, { merge: true });
+                    }
+                }
+
             } else {
                 setAuthReason(null);
                 setMainView('selection');
@@ -688,6 +711,8 @@ function App() {
 
                 </div>
             </main>
+            {/* 🟢 NUEVO: BOTÓN FLOTANTE WHATSAPP (A LA IZQUIERDA) */}
+            
         <Toaster 
             position="top-center"
             toastOptions={{
