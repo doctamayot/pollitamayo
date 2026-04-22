@@ -97,6 +97,7 @@ export const getStandings = async (competitionId) => {
     }
 
     const data = await fetchFromApi(`competitions/${competitionId}/standings`);
+    console.log(data)
 
     // Validar la estructura de la respuest
     const table = data?.standings?.[0]?.table;
