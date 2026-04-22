@@ -33,14 +33,33 @@ const WorldCupAdmin = () => {
     }, []);
 
     const filteredParticipants = useMemo(() => {
-        if (!searchTerm) return participants;
+        // 1. Hacemos una copia de los participantes para poder ordenarlos
+        let result = [...participants]; 
         
-        const lowerTerm = searchTerm.toLowerCase();
-        return participants.filter(p => {
-            const nameMatch = p.displayName?.toLowerCase().includes(lowerTerm);
-            const emailMatch = p.email?.toLowerCase().includes(lowerTerm);
-            return nameMatch || emailMatch; 
+        // 2. Aplicamos el filtro de búsqueda si el administrador escribió algo
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            result = result.filter(p => {
+                const nameMatch = p.displayName?.toLowerCase().includes(lowerTerm);
+                const emailMatch = p.email?.toLowerCase().includes(lowerTerm);
+                return nameMatch || emailMatch; 
+            });
+        }
+
+        // 3. Ordenamos por fecha de llegada (El primero en registrarse sale arriba)
+        result.sort((a, b) => {
+            const getTime = (player) => {
+                const dateField = player.createdAt || player.updatedAt;
+                if (!dateField) return 0; // Si no tiene fecha, lo manda al fondo
+                // Firebase a veces guarda Timestamp y a veces un String ISO, aquí manejamos ambos:
+                return dateField.toDate ? dateField.toDate().getTime() : new Date(dateField).getTime();
+            };
+            
+            // Orden Ascendente (Para Orden Descendente, es decir el más nuevo arriba, cambia a: getTime(b) - getTime(a))
+            return getTime(b) - getTime(a); 
         });
+
+        return result;
     }, [participants, searchTerm]);
 
     const toggleLiveMode = async () => {
@@ -187,9 +206,11 @@ const WorldCupAdmin = () => {
                                             </div>
                                         </td>
                                         <td className="p-4 sm:p-6 text-center text-foreground-muted">
-                                            {p.createdAt || p.updatedAt 
-                                                ? new Date((p.createdAt || p.updatedAt).toDate ? (p.createdAt || p.updatedAt).toDate() : (p.createdAt || p.updatedAt)).toLocaleDateString('es-ES') 
-                                                : 'N/A'}
+                                            {/* Prioridad absoluta a createdAt (la primera vez que entró) */}
+                                            {p.createdAt 
+                                                ? new Date(p.createdAt.toDate ? p.createdAt.toDate() : p.createdAt).toLocaleDateString('es-ES') 
+                                                : (p.updatedAt ? new Date(p.updatedAt.toDate ? p.updatedAt.toDate() : p.updatedAt).toLocaleDateString('es-ES') : 'N/A')
+                                            }
                                         </td>
                                         <td className="p-4 sm:p-6 text-center">
                                             <button 
