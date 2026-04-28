@@ -53,6 +53,8 @@ const WorldCupPredictions = ({ currentUser }) => {
     const [hasPaid, setHasPaid] = useState(false);
     const [activeRoundTab, setActiveRoundTab] = useState('dieciseisavos');
 
+    const [showAssistant, setShowAssistant] = useState(true);
+
     const subTabsRef = useRef(null);
     const roundTabsRef = useRef(null);
     const lastSyncTime = useRef(0);
@@ -631,6 +633,105 @@ const WorldCupPredictions = ({ currentUser }) => {
         return missing;
     }, [activePhase, matchesByGroup, knockoutMatches, predictions, knockoutPicks, extraPicks, eventPicks, isAdmin]);
 
+    // 🟢 CEREBRO DE PROGRESO (Para los Semáforos de los Tabs)
+    const tabStatuses = useMemo(() => {
+        const statuses = { partidos: 'red', rondas: 'red', extras: 'red', eventos: 'red' };
+        if (isAdmin) return { partidos: 'green', rondas: 'green', extras: 'green', eventos: 'green' };
+
+        // 1. MARCADORES (Se adapta dinámicamente según la Fase del Mundial)
+        let totalMatches = 0; let filledMatches = 0;
+        if (activePhase === 'GROUP_STAGE' || activePhase === 'ALL_OPEN') {
+            const allGroupMatches = Object.values(matchesByGroup).flat();
+            totalMatches = allGroupMatches.length;
+            filledMatches = allGroupMatches.filter(m => predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== '' && predictions[m.id]?.away !== undefined && predictions[m.id]?.away !== '').length;
+        } else {
+            const phaseMatches = knockoutMatches[activePhase] || [];
+            totalMatches = phaseMatches.length;
+            filledMatches = phaseMatches.filter(m => predictions[m.id]?.home !== undefined && predictions[m.id]?.home !== '' && predictions[m.id]?.away !== undefined && predictions[m.id]?.away !== '').length;
+        }
+        
+        if (totalMatches === 0) statuses.partidos = 'green';
+        else if (filledMatches === 0) statuses.partidos = 'red';
+        else if (filledMatches < totalMatches) statuses.partidos = 'orange';
+        else statuses.partidos = 'green';
+
+        // 2. CLASIFICADOS (Se bloquea en verde si ya pasó la fase de grupos)
+        if (activePhase !== 'GROUP_STAGE' && activePhase !== 'ALL_OPEN') {
+            statuses.rondas = 'green';
+            statuses.extras = 'green';
+            statuses.eventos = 'green';
+        } else {
+            const totalRounds = 34; // 16+8+4+2+1+1+1+1
+            const filledRounds = (knockoutPicks.dieciseisavos?.length || 0) + (knockoutPicks.octavos?.length || 0) + (knockoutPicks.cuartos?.length || 0) + (knockoutPicks.semis?.length || 0) + (knockoutPicks.campeon?.length || 0) + (knockoutPicks.subcampeon?.length || 0) + (knockoutPicks.tercero?.length || 0) + (knockoutPicks.cuarto?.length || 0);
+            if (filledRounds === 0) statuses.rondas = 'red'; else if (filledRounds < totalRounds) statuses.rondas = 'orange'; else statuses.rondas = 'green';
+
+            const totalExtras = extraQuestions.length;
+            const filledExtras = extraQuestions.filter(q => extraPicks[q.id] !== undefined && extraPicks[q.id] !== '').length;
+            if (filledExtras === 0) statuses.extras = 'red'; else if (filledExtras < totalExtras) statuses.extras = 'orange'; else statuses.extras = 'green';
+
+            const totalEvents = specialEvents.length;
+            const filledEvents = specialEvents.filter(e => eventPicks[e.id] !== undefined && eventPicks[e.id] !== '').length;
+            if (filledEvents === 0) statuses.eventos = 'red'; else if (filledEvents < totalEvents) statuses.eventos = 'orange'; else statuses.eventos = 'green';
+        }
+
+        return statuses;
+    }, [activePhase, matchesByGroup, knockoutMatches, predictions, knockoutPicks, extraPicks, eventPicks, isAdmin]);
+
+    // 🟢 GUION DEL ASISTENTE VIRTUAL
+    // Hacemos que la burbuja reaparezca si el usuario cambia de pestaña
+   useEffect(() => {
+        // El Profe se asoma cada vez que cambias de pestaña
+        setShowAssistant(true);
+        const hideTimeout = setTimeout(() => setShowAssistant(false), 5000); // Se esconde a los 6 segundos
+
+        // Si el equipo anda flojo (no está en verde), el Profe te pega un grito cada 20 seg
+        const reminderInterval = setInterval(() => {
+            if (tabStatuses[activeTab] !== 'green') {
+                setShowAssistant(true);
+                setTimeout(() => setShowAssistant(false), 20000);
+            }
+        }, 20000);
+
+        return () => {
+            clearTimeout(hideTimeout);
+            clearInterval(reminderInterval);
+        };
+    }, [activeTab, tabStatuses]);
+
+    const assistantMessage = useMemo(() => {
+        const status = tabStatuses[activeTab];
+        
+        // Si todo está perfecto
+        if (status === 'green') return { text: '¡Esa es la actitud, muchacho! Todo listo acá. Dale a guardar y vamos a ganar esta polla.', avatar: '✅' };
+
+        // Pestaña Marcadores
+        if (activeTab === 'partidos') {
+            if (activePhase !== 'GROUP_STAGE' && activePhase !== 'ALL_OPEN') return { text: '¡Despierta! Ya hay cruces oficiales. Pon tus marcadores exactos antes de que ruede el balón o nos quedamos fuera.', avatar: '🤬⏱️' };
+            if (status === 'red') return { text: '¡Pisa la cancha! Arranca llenando TODOS los marcadores de grupos. Yo me encargo de armarte los 16avos.', avatar: '👨‍🏫' };
+            if (status === 'orange') return { text: '¡Eh, nos faltan goles! Busca los grupos que dejaste en blanco.', avatar: '🧐' };
+        }
+
+        // Pestaña Clasificados
+        if (activeTab === 'rondas') {
+            if (status === 'red') return { text: '¡A armar el camino! Toca a los equipos que pasarán ronda por ronda hasta la Copa. No te me duermas.', avatar: '🏆🗣️' };
+            if (status === 'orange') return { text: '¡Ey! Revisa las rondas finales. Me dejaste el equipo a medias y así no se gana un Mundial.', avatar: '😤' };
+        }
+
+        // Pestaña Extras
+        if (activeTab === 'extras') {
+            if (status === 'red') return { text: '¡Puntos de oro a la vista! Dime quién es el goleador y los premios. Piensa con cabeza fría.', avatar: '⚽' };
+            if (status === 'orange') return { text: '¡No regales nada al rival! Te faltan responder algunas preguntas extras. Léelas bien.', avatar: '🤨' };
+        }
+
+        // Pestaña Eventos
+        if (activeTab === 'eventos') {
+            if (status === 'red') return { text: '¡Ojo al VAR! Responde SÍ o NO a estas rarezas del Mundial. Un pleno acá y te vas arriba en la tabla.', avatar: '📺☝️' };
+            if (status === 'orange') return { text: '¡Revisa el monitor! Te dejaste eventos sin responder. Pon SÍ o NO y terminamos el entreno.', avatar: '👀' };
+        }
+
+        return { text: '¡Vamos equipo, a llenar esa polla!', avatar: '👨‍🏫' };
+    }, [activeTab, tabStatuses, activePhase]);
+
     const handleScoreChange = (matchId, team, value) => {
         if (activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) return;
         if (value !== '' && (isNaN(value) || value < 0 || value > 99)) return;
@@ -1013,6 +1114,11 @@ const WorldCupPredictions = ({ currentUser }) => {
                     {tabs.map((tab) => {
                         const isSelected = activeTab === tab.id;
                         
+                        // 🟢 Lógica visual del semáforo
+                        const statusColor = tabStatuses[tab.id] === 'green' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' :
+                                            tabStatuses[tab.id] === 'orange' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-pulse' :
+                                            'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]';
+                        
                         return (
                             <button
                                 key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -1020,6 +1126,9 @@ const WorldCupPredictions = ({ currentUser }) => {
                                     isSelected ? 'bg-gradient-to-br from-primary to-amber-600 text-white shadow-lg sm:scale-105 z-10' : 'bg-transparent text-foreground-muted hover:bg-background-offset hover:text-foreground'
                                 }`}
                             >
+                                {/* 🟢 Puntito del Semáforo */}
+                                <div className={`absolute top-1.5 sm:top-2.5 right-2 sm:right-3 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${statusColor} border border-background/50 z-20 transition-colors`}></div>
+                                
                                 <span className="text-[18px] sm:text-base relative z-10 leading-none mb-0.5 sm:mb-0">{tab.icon}</span>
                                 <span className="text-[8px] sm:text-xs uppercase tracking-tight sm:tracking-wider text-center relative z-10 w-full whitespace-nowrap">{tab.label}</span>
                             </button>
@@ -1199,6 +1308,35 @@ const WorldCupPredictions = ({ currentUser }) => {
                         )}
                     </button>
                 </div>
+                
+                {/* 🟢 ASISTENTE TÁCTICO PREMIUM (ARRIBA IZQUIERDA) */}
+                {showAssistant && !(activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) && (
+                    <div className="fixed top-36 sm:top-40 lg:top-32 left-2 md:left-[280px] lg:left-[320px] z-50 pointer-events-none animate-fade-in max-w-[90vw] sm:max-w-[360px]">
+                        
+                        <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-card/95 backdrop-blur-xl border border-border/60 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] transition-all">
+                            
+                            {/* Avatar elegante (Marco sutil, sin saltos caricaturescos) */}
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-background-offset rounded-full flex items-center justify-center text-2xl sm:text-3xl border border-primary/30 shadow-inner relative overflow-hidden">
+                                <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent"></div>
+                                <span className="relative z-10">{assistantMessage.avatar}</span>
+                            </div>
+
+                            {/* Contenido de la notificación */}
+                            <div className="flex flex-col flex-1">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                                        Asistente Táctico
+                                    </span>
+                                </div>
+                                <p className="text-foreground text-[11px] sm:text-xs font-medium leading-snug">
+                                    {assistantMessage.text}
+                                </p>
+                            </div>
+                            
+                        </div>
+                    </div>
+                )}
                 </div>
             )}
         </div>

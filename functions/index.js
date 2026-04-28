@@ -81,6 +81,7 @@ async function runAiNewsGeneration() {
             usersSnap.forEach(doc => {
                 const data = doc.data();
                 if (data.hasPaid) {
+                    // 1. Extraer marcadores cercanos
                     let picks = [];
                     [...recentMatches, ...upcomingMatches].forEach(m => {
                         const pred = data.predictions?.[m.id];
@@ -88,17 +89,45 @@ async function runAiNewsGeneration() {
                             picks.push(`${m.homeTeam.name} ${pred.home}-${pred.away} ${m.awayTeam.name}`);
                         }
                     });
-                    usersData.push({ name: data.displayName, points: data.totalPoints || 0, picks: picks.join(", ") });
+
+                    // 2. Extraer TODAS las predicciones a futuro dinámicamente
+                    const knockout = data.knockoutPicks || {};
+                    const extras = data.extraPicks || {};
+                    const eventos = data.eventPicks || {};
+
+                    const campeon = knockout.campeon?.[0]?.name || 'Nadie';
+                    const subcampeon = knockout.subcampeon?.[0]?.name || 'Nadie';
+                    const semis = (knockout.semis || []).map(t => t.name).join(", ") || 'Ninguno';
+                    const cuartos = (knockout.cuartos || []).map(t => t.name).join(", ") || 'Ninguno';
+
+                    // Convertir TODAS las preguntas Extras a un texto legible
+                    const extrasStr = Object.entries(extras)
+                        .filter(([k, v]) => v && v !== '')
+                        .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+                        .join(", ");
+
+                    // Convertir TODOS los Eventos Especiales (Solo los que apostó que "SI")
+                    const eventosSi = Object.entries(eventos)
+                        .filter(([k, v]) => v === 'SI')
+                        .map(([k]) => k.replace(/_/g, ' '));
+                    const eventosStr = eventosSi.length > 0 ? `| Eventos que jura que pasarán: ${eventosSi.join(", ")}` : '';
+
+                    usersData.push({ 
+                        name: data.displayName, 
+                        points: data.totalPoints || 0, 
+                        picks: picks.join(", "),
+                        futuro: `Campeón: ${campeon} | Subcampeón: ${subcampeon} | Semis: ${semis} | Cuartos: ${cuartos} | Extras (${extrasStr}) ${eventosStr}`
+                    });
                 }
             });
             
             usersData.sort((a, b) => b.points - a.points);
-            const top5 = usersData.slice(0, 5).map(u => `${u.name} (${u.points} pts) [Pronosticó: ${u.picks || 'Nada'}]`).join(" \n ");
+            const top5 = usersData.slice(0, 5).map(u => `${u.name} (${u.points} pts) [Marcadores: ${u.picks || 'Nada'}] [Predicciones Generales: ${u.futuro}]`).join(" \n ");
 
             prompt = `Eres el presentador estrella de Sportscenter en ESPN. El Mundial ya empezó y tu trabajo es redactar 5 titulares deportivos impactantes para la marquesina de TV de nuestra Polla.
             
             Datos en tiempo real de la jornada:
-            - RANKING TOP 5 DE LA POLLA Y SUS PRONÓSTICOS: 
+            - RANKING TOP 5 DE LA POLLA Y SUS PRONÓSTICOS (Marcadores y Torneo): 
             ${top5}
             
             - ÚLTIMOS RESULTADOS REALES DEL MUNDIAL: 
@@ -107,12 +136,12 @@ async function runAiNewsGeneration() {
             - PRÓXIMOS PARTIDOS DEL MUNDIAL: 
             ${upcomingText || 'Aún no hay partidos.'}
 
-           Instrucciones vitales:
-            1. Saca conclusiones cruzadas: Compara los "Resultados Reales" con lo que "Pronosticó" el Top 5. ¿Alguien le atinó al marcador exacto?
-            2. Analiza los "Próximos partidos" y expón al público qué predicciones hicieron los líderes para esos encuentros.
-            3. EL MURO DEL VAR (Salseo en vivo): Dedica al menos 2 de los 5 titulares a simular "El Muro del VAR". Estos deben ser mensajes directos, sarcásticos y picantes como si el VAR estuviera revisando las predicciones y burlándose de quienes perdieron puntos por un gol, o alabando una predicción arriesgada. 
-            4. Tono: Épico, analítico, y sumamente burlón/picante en la sección del VAR.
-            5. Usa SIEMPRE prefijos como "LIDERATO:", "ALERTA:", "BATACAZO:", "PRONÓSTICO:", "EL VAR:", "CHAT:".
+            Instrucciones vitales:
+            1. Saca conclusiones cruzadas: Compara los "Resultados Reales" con los "Marcadores" que pronosticó el Top 5. ¿Alguien le atinó?
+            2. Analiza el futuro de los líderes: Revisa a fondo la sección "Predicciones Generales". Si un líder va de primero pero tiene predicciones absurdas o arriesgadas (ej: en Cuartos, Semis, en preguntas Extras o Eventos locos), exponlo públicamente.
+            3. EL MURO DEL VAR (Salseo en vivo): Dedica al menos 2 de los 5 titulares a simular "El Muro del VAR". Usa este espacio para burlarte con sarcasmo de los que perdieron puntos en marcadores recientes, o para cuestionar las apuestas generales del líder (ej. "El VAR revisa la quiniela de Hugo... ¿De verdad cree que habrá una roja en el banquillo y que el goleador será de Ecuador?").
+            4. Tono: Épico, analítico, estadístico, pero sumamente burlón/picante en la sección del VAR.
+            5. Usa SIEMPRE prefijos como "LIDERATO:", "ALERTA:", "BATACAZO:", "PRONÓSTICO:", "EL VAR:", "CHAT:", "EL ORÁCULO:".
             6. PROHIBIDO mencionar que eres una IA o usar la palabra "ID".
             7. Devuelve ÚNICAMENTE un array JSON válido de strings.`;
         }
