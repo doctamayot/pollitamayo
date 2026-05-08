@@ -32,7 +32,7 @@ const StatusWarnings = ({ isAdmin, hasPaid, missingSections, isLocked }) => {
                     <div className="text-2xl sm:text-3xl shrink-0">✅</div>
                     <div>
                         <h3 className="font-bold text-green-500 mb-1 text-sm sm:text-base">¡Ya estas Oficialmente inscrito!</h3>
-                        <a href="https://chat.whatsapp.com/E223l4vTVhy21yCcVwGY44" target="_blank" rel="noopener noreferrer" className="text-amber-500 font-bold underline hover:text-amber-400 transition-colors">
+                        <a href="https://chat.whatsapp.com/CYpX5kuGcYl4l3uxuyPUZB" target="_blank" rel="noopener noreferrer" className="text-amber-500 font-bold underline hover:text-amber-400 transition-colors">
                                 Entrar al grupo de Whatsapp
                             </a>
                     </div>
