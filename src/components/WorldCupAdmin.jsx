@@ -2,12 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import SearchBar from './SearchBar'; 
+import AdminAuditor from './AdminAuditor'
 
 const WorldCupAdmin = () => {
     const [participants, setParticipants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [liveMenuMode, setLiveMenuMode] = useState(false);
     const [searchTerm, setSearchTerm] = useState(''); 
+    const [showAuditor, setShowAuditor] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onSnapshot(collection(db, 'worldCupPredictions'), (snapshot) => {
@@ -240,6 +242,22 @@ const WorldCupAdmin = () => {
                     </table>
                 </div>
             </div>
+            <div className="mt-12 mb-8 text-center border-t border-border pt-10">
+                <button 
+                    onClick={() => setShowAuditor(!showAuditor)}
+                    className="bg-amber-500 hover:bg-amber-400 text-white px-8 py-3 rounded-full font-black text-sm flex items-center gap-3 transition-transform hover:scale-105 shadow-lg mx-auto"
+                >
+                    <span className="text-xl">{showAuditor ? '👀' : '🔍'}</span> 
+                    {showAuditor ? 'Ocultar Radar de Incompletos' : 'Abrir Radar de Incompletos'}
+                </button>
+            </div>
+
+            {/* Renderizado Condicional del Componente */}
+            {showAuditor && (
+                <div className="mt-6 animate-slide-up">
+                    <AdminAuditor />
+                </div>
+            )}
         </div>
     );
 };
