@@ -108,6 +108,7 @@ const LeagueChampionsView = ({ isAdmin }) => {
             const promises = leaguesToFetch.map(league => getStandings(league.id));
             try {
                 const results = await Promise.allSettled(promises);
+                console.log(results)
                 const standingsMap = {};
                 leaguesToFetch.forEach((league, index) => {
                     const result = results[index];

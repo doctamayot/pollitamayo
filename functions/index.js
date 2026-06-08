@@ -10,7 +10,7 @@ const db = admin.firestore();
 async function runAiNewsGeneration() {
     try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" }); 
+        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" }); 
 
         // 1. OBTENER ESTADO DEL TORNEO
         const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();

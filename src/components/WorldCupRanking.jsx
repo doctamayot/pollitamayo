@@ -50,9 +50,19 @@ const specialEvents = [
 
 const formatShortName = (fullName) => {
     if (!fullName) return 'Anon';
-    const parts = fullName.trim().split(' ');
+    
+    // Separamos el nombre por espacios
+    const parts = fullName.trim().split(/\s+/); 
+    
+    // Si solo tiene una palabra (ej: "Neymar")
     if (parts.length === 1) return parts[0];
-    return `${parts[0]} ${parts[1].charAt(0)}.`;
+    
+    // Si tiene exactamente dos palabras (ej: "Lionel Messi")
+    if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
+    
+    // Si tiene tres o más palabras, tomamos las dos primeras y la inicial de la tercera
+    // (ej: "Juan Carlos Pérez" -> "Juan Carlos P.")
+    return `${parts[0]} ${parts[1]} ${parts[2].charAt(0)}.`;
 };
 
 const formatMoney = (amount) => {
@@ -745,7 +755,7 @@ const WorldCupRanking = ({ currentUser }) => {
                                 </div>
                                 
                                 <div className="flex flex-col flex-1 min-w-0 pr-2">
-                                    <span className="font-bold text-sm sm:text-lg text-foreground leading-tight truncate">{formatShortName(user.name)}</span>
+                                    <span className="font-bold text-[12px] sm:text-lg text-foreground leading-tight truncate">{formatShortName(user.name)}</span>
                                     
                                     {/* 🟢 RENDERIZADO DE LAS NUEVAS INSIGNIAS */}
                                  
