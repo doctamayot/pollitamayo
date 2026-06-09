@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { extraQuestions, specialEvents } from './worldcupcomponents/constants';
 import SearchBar from './SearchBar';
-import toast from 'react-hot-toast'; // Importamos toast para la alerta visual
+import toast from 'react-hot-toast'; 
 
 const AdminAuditor = () => {
     const [participants, setParticipants] = useState([]);
@@ -50,12 +50,15 @@ const AdminAuditor = () => {
                 }
             });
 
-            // Auditar Clasificados (Brackets)
+            // 🟢 CORRECCIÓN: Auditar Clasificados y el PODIO COMPLETO
             if ((ko.dieciseisavos?.length || 0) < 16) { missing.knockouts.push('16vos'); missing.totalCount++; }
             if ((ko.octavos?.length || 0) < 8) { missing.knockouts.push('Octavos'); missing.totalCount++; }
             if ((ko.cuartos?.length || 0) < 4) { missing.knockouts.push('Cuartos'); missing.totalCount++; }
             if ((ko.semis?.length || 0) < 2) { missing.knockouts.push('Semis'); missing.totalCount++; }
             if (!ko.campeon?.length) { missing.knockouts.push('Campeón'); missing.totalCount++; }
+            if (!ko.subcampeon?.length) { missing.knockouts.push('Subcampeón'); missing.totalCount++; }
+            if (!ko.tercero?.length) { missing.knockouts.push('Tercer Puesto'); missing.totalCount++; }
+            if (!ko.cuarto?.length) { missing.knockouts.push('Cuarto Puesto'); missing.totalCount++; }
 
             // Auditar Extras (Pregunta por pregunta)
             extraQuestions.forEach(q => {
