@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; // 🟢 getDoc añadido
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
 import { getWorldCupMatches } from '../services/apiFootball';
 import html2pdf from 'html2pdf.js';
 import SearchBar from './SearchBar'; 
@@ -36,16 +36,17 @@ const roundTranslations = {
     'QUARTER_FINALS': 'Cuartos de Final',
     'SEMI_FINALS': 'Semifinales',
     'FINALS': 'Gran Final / 3er Puesto',
-    'octavos': 'Clasificados a Octavos',
-    'cuartos': 'Clasificados a Cuartos',
-    'semis': 'Clasificados a Semis',
+    'dieciseisavos': 'Octavos', // 16 Equipos resultantes
+    'octavos': 'Cuartos',       // 8 Equipos resultantes
+    'cuartos': 'Semis',         // 4 Equipos resultantes
+    'semis': 'Finalistas',      // 2 Equipos resultantes
     'campeon': 'Campeón',
     'subcampeon': 'Subcampeón',
     'tercero': 'Tercer Puesto',
     'cuarto': 'Cuarto Puesto'
 };
 
-const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
+const WorldCupAllPollas = ({ currentUser }) => {
     const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
 
     const [participants, setParticipants] = useState([]);
@@ -69,7 +70,6 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
             try {
                 let data = null;
 
-                // 🟢 BLINDAJE DE API: Lee de caché si no es admin
                 if (isAdmin) {
                     data = await getWorldCupMatches();
                 } else {
@@ -120,7 +120,6 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
         );
     }, [participants, searchTerm]);
 
-    // 🟢 SÚPER CALCULADORA APLICADA AL DOSSIER (Idéntica a Predictions y Mi Polla)
     const calculateUserStandings = useCallback((groupMatches, preds, manualTiebreakers, groupName) => {
         if (!groupMatches) return [];
         const teams = {};
@@ -164,13 +163,13 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
                     const pred = preds?.[m.id];
                     if (pred && pred.home !== '' && pred.away !== '') {
                         const hG = parseInt(pred.home, 10); const aG = parseInt(pred.away, 10);
-                        const h = m.homeTeam.name; const a = m.awayTeam.name;
+                        const home = m.homeTeam.name; const away = m.awayTeam.name;
                         
-                        h2hStats[h].gf += hG; h2hStats[a].gf += aG;
-                        h2hStats[h].dg += (hG - aG); h2hStats[a].dg += (aG - hG);
-                        if (hG > aG) { h2hStats[h].pts += 3; }
-                        else if (hG < aG) { h2hStats[a].pts += 3; }
-                        else { h2hStats[h].pts += 1; h2hStats[a].pts += 1; }
+                        h2hStats[home].gf += hG; h2hStats[away].gf += aG;
+                        h2hStats[home].dg += (hG - aG); h2hStats[away].dg += (aG - hG);
+                        if (hG > aG) { h2hStats[home].pts += 3; }
+                        else if (hG < aG) { h2hStats[away].pts += 3; }
+                        else { h2hStats[home].pts += 1; h2hStats[away].pts += 1; }
                     }
                 }
             });
@@ -242,7 +241,6 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
         });
 
         const sortedPtsKeys = Object.keys(groupedByPts).map(Number).sort((a, b) => b - a);
-
         let finalFlattenedStandings = [];
 
         sortedPtsKeys.forEach(pts => {
@@ -253,7 +251,6 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
         return finalFlattenedStandings;
     }, []);
 
-    // 🟢 NUEVO CANDADO: ¿Este usuario específico ya llenó todos sus grupos?
     const isUserGroupStageComplete = useMemo(() => {
         if (!selectedUser) return false;
         const allGroupMatches = Object.values(matchesByGroup).flat();
@@ -269,7 +266,6 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
 
     const qualifiedRoundOf32 = useMemo(() => {
         if (!selectedUser) return [];
-        // 🟢 FIREWALL: Si no ha llenado sus grupos, no calcules nada (evita la "inercia" alfabética)
         if (!isUserGroupStageComplete) return [];
 
         const preds = selectedUser.predictions || {};
@@ -418,32 +414,10 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
                         </div>
                     </div>
 
-                    {/* SECCIÓN 2: LOS 32 CLASIFICADOS */}
-                    <div className="avoid-break mb-10">
-                        <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                            2. Clasificados a 16vos
-                        </h3>
-                        {isUserGroupStageComplete ? (
-                            <div className="flex flex-wrap gap-3 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                {qualifiedRoundOf32.map((t, idx) => (
-                                    <div key={idx} className="px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}>
-                                        <span className="text-xs font-bold" style={{ color: '#0f172a' }}>{translateTeam(t.name)}</span>
-                                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded" style={{ color: '#b45309', backgroundColor: '#fef3c7' }}>{t.qualReason} {t.group.replace('Grupo ', '')}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center p-6 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b' }}>
-                                <span className="text-2xl block mb-2">🚧</span>
-                                <p className="text-sm font-bold">El jugador aún no ha terminado de pronosticar su Fase de Grupos.</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* SECCIÓN 3: FASE ELIMINATORIA */}
+                    {/* SECCIÓN 2: PARTIDOS DE LA FASE ELIMINATORIA */}
                     <div className="mb-10">
                         <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                            3. Fase Eliminatoria
+                            2. Fase Eliminatoria (Partidos)
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINALS'].map(stage => {
@@ -483,21 +457,49 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
                         </div>
                     </div>
 
-                    {/* SECCIÓN 4: PODIO Y AVANCES */}
+                    {/* SECCIÓN 3: PREDICCIÓN DE AVANCES EN ORDEN COMPLETO */}
                     <div className="mb-10">
                         <h3 className="text-lg font-black uppercase tracking-widest mb-6" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                            4. Predicción de Podio & Avances
+                            3. Predicción de Avances & Podio Final
                         </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {['campeon', 'subcampeon', 'tercero', 'cuarto', 'semis', 'cuartos', 'octavos'].map(round => {
+                        
+                        <div className="flex flex-col gap-6">
+                            
+                            {/* PASO 1: LOS 32 CLASIFICADOS A 16VOS (Calculados de la Fase de Grupos) */}
+                            <div className="avoid-break p-4 rounded-xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <h4 className="text-sm font-black uppercase mb-3 text-center" style={{ color: '#0f172a' }}>
+                                    16vos <span style={{ color: '#d97706' }}>({qualifiedRoundOf32.length})</span>
+                                </h4>
+                                {isUserGroupStageComplete ? (
+                                    <div className="flex flex-wrap justify-center gap-2">
+                                        {qualifiedRoundOf32.map((t, idx) => (
+                                            <div key={idx} className="px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}>
+                                                <span className="text-xs font-bold" style={{ color: '#334155' }}>{translateTeam(t.name)}</span>
+                                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded" style={{ color: '#b45309', backgroundColor: '#fef3c7' }}>{t.qualReason} {t.group.replace('Grupo ', '')}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-4" style={{ color: '#64748b' }}>
+                                        <span className="text-2xl block mb-2">🚧</span>
+                                        <p className="text-xs font-bold">Fase de Grupos incompleta.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* PASO 2: EL RESTO DEL BRACKET (Octavos, Cuartos, Semis) */}
+                            {['dieciseisavos', 'octavos', 'cuartos'].map(round => {
                                 const teams = selectedUser.knockoutPicks?.[round];
                                 if (!teams || teams.length === 0) return null;
+                                
                                 return (
                                     <div key={round} className="avoid-break p-4 rounded-xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                        <h4 className="text-xs font-black uppercase mb-3 text-center" style={{ color: '#475569' }}>{roundTranslations[round]}</h4>
+                                        <h4 className="text-sm font-black uppercase mb-3 text-center" style={{ color: '#0f172a' }}>
+                                            {roundTranslations[round]} <span style={{ color: '#d97706' }}>({teams.length})</span>
+                                        </h4>
                                         <div className="flex flex-wrap justify-center gap-2">
                                             {teams.map(t => (
-                                                <span key={t.name} className="px-2.5 py-1 rounded text-[11px] font-bold shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a' }}>
+                                                <span key={t.name} className="px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#334155' }}>
                                                     {translateTeam(t.name)}
                                                 </span>
                                             ))}
@@ -505,14 +507,38 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
                                     </div>
                                 );
                             })}
+
+                            {/* PASO 3: EL PODIO INTERACTIVO AL FINAL */}
+                            <div className="avoid-break grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                                {['campeon', 'subcampeon', 'tercero', 'cuarto'].map(round => {
+                                    const teams = selectedUser.knockoutPicks?.[round];
+                                    if (!teams || teams.length === 0) return null;
+                                    
+                                    const bgColor = round === 'campeon' ? '#fef3c7' : round === 'subcampeon' ? '#f1f5f9' : round === 'tercero' ? '#ffedd5' : '#ffffff';
+                                    const borderColor = round === 'campeon' ? '#f59e0b' : round === 'subcampeon' ? '#94a3b8' : round === 'tercero' ? '#fdba74' : '#cbd5e1';
+                                    const textColor = round === 'campeon' ? '#b45309' : round === 'subcampeon' ? '#475569' : round === 'tercero' ? '#c2410c' : '#475569';
+                                    const crown = round === 'campeon' ? '👑 ' : round === 'subcampeon' ? '🥈 ' : round === 'tercero' ? '🥉 ' : '🎖️ ';
+
+                                    return (
+                                        <div key={round} className="p-4 rounded-xl text-center shadow-md" style={{ backgroundColor: bgColor, border: `2px solid ${borderColor}` }}>
+                                            <h4 className="text-[10px] font-black uppercase mb-2" style={{ color: textColor }}>{roundTranslations[round]}</h4>
+                                            {teams.map(t => (
+                                                <div key={t.name} className="text-sm font-black" style={{ color: '#0f172a' }}>
+                                                    {crown} {translateTeam(t.name)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 
-                    {/* SECCIÓN 5: EXTRAS Y EVENTOS */}
+                    {/* SECCIÓN 4: EXTRAS */}
                     <div className="avoid-break grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <h3 className="text-lg font-black uppercase tracking-widest mb-4" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                                5. Extras
+                                4. Extras
                             </h3>
                             <div className="flex flex-col gap-2 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                 {Object.entries(selectedUser.extraPicks || {}).map(([key, val]) => (
@@ -524,9 +550,10 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
                             </div>
                         </div>
 
+                    {/* SECCIÓN 5: EVENTOS */}
                         <div>
                             <h3 className="text-lg font-black uppercase tracking-widest mb-4" style={{ color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                                6. Eventos Especiales
+                                5. Eventos Especiales
                             </h3>
                             <div className="flex flex-col gap-2 p-5 rounded-2xl" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                 {Object.entries(selectedUser.eventPicks || {}).map(([key, val]) => (
@@ -558,14 +585,12 @@ const WorldCupAllPollas = ({ currentUser }) => { // 🟢 Recibimos currentUser
                 <p className="text-foreground-muted text-sm">El administrador ha habilitado la vista pública. Revisa y descarga los pronósticos de tus rivales.</p>
             </div>
 
-            {/* AQUÍ INYECTAMOS EL BUSCADOR INTELIGENTE */}
             <SearchBar 
                 value={searchTerm} 
                 onChange={setSearchTerm} 
                 placeholder="Buscar por nombre de jugador..." 
             />
 
-            {/* MOSTRAMOS MENSAJE SI NO HAY RESULTADOS */}
             {filteredParticipants.length === 0 && searchTerm !== '' ? (
                 <div className="text-center py-10 bg-background-offset border border-border rounded-3xl shadow-inner mt-4">
                     <span className="text-4xl block mb-3">👻</span>
