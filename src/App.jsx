@@ -173,14 +173,30 @@ function App() {
     }, [user]);
 
     // ESCUCHAR EL MODO LIVE DESDE FIREBASE (Actualizado)
+    // ESCUCHAR EL MODO LIVE DESDE FIREBASE (Y EXPULSAR MOROSOS EN TIEMPO REAL)
     useEffect(() => {
         const settingsRef = doc(db, 'worldCupAdmin', 'settings');
-        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+        const unsubscribeSettings = onSnapshot(settingsRef, async (docSnap) => {
             if (docSnap.exists()) {
                 const isLive = !!docSnap.data().liveMenuMode;
-                const isClosed = !!docSnap.data().predictionsClosed; // 🟢 NUEVO
+                const isClosed = !!docSnap.data().predictionsClosed;
                 setLiveMenuMode(isLive);
-                setIsPollaClosed(isClosed); // 🟢 NUEVO
+                setIsPollaClosed(isClosed);
+                
+                // 🟢 LA RONDA DEL CELADOR (Expulsión en tiempo real)
+                if (isClosed && user && !isAdmin) {
+                    const wcRef = doc(db, 'worldCupPredictions', user.uid);
+                    const wcSnap = await getDoc(wcRef);
+                    
+                    if (!wcSnap.exists() || wcSnap.data().hasPaid === false) {
+                        toast.error(
+                            "🚨 INSCRIPCIONES CERRADAS 🚨\n\nEl torneo acaba de iniciar y no completaste tu pago a tiempo. Sesión terminada.", 
+                            { duration: 8000, icon: '🛑' }
+                        );
+                        signOut(auth);
+                        return; // Lo sacamos inmediatamente
+                    }
+                }
                 
                 // Si el admin apaga el mundial y estaban en la grilla, los devolvemos a predicciones
                 setMainView((currentView) => {
@@ -195,7 +211,7 @@ function App() {
             }
         });
         return () => unsubscribeSettings();
-    }, [user]);
+    }, [user, isAdmin]); // 🟢 Importante: agregamos isAdmin a las dependencias
     
     useEffect(() => {
         if (isAdmin) {
