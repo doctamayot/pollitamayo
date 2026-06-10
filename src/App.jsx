@@ -3,7 +3,7 @@ import './App.css';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, onSnapshot, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast'; // 🟢 Agregado "toast" aquí
 
 // Imágenes / Assets
 import logoMundial from './assets/logomundial.png';
@@ -31,7 +31,6 @@ import WorldCupRanking from './components/WorldCupRanking';
 import WorldCupAllPollas from './components/WorldCupAllPollas';
 import WorldCupGridOthers from './components/WorldCupGridOthers';
 
-
 // Config
 import { ADMIN_EMAIL, USERS_COLLECTION } from './config';
 
@@ -48,6 +47,7 @@ function App() {
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [liveMenuMode, setLiveMenuMode] = useState(false);
+    const [isPollaClosed, setIsPollaClosed] = useState(false); // 🟢 NUEVO ESTADO: Celador Global
     const [showLegalModal, setShowLegalModal] = useState(false);
 
     const activeQuinielas = useMemo(() => 
@@ -84,9 +84,9 @@ function App() {
         }
     }, [theme]);
 
+    // 🟢 EL CELADOR DE LA POLLA (Actualizado)
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
             if (currentUser) {
                 const isAdminUser = currentUser.email === ADMIN_EMAIL || currentUser.email === 'doctamayot@gmail.com';
                 setIsAdmin(isAdminUser);
@@ -100,11 +100,27 @@ function App() {
                     return; // Detenemos la ejecución si está bloqueado
                 }
 
-                // 🟢 AUTO-REGISTRO (EXCLUYENDO AL ADMINISTRADOR)
                 if (!isAdminUser) {
                     const wcRef = doc(db, 'worldCupPredictions', currentUser.uid);
                     const wcSnap = await getDoc(wcRef);
                     
+                    // 1. Verificamos si la Polla ya cerró inscripciones (leyendo directo de la DB)
+                    const settingsSnap = await getDoc(doc(db, 'worldCupAdmin', 'settings'));
+                    const isClosed = settingsSnap.exists() ? settingsSnap.data().predictionsClosed : false;
+
+                    // 2. Si ya cerró y el usuario no existe o NO ha pagado, ¡PAFUERA!
+                    if (isClosed) {
+                        if (!wcSnap.exists() || wcSnap.data().hasPaid === false) {
+                            toast.error(
+                                "🚨 INSCRIPCIONES CERRADAS 🚨\n\nEl torneo ya inició y no completaste tu pago a tiempo. No puedes acceder a la Polla.", 
+                                { duration: 8000, icon: '🛑' }
+                            );
+                            signOut(auth);
+                            return; // No lo dejamos entrar
+                        }
+                    }
+
+                    // 3. Si todo está bien y no existe, lo registramos normalmente
                     if (!wcSnap.exists()) {
                         await setDoc(wcRef, {
                             displayName: currentUser.displayName || 'Jugador',
@@ -116,8 +132,11 @@ function App() {
                         }, { merge: true });
                     }
                 }
-
+                
+                // Si pasa todos los filtros, le damos la bienvenida
+                setUser(currentUser);
             } else {
+                setUser(null);
                 setAuthReason(null);
                 setMainView('selection');
                 setIsAdmin(false);
@@ -153,13 +172,15 @@ function App() {
         return () => unsubscribe();
     }, [user]);
 
-    // ESCUCHAR EL MODO LIVE DESDE FIREBASE
+    // ESCUCHAR EL MODO LIVE DESDE FIREBASE (Actualizado)
     useEffect(() => {
         const settingsRef = doc(db, 'worldCupAdmin', 'settings');
         const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
                 const isLive = !!docSnap.data().liveMenuMode;
+                const isClosed = !!docSnap.data().predictionsClosed; // 🟢 NUEVO
                 setLiveMenuMode(isLive);
+                setIsPollaClosed(isClosed); // 🟢 NUEVO
                 
                 // Si el admin apaga el mundial y estaban en la grilla, los devolvemos a predicciones
                 setMainView((currentView) => {
@@ -170,6 +191,7 @@ function App() {
                 });
             } else {
                 setLiveMenuMode(false);
+                setIsPollaClosed(false);
             }
         });
         return () => unsubscribeSettings();
@@ -211,7 +233,19 @@ function App() {
     }
 
     if (!user) {
-        return <AuthScreen authReason={authReason} setAuthReason={setAuthReason} />;
+        return (
+            <>
+                <Toaster 
+                    position="top-center"
+                    toastOptions={{
+                        className: 'bg-card text-foreground border border-border rounded-2xl shadow-xl font-bold',
+                        duration: 8000,
+                        style: { zIndex: 9999 }
+                    }}
+                />
+                <AuthScreen authReason={authReason} setAuthReason={setAuthReason} />
+            </>
+        );
     }
 
     const quinielaToShowForPlayer = activeQuinielas.find(q => q.id === selectedQuinielaId);
@@ -228,7 +262,6 @@ function App() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 w-full max-w-5xl">
                 
                 <div 
-                    // 🟢 NUEVO: Si el modo live está activo, los manda a la grilla directamente
                     onClick={() => navigateTo(liveMenuMode ? 'worldCup_grid' : 'worldCup_predictions')}
                     className="bg-gradient-to-b from-card to-background-offset border border-primary/30 hover:border-primary rounded-[2.5rem] p-8 lg:p-10 cursor-pointer transition-all duration-500 transform hover:-translate-y-2 group shadow-xl hover:shadow-[0_20px_50px_-15px_rgba(245,158,11,0.4)] flex flex-col items-center text-center relative overflow-hidden"
                 >
@@ -340,7 +373,6 @@ function App() {
                             <span className="text-xl">🎯</span> {user.email === 'doctamayot@gmail.com' ? 'Ajustar Resultados' : 'Mis predicciones'}
                         </button>
                         
-                        {/* BOTÓN GRILLA: APARECE SI ESTÁ EN MODO LIVE O SI ES EL ADMIN */}
                         {(liveMenuMode || user.email === 'doctamayot@gmail.com') && (
                             <button onClick={() => navigateTo('worldCup_grid')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_grid' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                                 <span className="text-xl">📡</span> Grilla Live
@@ -351,15 +383,12 @@ function App() {
                             <button onClick={() => navigateTo('worldCup_grid_others')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_grid_others' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                                 <span className="text-xl">📊</span> Grilla (Otros)
                             </button>
-)}
+                        )}
                         
                         <button onClick={() => navigateTo('worldCup_myReport')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_myReport' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                             <span className="text-xl">👁️</span> Mi Polla
                         </button>
 
-                        {/* --- BOTÓN VER POLLAS PÚBLICAS --- */}
-                        
-                        
                         <button onClick={() => navigateTo('worldCup_ranking')} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition ${mainView === 'worldCup_ranking' ? 'bg-primary text-primary-foreground shadow-md font-bold' : 'text-foreground hover:bg-background-offset dark:hover:bg-card'}`}>
                             <span className="text-xl">🏆</span> Ranking Oficial
                         </button>
@@ -377,7 +406,6 @@ function App() {
                             </button>
                         )}
 
-                        {/* BOTÓN EXCLUSIVO DEL ADMINISTRADOR MUNDIALISTA */}
                         {user.email === 'doctamayot@gmail.com' && (
                             <>
                                 <span className="text-xs text-red-500 font-bold tracking-wider uppercase px-4 block pb-1 border-b border-red-500/20 mb-3 mt-6">Administración</span>
@@ -404,14 +432,14 @@ function App() {
                         </button>
                     )}
 
-                    <div className="hidden lg:flex  items-center justify-center gap-4 bg-background-offset/80 p-2 rounded-full border border-border shadow-inner">
+                    <div className="hidden lg:flex  items-center justify-center gap-4 bg-background-offset/80 p-2 rounded-full border border-border shadow-inner">
                         <button onClick={() => setShowLegalModal(true)} className="flex items-center justify-center rounded-full mt-1 w-8 h-8 text-foreground-muted hover:text-primary border-2 border-foreground-muted hover:border-primary transition-colors" title="Términos y Privacidad">
                             <span className="text-sm font-black">?</span>
                         </button>
                         <div className="w-px h-6 bg-border"></div>
                         <button onClick={() => setTheme('light')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'light' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Claro">☀️</button>
                         <div className="w-px h-6 bg-border"></div>
-                        <button onClick={() => setTheme('dark')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'dark' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Oscuro">🌙</button>
+                        <button onClick={() => setTheme('dark')} className={`flex items-center justify-center rounded-full w-10 h-10 transition-colors ${theme === 'dark' ? 'bg-primary/20 text-primary font-bold ring-2 ring-primary/20' : 'text-foreground-muted hover:bg-border/20'}`} title="Modo Oscuro">🌙</button>
                     </div>
 
                     <button onClick={handleLogout} className="w-full flex items-center justify-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors duration-200 border border-red-500/20 shadow-inner">
@@ -422,22 +450,18 @@ function App() {
         </aside>
     );
 
-    // --- MENÚ INFERIOR DINÁMICO (BOTTOM NAV) ---
     const renderMobileBottomNav = () => {
         if (!isWorldCupView && !isQuinielaView) return null;
 
         let navItems = [];
 
         if (isWorldCupView) {
-            // ELIMINAMOS "Ver Pollas" DEL MENÚ INFERIOR PARA MANTENERLO LIMPIO
             if (liveMenuMode) {
                 navItems = [
                     { id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' },
                     { id: 'worldCup_grid_others', label: 'Grilla Otros', icon: '📊' },
                     { id: 'worldCup_myReport', label: 'Mi polla', icon: '👁️' },
-                    
                     { id: 'worldCup_ranking', label: 'Ranking', icon: '🏆' },
-                    
                 ];
             } else {
                 navItems = [
@@ -446,7 +470,6 @@ function App() {
                     { id: 'worldCup_rules', label: 'Reglamento', icon: '📜' },
                     { id: 'worldCup_pot', label: 'Pot', icon: '💰' },
                 ];
-                // Admin inyección grilla en pre-mundial
                 if (user.email === 'doctamayot@gmail.com') {
                     navItems.unshift({ id: 'worldCup_grid', label: 'Grilla Live', icon: '📡' });
                 }
@@ -488,7 +511,6 @@ function App() {
         );
     };
 
-    // --- MODAL DE TÉRMINOS Y PRIVACIDAD ---
     const renderLegalModal = () => {
         if (!showLegalModal) return null;
         return (
@@ -537,57 +559,49 @@ function App() {
     return (
         <div className="min-h-screen bg-background flex flex-col lg:flex-row text-foreground relative">
             <header className="lg:hidden fixed top-0 w-full bg-background-offset/90 dark:bg-card/90 backdrop-blur-md border-b border-border z-40 h-16 flex items-center justify-between px-4 shadow-sm">
-    <div className="flex items-center gap-2">
-        
-        <div className="w-12 h-12 flex items-center justify-center drop-shadow-sm shrink-0">
-            <img src={logoGeneral} alt="PolliTamayo" className="w-full h-full object-contain" />
-        </div>
-        <h1 className="text-lg font-extrabold tracking-tighter">PolliTamayo</h1>
-    </div>
-    
-    {/* Contenedor Derecho: Botón de Tema + Menú */}
-    <div className="flex items-center gap-3">
-        <button onClick={() => setShowLegalModal(true)} className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-foreground-muted text-foreground-muted hover:text-primary hover:border-primary transition-colors" aria-label="Información Legal">
-            <span className="text-xs font-black">?</span>
-        </button>
-        {/* Botón Switch Premium (Animado) */}
-        {/* Botón Switch Premium (Estilo Píldora con Texto) */}
-        {/* Botón Switch Premium (Muestra Modo Actual con animación "Slot Machine") */}
-        <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="flex items-center gap-1.5 px-3 h-9 rounded-full border border-primary/40 bg-gradient-to-tr from-primary/10 to-transparent transition-all duration-500 hover:scale-105 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-            aria-label="Cambiar tema"
-        >
-            {/* Contenedor del texto animado */}
-            <div className="relative overflow-hidden h-4 w-[35px] flex items-center justify-center">
-                <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
-                    Oscuro
-                </span>
-                <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'light' ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
-                    Claro
-                </span>
-            </div>
-
-            {/* Contenedor del icono animado */}
-            <div className="relative w-4 h-4 overflow-hidden flex items-center justify-center">
-                <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100 rotate-0' : '-translate-y-full opacity-0 rotate-90'}`}>
-                    <span className="text-[13px] drop-shadow-md leading-none">🌙</span>
+                <div className="flex items-center gap-2">
+                    <div className="w-12 h-12 flex items-center justify-center drop-shadow-sm shrink-0">
+                        <img src={logoGeneral} alt="PolliTamayo" className="w-full h-full object-contain" />
+                    </div>
+                    <h1 className="text-lg font-extrabold tracking-tighter">PolliTamayo</h1>
                 </div>
-                <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 ${theme === 'light' ? 'translate-y-0 opacity-100 rotate-0' : 'translate-y-full opacity-0 -rotate-90'}`}>
-                    <span className="text-[13px] drop-shadow-md leading-none">☀️</span>
-                </div>
-            </div>
-        </button>
+                
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setShowLegalModal(true)} className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-foreground-muted text-foreground-muted hover:text-primary hover:border-primary transition-colors" aria-label="Información Legal">
+                        <span className="text-xs font-black">?</span>
+                    </button>
+                    <button
+                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        className="flex items-center gap-1.5 px-3 h-9 rounded-full border border-primary/40 bg-gradient-to-tr from-primary/10 to-transparent transition-all duration-500 hover:scale-105 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                        aria-label="Cambiar tema"
+                    >
+                        <div className="relative overflow-hidden h-4 w-[35px] flex items-center justify-center">
+                            <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+                                Oscuro
+                            </span>
+                            <span className={`absolute text-[6px] font-black uppercase tracking-widest text-primary drop-shadow-sm transition-transform duration-500 ${theme === 'light' ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+                                Claro
+                            </span>
+                        </div>
 
-        {/* Menú Hamburguesa */}
-        <button 
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="p-1.5 text-foreground-muted hover:text-foreground focus:outline-none transition-colors"
-        >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-        </button>
-    </div>
-</header>
+                        <div className="relative w-4 h-4 overflow-hidden flex items-center justify-center">
+                            <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 ${theme === 'dark' ? 'translate-y-0 opacity-100 rotate-0' : '-translate-y-full opacity-0 rotate-90'}`}>
+                                <span className="text-[13px] drop-shadow-md leading-none">🌙</span>
+                            </div>
+                            <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 ${theme === 'light' ? 'translate-y-0 opacity-100 rotate-0' : 'translate-y-full opacity-0 -rotate-90'}`}>
+                                <span className="text-[13px] drop-shadow-md leading-none">☀️</span>
+                            </div>
+                        </div>
+                    </button>
+
+                    <button 
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="p-1.5 text-foreground-muted hover:text-foreground focus:outline-none transition-colors"
+                    >
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                </div>
+            </header>
 
             {isMobileMenuOpen && (
                 <div 
@@ -650,12 +664,8 @@ function App() {
                         </div>
                     )}
 
-                    {/* --- VISTAS DEL MOTOR MUNDIALISTA --- */}
-                    
                     {(mainView === 'worldCup' || mainView === 'worldCup_predictions') && (
                         <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
-                            
-                    
                             <WorldCupPredictions currentUser={user} />
                         </div>
                     )}
@@ -666,10 +676,9 @@ function App() {
                         </div>
                     )}
 
-                    {/* --- NUEVA VISTA DE POLLAS PÚBLICAS --- */}
                     {mainView === 'worldCup_allPollas' && (
                         <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
-                            <WorldCupAllPollas />
+                            <WorldCupAllPollas currentUser={user} />
                         </div>
                     )}
 
@@ -703,7 +712,6 @@ function App() {
                         </div>
                     )}
 
-                    {/* 🟢 NUEVA VISTA: OTROS ACIERTOS (Solo modo Live) */}
                     {mainView === 'worldCup_grid_others' && (
                         <div className="bg-card p-4 sm:p-8 rounded-3xl border border-card-border shadow-xl">
                             <WorldCupGridOthers currentUser={user} />
@@ -712,7 +720,6 @@ function App() {
 
                 </div>
             </main>
-            {/* 🟢 NUEVO: BOTÓN FLOTANTE WHATSAPP (A LA IZQUIERDA) */}
             
         <Toaster 
             position="top-center"
@@ -721,7 +728,6 @@ function App() {
                 duration: 4000,
             }}
         />
-            {/* SE RENDERIZA EL NUEVO MENÚ DINÁMICO */}
             {renderMobileBottomNav()}
             {renderLegalModal()}
         </div>
@@ -729,5 +735,3 @@ function App() {
 }
 
 export default App;
-
-

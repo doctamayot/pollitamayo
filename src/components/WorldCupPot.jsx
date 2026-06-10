@@ -94,9 +94,9 @@ const WorldCupPot = () => {
                 </p>
                 <p className="text-amber-100/80 text-sm mt-4 font-medium relative z-10 leading-relaxed">
                     Basado en {paidUsersCount} participantes confirmados.<br className="hidden sm:block" />
-                    <span className="text-amber-200/90 text-xs sm:text-sm mt-1 sm:mt-0 block sm:inline">
+                    {/* <span className="text-amber-200/90 text-xs sm:text-sm mt-1 sm:mt-0 block sm:inline">
                         Hay {unpaidUsersCount} inscritos pendientes de pago para un posible Pot de <strong className="text-white">{formatCOP(possibleNetPot)}</strong>.
-                    </span>
+                    </span> */}
                 </p>
             </div>
 
