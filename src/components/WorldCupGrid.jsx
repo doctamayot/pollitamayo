@@ -1015,7 +1015,8 @@ const WorldCupGrid = ({ currentUser }) => {
                     const rA = a?.away;
                     const matchStatus = match.status || '';
                     const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
-                    const isLive = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
+                    const isPlaying = matchStatus === 'IN_PLAY';
+                    const isPaused = matchStatus === 'PAUSED';
 
                     // 🟢 RANKING ESPECÍFICO HASTA ESTE PARTIDO EXACTO
                     const matchSpecificRanking = calculateProgressiveRanking(match.utcDate).map(user => {
@@ -1113,7 +1114,7 @@ const WorldCupGrid = ({ currentUser }) => {
                         : null;
 
                     return (
-                        <div key={match.id} className={`bg-card border ${isLive ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
+                        <div key={match.id} className={`bg-card border ${isPlaying ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : isPaused ? 'border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
                             {isAdmin && (
                                 <div className="absolute top-3 right-3 z-50 mt-[-10px]">
@@ -1132,10 +1133,10 @@ const WorldCupGrid = ({ currentUser }) => {
                                 </div>
                             )}
 
-                            <div className={`${isLive ? 'bg-green-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
+                            <div className={`${isPlaying ? 'bg-green-500/5' : isPaused ? 'bg-amber-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
                                 <div className="flex justify-between items-center mb-3 sm:mb-5">
                                     <div className="flex items-center gap-2 sm:gap-4">
-                                        <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isLive ? 'bg-green-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
+                                        <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isPlaying ? 'bg-green-500 text-white animate-pulse' : isPaused ? 'bg-amber-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
                                             {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
                                         </span>
                                         <span className="hidden sm:flex items-center gap-1.5 text-[10px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-0.5 rounded border border-border/50">
@@ -1156,8 +1157,9 @@ const WorldCupGrid = ({ currentUser }) => {
                                     </div>
                                     
                                     <div className="flex flex-col items-center justify-center shrink-0 min-w-[90px] sm:min-w-[140px]">
-                                        <span className={`text-[7px] sm:text-[9px] font-black uppercase tracking-widest mb-2 sm:mb-3 px-2 py-0.5 rounded shadow-sm ${isLive ? 'text-green-500 bg-green-500/10 animate-pulse border border-green-500/20' : 'text-foreground-muted bg-background/50 border border-border/50'}`}>
-                                            {isLive ? '• EN VIVO' : matchStatusTranslations[match.status] || match.status}
+                                        {/* 🟢 ETIQUETA DE ESTADO CON PAUSA EXPLÍCITA */}
+                                        <span className={`text-[7px] sm:text-[9px] font-black uppercase tracking-widest mb-2 sm:mb-3 px-2 py-0.5 rounded shadow-sm ${isPlaying ? 'text-green-500 bg-green-500/10 animate-pulse border border-green-500/20' : isPaused ? 'text-amber-500 bg-amber-500/10 animate-pulse border border-amber-500/20' : 'text-foreground-muted bg-background/50 border border-border/50'}`}>
+                                            {isPlaying ? '• EN VIVO' : isPaused ? '⏸ EN PAUSA' : matchStatusTranslations[match.status] || match.status}
                                         </span>
                                         
                                         <div className="flex items-center justify-center gap-1.5 sm:gap-3">
