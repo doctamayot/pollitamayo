@@ -126,43 +126,13 @@ const WorldCupGrid = ({ currentUser }) => {
 
             if (isAdmin) {
                 const data = await getWorldCupMatches();
-                console.log("llamando api")
+                console.log("llamando api");
                 if (data && data.matches) {
                     setMatches(data.matches);
+                    // 🟢 CORRECCIÓN: Solo guardamos la data en el apiCache. 
+                    // Ya NO sobrescribimos los resultados manuales del admin aquí. 
+                    // Para eso está el botón de Auto-Sync.
                     await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
-
-                    const adminRef = doc(db, 'worldCupAdmin', 'results');
-                    const adminDoc = await getDoc(adminRef);
-                    let currentAdminPreds = adminDoc.exists() ? adminDoc.data().predictions || {} : {};
-                    let currentLocks = adminDoc.exists() ? adminDoc.data().lockedMatches || {} : {};
-                    let hasChanges = false;
-
-                    data.matches.forEach(apiMatch => {
-                        if (currentLocks[apiMatch.id]) return;
-
-                        const isFinished = apiMatch.status === 'FINISHED';
-                        const isLive = apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED';
-                        
-                        if (isFinished || isLive) {
-                            const currentH = currentAdminPreds[apiMatch.id]?.home;
-                            const currentA = currentAdminPreds[apiMatch.id]?.away;
-                            const newH = apiMatch.score?.fullTime?.home;
-                            const newA = apiMatch.score?.fullTime?.away;
-
-                            if (currentH !== newH || currentA !== newA) {
-                                currentAdminPreds[apiMatch.id] = {
-                                    ...currentAdminPreds[apiMatch.id],
-                                    home: newH !== null ? newH : '',
-                                    away: newA !== null ? newA : ''
-                                };
-                                hasChanges = true;
-                            }
-                        }
-                    });
-
-                    if (hasChanges) {
-                        await setDoc(adminRef, { predictions: currentAdminPreds }, { merge: true });
-                    }
                 }
             } else {
                 const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));

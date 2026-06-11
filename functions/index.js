@@ -14,16 +14,51 @@ const ADMIN_FEE_PERCENT = 0.10;
 async function runAiNewsGeneration() {
     try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" }); 
+        const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" }); 
 
-        // 1. OBTENER ESTADO DEL TORNEO Y PARTIDOS
+        // 1. OBTENER ESTADO DEL TORNEO
         const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();
         const isTournamentStarted = settingsSnap.exists ? settingsSnap.data().predictionsClosed === true : false;
 
+        // 2. LEER LA API REAL
         const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
-        const matches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
+        const apiMatches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
+
+        // 3. LEER LA VERDAD DEL ADMIN (LA PRIORIDAD)
+        const adminResultsSnap = await db.collection("worldCupAdmin").doc("results").get();
+        const adminResultsData = adminResultsSnap.exists ? adminResultsSnap.data() : {};
+        const adminPreds = adminResultsData.predictions || {};
+        const simStatuses = adminResultsData.simulation?.matchStatuses || {};
+
+        // 🟢 4. FUSIONAR: EL ADMIN MANDA SOBRE LA API OFICIAL
+        const matches = apiMatches.map(m => {
+            let newMatch = { ...m };
+            
+            // A. Forzar estado si el admin lo cambió en el select (Simulación)
+            if (simStatuses[m.id] && simStatuses[m.id] !== '') {
+                newMatch.status = simStatuses[m.id];
+            }
+
+            // B. Forzar marcador si el admin lo guardó manualmente
+            const adm = adminPreds[m.id];
+            const hasAdminScore = adm && adm.home !== undefined && adm.home !== '' && adm.away !== undefined && adm.away !== '';
+            
+            if (hasAdminScore) {
+                if (!newMatch.score) newMatch.score = {};
+                newMatch.score.fullTime = {
+                    home: parseInt(adm.home, 10),
+                    away: parseInt(adm.away, 10)
+                };
+                
+                // Si el admin puso marcador pero el estado oficial sigue "Programado", lo forzamos a "FINALIZADO"
+                if (newMatch.status === 'SCHEDULED' || newMatch.status === 'TIMED') {
+                    newMatch.status = 'FINISHED';
+                }
+            }
+            return newMatch;
+        });
         
-        // 2. OBTENER USUARIOS Y CALCULAR EL BOTÍN
+        // 5. OBTENER USUARIOS Y CALCULAR EL BOTÍN
         const usersSnap = await db.collection("worldCupPredictions").get();
         let totalUsers = 0;
         let paidUsers = 0;
@@ -36,7 +71,7 @@ async function runAiNewsGeneration() {
             if (data.hasPaid) {
                 paidUsers++;
                 paidNames.push(data.displayName || 'Un jugador');
-                usersData.push({ id: doc.id, ...data }); // Guardamos el doc.id vital para los puntos
+                usersData.push({ id: doc.id, ...data }); 
             }
         });
 
@@ -46,7 +81,6 @@ async function runAiNewsGeneration() {
         const prize2 = netPot * 0.20;
         const prize3 = netPot * 0.05;
 
-        // Formateador de moneda para el Prompt
         const formatMoney = (amount) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
 
         const upcomingMatches = matches
@@ -86,7 +120,7 @@ async function runAiNewsGeneration() {
         // 🧠 MODO 2: TORNEO ACTIVO (Goles, Ranking y Dinero en vivo)
         // ==========================================
         else {
-            // Partidos en VIVO y Recientes
+            // Partidos en VIVO y Recientes (Usando la data Fusionada)
             const liveMatches = matches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
             const liveText = liveMatches.map(m => `EN VIVO: ${m.homeTeam.name} ${m.score?.fullTime?.home ?? 0} - ${m.score?.fullTime?.away ?? 0} ${m.awayTeam.name}`).join(" | ");
 
@@ -96,7 +130,7 @@ async function runAiNewsGeneration() {
                 .slice(0, 3);
             const recentText = recentMatches.map(m => `${m.homeTeam.name} ${m.score?.fullTime?.home} - ${m.score?.fullTime?.away} ${m.awayTeam.name}`).join(" | ");
 
-            // 1. LEER EL RANKING REAL QUE GUARDÓ REACT EN FIREBASE SI
+            // 1. LEER EL RANKING REAL QUE GUARDÓ REACT EN FIREBASE
             const liveRankingSnap = await db.collection("worldCupAdmin").doc("liveRanking").get();
             const livePointsMap = liveRankingSnap.exists ? liveRankingSnap.data().points || {} : {};
 
@@ -131,7 +165,7 @@ async function runAiNewsGeneration() {
 
                 return { 
                     name: data.displayName, 
-                    points: livePointsMap[data.id] || 0, // AQUÍ USA LOS PUNTOS REALES
+                    points: livePointsMap[data.id] || 0, // Puntos Reales
                     picks: picks.join(", "),
                     campeon,
                     futuro: `Campeón: ${campeon} | Sub: ${subcampeon} | Semis: ${semis} | Cuartos: ${cuartos} | Extras (${extrasStr}) ${eventosStr}`
@@ -178,37 +212,14 @@ async function runAiNewsGeneration() {
 
 // --- 1. DISPARADOR POR PARTIDOS (Cambios de estado O GOLES) ---
 exports.onMatchUpdate = onDocumentUpdated("worldCupAdmin/apiCache", async (event) => {
-    const beforeMatches = event.data.before?.data()?.matches || [];
-    const afterMatches = event.data.after?.data()?.matches || [];
-
-    let shouldTrigger = false;
-
-    afterMatches.forEach((match, i) => {
-        const beforeMatch = beforeMatches[i];
-        if (!beforeMatch) return;
-
-        // ¿Cambió el estado? (Ej: SCHEDULED -> IN_PLAY -> FINISHED)
-        const statusChanged = match.status !== beforeMatch.status;
-        
-        // ¿Hubo gol? (Cambió el marcador home o away)
-        const scoreChanged = 
-            match.score?.fullTime?.home !== beforeMatch.score?.fullTime?.home ||
-            match.score?.fullTime?.away !== beforeMatch.score?.fullTime?.away;
-
-        if (statusChanged || scoreChanged) {
-            shouldTrigger = true;
-        }
-    });
-
-    if (shouldTrigger) {
-        console.log("Detectado GOL o cambio de estado. Generando noticias instantáneas...");
-        await runAiNewsGeneration();
-    }
+    // Nota: Aunque actualicemos con apiCache, la función runAiNewsGeneration se encarga de leer el admin.
+    console.log("Detectado cambio en API. Evaluando...");
+    await runAiNewsGeneration();
 });
 
 // --- 2. DISPARADOR POR ACTUALIZACIÓN DE RANKING OFICIAL ---
-exports.onRankingUpdate = onDocumentUpdated("worldCupAdmin/results", async (event) => {
-    console.log("Resultados oficiales actualizados (Impacto en ranking). Generando noticias...");
+exports.onRankingUpdate = onDocumentUpdated("worldCupAdmin/liveRanking", async (event) => {
+    console.log("Ranking oficial actualizado desde React. Generando noticias...");
     await runAiNewsGeneration();
 });
 
@@ -225,29 +236,40 @@ exports.generateespnnews = onSchedule({
     const minutes = now.getMinutes();
 
     if (!isTournamentStarted) {
-        // En pre-mundial, solo generamos en punto (minuto 0 al 4) de cada hora
         if (minutes < 5) {
             console.log("Modo Pre-Mundial: Generando boletín horario...");
             await runAiNewsGeneration();
         }
     } 
     else {
+        // En modo torneo leemos api y admin para saber si corremos
         const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
-        const matches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
+        const apiMatches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
+        
+        const adminResultsSnap = await db.collection("worldCupAdmin").doc("results").get();
+        const simStatuses = adminResultsSnap.exists ? (adminResultsSnap.data().simulation?.matchStatuses || {}) : {};
 
-        const isAboutToStart = matches.some(m => {
+        const isAboutToStart = apiMatches.some(m => {
             const startTime = new Date(m.utcDate);
             const diffMinutes = (startTime - now) / (1000 * 60);
             return diffMinutes > 0 && diffMinutes <= 7;
         });
 
-        const hasLiveMatches = matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+        // Revisamos si hay partidos en vivo (según API o simulación del Admin)
+        const hasLiveMatches = apiMatches.some(m => {
+            const finalStatus = simStatuses[m.id] && simStatuses[m.id] !== '' ? simStatuses[m.id] : m.status;
+            return finalStatus === 'IN_PLAY' || finalStatus === 'PAUSED';
+        });
 
-        // En pleno torneo, mantenemos activo el radar si hay partidos vivos, si va a empezar uno, o al dar la hora
         if (isAboutToStart || hasLiveMatches || minutes < 5) {
             console.log("Modo Torneo: Mantenimiento de noticias por reloj...");
             await runAiNewsGeneration();
         }
     }
     return null;
+});
+
+exports.onAdminResultsUpdate = onDocumentUpdated("worldCupAdmin/results", async (event) => {
+    console.log("El Admin cambió un marcador manual. Generando noticias...");
+    await runAiNewsGeneration();
 });
