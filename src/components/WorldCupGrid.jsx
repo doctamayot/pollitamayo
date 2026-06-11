@@ -62,11 +62,26 @@ const specialEvents = [
     { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' }
 ];
 
+
+
 const formatShortName = (fullName) => {
     if (!fullName) return 'Anon';
-    const parts = fullName.trim().split(' ');
+    
+    // Separamos el nombre por espacios
+    const parts = fullName.trim().split(/\s+/); 
+    
+    // Si solo tiene una palabra (ej: "Neymar")
     if (parts.length === 1) return parts[0];
-    return `${parts[0]} ${parts[1].charAt(0)}.`;
+    
+    // Si tiene exactamente dos palabras: primera completa y la inicial de la segunda
+    // (ej: "Lionel Messi" -> "Lionel M.")
+    if (parts.length === 2) {
+        return `${parts[0]} ${parts[1].charAt(0)}.`;
+    }
+    
+    // Si tiene tres o más palabras: primera completa y la inicial de la tercera (omitiendo la segunda)
+    // (ej: "Juan Carlos Pérez" -> "Juan P.")
+    return `${parts[0]} ${parts[2].charAt(0)}.`;
 };
 
 const formatDateObj = (dateStr) => {
