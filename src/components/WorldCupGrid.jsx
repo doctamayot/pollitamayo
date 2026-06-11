@@ -1294,6 +1294,7 @@ const WorldCupGrid = ({ currentUser }) => {
 }`}>
     {user.pts > 0 ? `+${user.pts}` : '0'}
 </span>
+
                                                             )}
                                                         </div>
                                                     </td>
