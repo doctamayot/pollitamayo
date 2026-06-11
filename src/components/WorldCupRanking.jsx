@@ -596,56 +596,75 @@ const WorldCupRanking = ({ currentUser }) => {
     }, [allPredictions, effectiveMatches, officialMatches, historicalRanks, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus]);
 
     const premiosRepartidos = useMemo(() => {
-        if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitad: 0, netPot: 0, r1: 1, r2: 0, r3: 0 };
-        
-        const netPot = (ranking.length * ENTRY_FEE) * (1 - ADMIN_FEE_PERCENT);
-        const bolsa1 = netPot * PORCENTAJES.p1;
-        const bolsa2 = netPot * PORCENTAJES.p2;
-        const bolsa3 = netPot * PORCENTAJES.p3;
-        const bolsaMitad = netPot * PORCENTAJES.mitad;
+    if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitadTotal: 0, mitadInd: 0, netPot: 0, r1: 1, r2: 0, r3: 0, rMitad: 0 };
+    
+    const netPot = (ranking.length * ENTRY_FEE) * (1 - ADMIN_FEE_PERCENT);
+    const bolsa1 = netPot * PORCENTAJES.p1;
+    const bolsa2 = netPot * PORCENTAJES.p2;
+    const bolsa3 = netPot * PORCENTAJES.p3;
+    const bolsaMitad = netPot * PORCENTAJES.mitad;
 
-        const playersByPos = {};
-        ranking.forEach(r => { playersByPos[r.position] = (playersByPos[r.position] || 0) + 1; });
+    // Contamos cuántos jugadores hay en cada posición
+    const playersByPos = {};
+    ranking.forEach(r => { playersByPos[r.position] = (playersByPos[r.position] || 0) + 1; });
 
-        const uniquePositions = [...new Set(ranking.map(r => r.position))].sort((a, b) => a - b);
-        const r1 = uniquePositions[0] || 0;
-        const r2 = uniquePositions[1] || 0;
-        const r3 = uniquePositions[2] || 0;
+    const uniquePositions = [...new Set(ranking.map(r => r.position))].sort((a, b) => a - b);
+    const r1 = uniquePositions[0] || 0;
+    const r2 = uniquePositions[1] || 0;
+    const r3 = uniquePositions[2] || 0;
 
-        let p1Ind = 0, p2Ind = 0, p3Ind = 0;
-        let p1Total = 0, p2Total = 0, p3Total = 0;
+    let p1Ind = 0, p2Ind = 0, p3Ind = 0;
+    let p1Total = 0, p2Total = 0, p3Total = 0;
 
-        const n1 = playersByPos[r1] || 0;
-        const n2 = playersByPos[r2] || 0;
-        const n3 = playersByPos[r3] || 0;
+    const n1 = playersByPos[r1] || 0;
+    const n2 = playersByPos[r2] || 0;
+    const n3 = playersByPos[r3] || 0;
 
-        if (n1 >= 3) {
-            p1Total = bolsa1 + bolsa2 + bolsa3;
-            p1Ind = p1Total / n1;
-        } else if (n1 === 2) {
-            p1Total = bolsa1 + bolsa2;
-            p1Ind = p1Total / 2;
-            p2Total = bolsa3;      
-            p2Ind = bolsa3 / n2;   
+    // Lógica del top 3
+    if (n1 >= 3) {
+        p1Total = bolsa1 + bolsa2 + bolsa3;
+        p1Ind = p1Total / n1;
+    } else if (n1 === 2) {
+        p1Total = bolsa1 + bolsa2;
+        p1Ind = p1Total / 2;
+        p2Total = bolsa3;      
+        p2Ind = bolsa3 / n2;   
+    } else {
+        p1Total = bolsa1;
+        p1Ind = bolsa1;
+        if (n2 >= 2) {
+            p2Total = bolsa2 + bolsa3;
+            p2Ind = p2Total / n2;
         } else {
-            p1Total = bolsa1;
-            p1Ind = bolsa1;
-            if (n2 >= 2) {
-                p2Total = bolsa2 + bolsa3;
-                p2Ind = p2Total / n2;
-            } else {
-                p2Total = bolsa2;
-                p2Ind = bolsa2;
-                p3Total = bolsa3;
-                p3Ind = bolsa3 / n3;
-            }
+            p2Total = bolsa2;
+            p2Ind = bolsa2;
+            p3Total = bolsa3;
+            p3Ind = bolsa3 / n3;
         }
+    }
 
-        return { p1Ind, p2Ind, p3Ind, p1Total, p2Total, p3Total, mitad: bolsaMitad, netPot, r1, r2, r3 };
-    }, [ranking]);
+    // 🟢 LÓGICA DINÁMICA DE LA MITAD (Basada en la Posición, no en la persona)
+    // 1. Encontramos cuál es la fila de la mitad (Si son 32, es la fila 16)
+    const middleIndex = Math.ceil(ranking.length / 2) - 1;
+    
+    // 2. Extraemos el NÚMERO DE POSICIÓN de esa fila (Ej: Posición 10)
+    const targetMiddlePosition = ranking[middleIndex]?.position || 0;
+    
+    // 3. Revisamos cuántas personas tienen esa misma posición
+    const nMitad = playersByPos[targetMiddlePosition] || 1;
+    
+    // 4. Dividimos el premio de la mitad entre todos los empatados en esa posición
+    const mitadInd = bolsaMitad / nMitad;
 
-    const physicalMiddlePos = ranking.length > 0 ? Math.ceil(ranking.length / 2) : -1;
-    const middlePlayerUid = physicalMiddlePos !== -1 ? ranking[physicalMiddlePos - 1]?.uid : null;
+    return { 
+        p1Ind, p2Ind, p3Ind, p1Total, p2Total, p3Total, 
+        mitadTotal: bolsaMitad, mitadInd, rMitad: targetMiddlePosition, 
+        netPot, r1, r2, r3 
+    };
+}, [ranking]);
+
+    // const physicalMiddlePos = ranking.length > 0 ? Math.ceil(ranking.length / 2) : -1;
+    // const middlePlayerUid = physicalMiddlePos !== -1 ? ranking[physicalMiddlePos - 1]?.uid : null;
 
     const PodiumSpot = ({ users, place, prizeTotal, bgGradient, heightClass, medalIcon, delayClass }) => {
         const isTied = users.length > 1;
@@ -715,12 +734,14 @@ const WorldCupRanking = ({ currentUser }) => {
             <div className="space-y-4">
                 {ranking.map((user) => {
                     const isExpanded = expandedUser === user.uid;
-                    const isMiddle = user.uid === middlePlayerUid;
-                    
+                    //const isMiddle = user.uid === middlePlayerUid;
+                    const isMiddle = user.position === premiosRepartidos.rMitad;
+
                     let rewardLabel = null;
                     if (user.position === premiosRepartidos.r1) rewardLabel = formatMoney(premiosRepartidos.p1Ind);
                     else if (user.position === premiosRepartidos.r2) rewardLabel = formatMoney(premiosRepartidos.p2Ind);
                     else if (user.position === premiosRepartidos.r3) rewardLabel = formatMoney(premiosRepartidos.p3Ind);
+                    else if (isMiddle) rewardLabel = formatMoney(premiosRepartidos.mitadInd);
                     
                     return (
                         <div key={user.uid} className={`bg-card border ${isExpanded ? 'border-primary shadow-lg ring-1 ring-primary/20' : 'border-card-border hover:border-border'} rounded-2xl overflow-hidden transition-all duration-300`}>
@@ -765,7 +786,7 @@ const WorldCupRanking = ({ currentUser }) => {
                                         {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: 'Colero general por 7 partidos. Hundiendo la tabla.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
                                         {user.isSeco && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Seco', desc: 'Ningún pleno hasta el momento. ¡Cero puntería!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">🌵</span>}
 
-                                        {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full ml-1">⚖️ MITAD: {formatMoney(premiosRepartidos.mitad)}</span>}
+                                        {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full ml-1">⚖️ MITAD: {formatMoney(premiosRepartidos.mitadInd)}</span>}
                                         {rewardLabel && rewardLabel !== "$0" && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full ml-1">GANANDO: {rewardLabel}</span>}
                                     </div>
                                 </div>
