@@ -6,25 +6,54 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 if (admin.apps.length === 0) admin.initializeApp();
 const db = admin.firestore();
 
+// --- CONSTANTES FINANCIERAS ---
+const ENTRY_FEE = 170000;
+const ADMIN_FEE_PERCENT = 0.10;
+
 // --- FUNCIÓN MAESTRA DE GENERACIÓN (La IA Deportiva) ---
 async function runAiNewsGeneration() {
     try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" }); 
 
-        // 1. OBTENER ESTADO DEL TORNEO
+        // 1. OBTENER ESTADO DEL TORNEO Y PARTIDOS
         const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();
         const isTournamentStarted = settingsSnap.exists ? settingsSnap.data().predictionsClosed === true : false;
 
-        // 2. OBTENER PARTIDOS (Desde apiCache)
         const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
         const matches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
         
+        // 2. OBTENER USUARIOS Y CALCULAR EL BOTÍN
+        const usersSnap = await db.collection("worldCupPredictions").get();
+        let totalUsers = 0;
+        let paidUsers = 0;
+        let paidNames = [];
+        let usersData = [];
+
+        usersSnap.forEach(doc => {
+            totalUsers++;
+            const data = doc.data();
+            if (data.hasPaid) {
+                paidUsers++;
+                paidNames.push(data.displayName || 'Un jugador');
+                usersData.push({ id: doc.id, ...data }); // Guardamos el doc.id vital para los puntos
+            }
+        });
+
+        // Cálculos Financieros Reales
+        const netPot = (paidUsers * ENTRY_FEE) * (1 - ADMIN_FEE_PERCENT);
+        const prize1 = netPot * 0.70;
+        const prize2 = netPot * 0.20;
+        const prize3 = netPot * 0.05;
+
+        // Formateador de moneda para el Prompt
+        const formatMoney = (amount) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
+
         const upcomingMatches = matches
-            .filter(m => m.score?.fullTime?.home === null)
+            .filter(m => m.status === 'SCHEDULED' || m.status === 'TIMED')
             .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate))
             .slice(0, 3);
-        const upcomingText = upcomingMatches.map(m => `[ID: ${m.id}] ${m.homeTeam.name} vs ${m.awayTeam.name}`).join(" | ");
+        const upcomingText = upcomingMatches.map(m => `${m.homeTeam.name} vs ${m.awayTeam.name}`).join(" | ");
 
         let prompt = "";
 
@@ -32,117 +61,106 @@ async function runAiNewsGeneration() {
         // 🧠 MODO 1: PRE-MUNDIAL (Expectativa pura)
         // ==========================================
         if (!isTournamentStarted) {
-            const usersSnap = await db.collection("worldCupPredictions").get();
-            let totalUsers = 0;
-            let paidUsers = 0;
-            let paidNames = [];
-
-            usersSnap.forEach(doc => {
-                totalUsers++;
-                const data = doc.data();
-                if (data.hasPaid) {
-                    paidUsers++;
-                    paidNames.push(data.displayName || 'Un jugador');
-                }
-            });
-
             const randomPaidNames = paidNames.sort(() => 0.5 - Math.random()).slice(0, 6).join(", ");
 
-            prompt = `Eres el presentador principal de Sportscenter en ESPN. Faltan semanas para el Mundial y nuestra Polla oficial está en plena fase de inscripciones y calentamiento.
+            prompt = `Eres el presentador principal de Sportscenter en ESPN. Faltan semanas para el Mundial y nuestra Polla oficial está en plena fase de inscripciones.
             
-            Datos actuales en el sistema:
-            - Usuarios registrados: ${totalUsers}
-            - Usuarios que YA PAGARON y están oficiales: ${paidUsers}
-            - Jugadores destacados ya confirmados (con pago): ${randomPaidNames}
-            - Primeros partidos del Mundial: ${upcomingText}
+            Datos financieros y de sistema actuales:
+            - Usuarios registrados totales: ${totalUsers}
+            - Usuarios OFICIALES (Ya pagaron): ${paidUsers}
+            - BOLSA TOTAL DE PREMIOS ACUMULADA HASTA AHORA: ${formatMoney(netPot)}
+            - Premio estimado al 1er lugar actual: ${formatMoney(prize1)}
+            - Jugadores destacados ya confirmados: ${randomPaidNames}
+            - Primeros partidos: ${upcomingText}
 
             Instrucciones:
-            1. Crea 5 titulares vibrantes para la marquesina (el banner rodante de TV) generando MUCHO HYPE.
-            2. Analiza los números: Celebra a los que ya pagaron su cupo y mete un poco de presión amistosa y picante a los que están registrados pero aún no sueltan el dinero.
-            3. Menciona la tensión previa a los primeros partidos del Mundial que se vienen.
+            1. Crea 5 titulares vibrantes para la marquesina de TV generando MUCHO HYPE.
+            2. HABLA DEL DINERO: Menciona lo jugosa que está la bolsa acumulada (${formatMoney(netPot)}) y cuánto se llevaría el ganador hoy. Usa esto para motivar a los que faltan por pagar.
+            3. Menciona los primeros partidos del Mundial que se vienen.
             4. REGLA DE ORO: NO inventes marcadores, puntos ni líderes porque el torneo no ha empezado.
-            5. Usa SIEMPRE uno de estos prefijos antes del texto: "EXPECTATIVA:", "INSCRIPCIONES:", "CUENTA REGRESIVA:", "PREVIA:", "OFICIAL:", "RUMOR:".
-            6. NUNCA reveles que eres una IA. Eres un periodista deportivo.
-            7. Devuelve ÚNICAMENTE un array JSON válido de strings.`;
+            5. Usa prefijos como: "EXPECTATIVA:", "LA BOLSA:", "CUENTA REGRESIVA:", "MILLONES:", "PREVIA:".
+            6. Devuelve ÚNICAMENTE un array JSON válido de strings.`;
 
         } 
         // ==========================================
-        // 🧠 MODO 2: TORNEO ACTIVO (Análisis Profundo)
+        // 🧠 MODO 2: TORNEO ACTIVO (Goles, Ranking y Dinero en vivo)
         // ==========================================
         else {
+            // Partidos en VIVO y Recientes
+            const liveMatches = matches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+            const liveText = liveMatches.map(m => `EN VIVO: ${m.homeTeam.name} ${m.score?.fullTime?.home ?? 0} - ${m.score?.fullTime?.away ?? 0} ${m.awayTeam.name}`).join(" | ");
+
             const recentMatches = matches
-                .filter(m => m.score?.fullTime?.home !== null)
+                .filter(m => m.status === 'FINISHED')
                 .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
-                .slice(0, 3); // Aumentamos a 3 para más contexto
-            const recentText = recentMatches.map(m => `[ID: ${m.id}] ${m.homeTeam.name} ${m.score.fullTime.home} - ${m.score.fullTime.away} ${m.awayTeam.name}`).join(" | ");
+                .slice(0, 3);
+            const recentText = recentMatches.map(m => `${m.homeTeam.name} ${m.score?.fullTime?.home} - ${m.score?.fullTime?.away} ${m.awayTeam.name}`).join(" | ");
 
-            const usersSnap = await db.collection("worldCupPredictions").get();
-            let usersData = [];
-            usersSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.hasPaid) {
-                    // 1. Extraer marcadores cercanos
-                    let picks = [];
-                    [...recentMatches, ...upcomingMatches].forEach(m => {
-                        const pred = data.predictions?.[m.id];
-                        if (pred && pred.home !== '' && pred.away !== '') {
-                            picks.push(`${m.homeTeam.name} ${pred.home}-${pred.away} ${m.awayTeam.name}`);
-                        }
-                    });
+            // 1. LEER EL RANKING REAL QUE GUARDÓ REACT EN FIREBASE
+            const liveRankingSnap = await db.collection("worldCupAdmin").doc("liveRanking").get();
+            const livePointsMap = liveRankingSnap.exists ? liveRankingSnap.data().points || {} : {};
 
-                    // 2. Extraer TODAS las predicciones a futuro dinámicamente
-                    const knockout = data.knockoutPicks || {};
-                    const extras = data.extraPicks || {};
-                    const eventos = data.eventPicks || {};
+            // 2. Parsear datos de usuarios para el Top 5
+            let parsedUsers = usersData.map(data => {
+                let picks = [];
+                [...liveMatches, ...recentMatches].forEach(m => {
+                    const pred = data.predictions?.[m.id];
+                    if (pred && pred.home !== '' && pred.away !== '') {
+                        picks.push(`${m.homeTeam.name} ${pred.home}-${pred.away} ${m.awayTeam.name}`);
+                    }
+                });
 
-                    const campeon = knockout.campeon?.[0]?.name || 'Nadie';
-                    const subcampeon = knockout.subcampeon?.[0]?.name || 'Nadie';
-                    const semis = (knockout.semis || []).map(t => t.name).join(", ") || 'Ninguno';
-                    const cuartos = (knockout.cuartos || []).map(t => t.name).join(", ") || 'Ninguno';
+                const knockout = data.knockoutPicks || {};
+                const extras = data.extraPicks || {};
+                const eventos = data.eventPicks || {};
 
-                    // Convertir TODAS las preguntas Extras a un texto legible
-                    const extrasStr = Object.entries(extras)
-                        .filter(([k, v]) => v && v !== '')
-                        .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
-                        .join(", ");
+                const campeon = knockout.campeon?.[0]?.name || 'Nadie';
+                const subcampeon = knockout.subcampeon?.[0]?.name || 'Nadie';
+                const semis = (knockout.semis || []).map(t => t.name).join(", ") || 'Ninguno';
+                const cuartos = (knockout.cuartos || []).map(t => t.name).join(", ") || 'Ninguno';
 
-                    // Convertir TODOS los Eventos Especiales (Solo los que apostó que "SI")
-                    const eventosSi = Object.entries(eventos)
-                        .filter(([k, v]) => v === 'SI')
-                        .map(([k]) => k.replace(/_/g, ' '));
-                    const eventosStr = eventosSi.length > 0 ? `| Eventos que jura que pasarán: ${eventosSi.join(", ")}` : '';
+                const extrasStr = Object.entries(extras)
+                    .filter(([k, v]) => v && v !== '')
+                    .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+                    .join(", ");
 
-                    usersData.push({ 
-                        name: data.displayName, 
-                        points: data.totalPoints || 0, 
-                        picks: picks.join(", "),
-                        futuro: `Campeón: ${campeon} | Subcampeón: ${subcampeon} | Semis: ${semis} | Cuartos: ${cuartos} | Extras (${extrasStr}) ${eventosStr}`
-                    });
-                }
+                const eventosSi = Object.entries(eventos)
+                    .filter(([k, v]) => v === 'SI')
+                    .map(([k]) => k.replace(/_/g, ' '));
+                const eventosStr = eventosSi.length > 0 ? `| Eventos: ${eventosSi.join(", ")}` : '';
+
+                return { 
+                    name: data.displayName, 
+                    points: livePointsMap[data.id] || 0, // AQUÍ USA LOS PUNTOS REALES
+                    picks: picks.join(", "),
+                    campeon,
+                    futuro: `Campeón: ${campeon} | Sub: ${subcampeon} | Semis: ${semis} | Cuartos: ${cuartos} | Extras (${extrasStr}) ${eventosStr}`
+                };
             });
             
-            usersData.sort((a, b) => b.points - a.points);
-            const top5 = usersData.slice(0, 5).map(u => `${u.name} (${u.points} pts) [Marcadores: ${u.picks || 'Nada'}] [Predicciones Generales: ${u.futuro}]`).join(" \n ");
+            parsedUsers.sort((a, b) => b.points - a.points);
+            
+            const top5 = parsedUsers.slice(0, 5).map((u, i) => {
+                let premio = i === 0 ? prize1 : i === 1 ? prize2 : i === 2 ? prize3 : 0;
+                return `#${i+1} ${u.name} (${u.points} pts) - Llevándose ${formatMoney(premio)} | Campeón apostado: ${u.campeon} | Marcadores actuales: ${u.picks || 'Nada'} | Predicciones locas: ${u.futuro}`;
+            }).join(" \n ");
 
-            prompt = `Eres el presentador estrella de Sportscenter en ESPN. El Mundial ya empezó y tu trabajo es redactar 5 titulares deportivos impactantes para la marquesina de TV de nuestra Polla.
+            prompt = `Eres el presentador estrella de Sportscenter en ESPN. El Mundial está EN JUEGO y tu trabajo es redactar 5 titulares deportivos impactantes para la marquesina de TV de nuestra Polla.
             
-            Datos en tiempo real de la jornada:
-            - RANKING TOP 5 DE LA POLLA Y SUS PRONÓSTICOS (Marcadores y Torneo): 
+            Datos EN TIEMPO REAL:
+            - BOLSA TOTAL EN JUEGO: ${formatMoney(netPot)}
+            - MARCADORES EN VIVO AHORA MISMO: ${liveText || 'No hay partidos en juego en este instante.'}
+            - ÚLTIMOS RESULTADOS FINALES: ${recentText || 'Aún no hay resultados.'}
+            - RANKING TOP 5 Y LA PLATA QUE SE ESTÁN LLEVANDO AHORA: 
             ${top5}
-            
-            - ÚLTIMOS RESULTADOS REALES DEL MUNDIAL: 
-            ${recentText || 'Aún no hay resultados finales.'}
-            
-            - PRÓXIMOS PARTIDOS DEL MUNDIAL: 
-            ${upcomingText || 'Aún no hay partidos.'}
 
             Instrucciones vitales:
-            1. Saca conclusiones cruzadas: Compara los "Resultados Reales" con los "Marcadores" que pronosticó el Top 5. ¿Alguien le atinó?
-            2. Analiza el futuro de los líderes: Revisa a fondo la sección "Predicciones Generales". Si un líder va de primero pero tiene predicciones absurdas o arriesgadas (ej: en Cuartos, Semis, en preguntas Extras o Eventos locos), exponlo públicamente.
-            3. EL MURO DEL VAR (Salseo en vivo): Dedica al menos 2 de los 5 titulares a simular "El Muro del VAR". Usa este espacio para burlarte con sarcasmo de los que perdieron puntos en marcadores recientes, o para cuestionar las apuestas generales del líder (ej. "El VAR revisa la quiniela de Hugo... ¿De verdad cree que habrá una roja en el banquillo y que el goleador será de Ecuador?").
-            4. Tono: Épico, analítico, estadístico, pero sumamente burlón/picante en la sección del VAR.
-            5. Usa SIEMPRE prefijos como "LIDERATO:", "ALERTA:", "BATACAZO:", "PRONÓSTICO:", "EL VAR:", "CHAT:", "EL ORÁCULO:".
-            6. PROHIBIDO mencionar que eres una IA o usar la palabra "ID".
+            1. Si hay partidos EN VIVO, NARRA LA TENSIÓN: Habla de los goles actuales y cómo un gol más o menos puede hacerle perder ${formatMoney(prize1)} al líder actual.
+            2. HABLA DE LA PLATA: Menciona al actual líder con nombre propio y el botín exacto que tiene en el bolsillo ahora mismo.
+            3. EL MURO DEL VAR (Salseo en vivo): Dedica 1 o 2 titulares para burlarte con sarcasmo de las apuestas fallidas de los líderes en los partidos recientes o de sus predicciones locas a futuro.
+            4. Tono: Épico, frenético de última hora, pero sumamente burlón/picante en el VAR.
+            5. Usa SIEMPRE prefijos como "ALERTA GOL:", "EL BOTÍN:", "LIDERATO:", "BATACAZO:", "EL VAR:".
+            6. PROHIBIDO mencionar que eres una IA.
             7. Devuelve ÚNICAMENTE un array JSON válido de strings.`;
         }
 
@@ -158,22 +176,43 @@ async function runAiNewsGeneration() {
     } catch (e) { console.error("Error IA:", e); }
 }
 
-// --- 1. DISPARADOR POR EVENTOS (Para el Mundial en Vivo) ---
+// --- 1. DISPARADOR POR PARTIDOS (Cambios de estado O GOLES) ---
 exports.onMatchUpdate = onDocumentUpdated("worldCupAdmin/apiCache", async (event) => {
     const beforeMatches = event.data.before?.data()?.matches || [];
     const afterMatches = event.data.after?.data()?.matches || [];
 
-    const statusChanged = afterMatches.some((match, i) => {
-        return beforeMatches[i] && match.status !== beforeMatches[i].status;
+    let shouldTrigger = false;
+
+    afterMatches.forEach((match, i) => {
+        const beforeMatch = beforeMatches[i];
+        if (!beforeMatch) return;
+
+        // ¿Cambió el estado? (Ej: SCHEDULED -> IN_PLAY -> FINISHED)
+        const statusChanged = match.status !== beforeMatch.status;
+        
+        // ¿Hubo gol? (Cambió el marcador home o away)
+        const scoreChanged = 
+            match.score?.fullTime?.home !== beforeMatch.score?.fullTime?.home ||
+            match.score?.fullTime?.away !== beforeMatch.score?.fullTime?.away;
+
+        if (statusChanged || scoreChanged) {
+            shouldTrigger = true;
+        }
     });
 
-    if (statusChanged) {
-        console.log("Detectado cambio de estado en partido. Generando noticias instantáneas...");
+    if (shouldTrigger) {
+        console.log("Detectado GOL o cambio de estado. Generando noticias instantáneas...");
         await runAiNewsGeneration();
     }
 });
 
-// --- 2. RELOJ INTELIGENTE (Ahorro de energía en Pre-Mundial) ---
+// --- 2. DISPARADOR POR ACTUALIZACIÓN DE RANKING OFICIAL ---
+exports.onRankingUpdate = onDocumentUpdated("worldCupAdmin/results", async (event) => {
+    console.log("Resultados oficiales actualizados (Impacto en ranking). Generando noticias...");
+    await runAiNewsGeneration();
+});
+
+// --- 3. RELOJ INTELIGENTE (Ahorro de energía y Mantenimiento) ---
 exports.generateespnnews = onSchedule({
     schedule: "*/5 9-23 * * *", 
     timeZone: "America/Bogota"
@@ -186,16 +225,13 @@ exports.generateespnnews = onSchedule({
     const minutes = now.getMinutes();
 
     if (!isTournamentStarted) {
-        // MODO PRE-MUNDIAL: Solo en punto de la hora (Minutos 0 al 4)
+        // En pre-mundial, solo generamos en punto (minuto 0 al 4) de cada hora
         if (minutes < 5) {
             console.log("Modo Pre-Mundial: Generando boletín horario...");
             await runAiNewsGeneration();
-        } else {
-            return null; // Ahorro de créditos
         }
     } 
     else {
-        // MODO TORNEO: Radar activo cada 5 minutos
         const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
         const matches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
 
@@ -205,8 +241,11 @@ exports.generateespnnews = onSchedule({
             return diffMinutes > 0 && diffMinutes <= 7;
         });
 
-        if (isAboutToStart || minutes < 5) {
-            console.log("Modo Torneo: Generando noticias por partido cercano o boletín horario...");
+        const hasLiveMatches = matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+
+        // En pleno torneo, mantenemos activo el radar si hay partidos vivos, si va a empezar uno, o al dar la hora
+        if (isAboutToStart || hasLiveMatches || minutes < 5) {
+            console.log("Modo Torneo: Mantenimiento de noticias por reloj...");
             await runAiNewsGeneration();
         }
     }

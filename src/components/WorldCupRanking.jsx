@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
+import { collection, onSnapshot, doc, getDoc, setDoc} from 'firebase/firestore'; 
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
+import { getAuth } from 'firebase/auth';
 
 // --- CONFIGURACIÓN FINANCIERA ---
 const ENTRY_FEE = 170000;
@@ -98,7 +99,9 @@ const getThirdPlaceTeams = (picksObj) => {
 };
 
 const WorldCupRanking = ({ currentUser }) => { 
-    const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
+    const auth = getAuth();
+    const userEmail = currentUser?.email || auth.currentUser?.email;
+    const isAdmin = userEmail === 'doctamayot@gmail.com'
 
     const [matches, setMatches] = useState([]);
     const [allPredictions, setAllPredictions] = useState({});
@@ -662,6 +665,25 @@ const WorldCupRanking = ({ currentUser }) => {
         netPot, r1, r2, r3 
     };
 }, [ranking]);
+
+// Agrega esto justo debajo de tu constante de premiosRepartidos
+// 🟢 GUARDAR RANKING PARA LA IA
+    // 🟢 GUARDAR RANKING PARA LA IA
+    useEffect(() => {
+        // Este log se imprimirá sí o sí. ¡Nos dirá la verdad!
+        console.log("🔍 DIAGNÓSTICO -> isAdmin:", isAdmin, "| Ranking:", ranking.length, "| Email actual:", currentUser?.email);
+
+        if (isAdmin && ranking.length > 0) {
+            const pointsMap = {};
+            ranking.forEach(u => {
+                pointsMap[u.uid] = u.total; 
+            });
+            
+            setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), { points: pointsMap }, { merge: true })
+                .then(() => console.log("✅ Ranking guardado correctamente para la IA en Firebase"))
+                .catch(error => console.error("❌ Error guardando ranking en Firebase:", error));
+        }
+    }, [ranking, isAdmin, currentUser]);
 
     // const physicalMiddlePos = ranking.length > 0 ? Math.ceil(ranking.length / 2) : -1;
     // const middlePlayerUid = physicalMiddlePos !== -1 ? ranking[physicalMiddlePos - 1]?.uid : null;
