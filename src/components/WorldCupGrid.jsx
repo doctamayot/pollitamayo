@@ -1286,12 +1286,14 @@ const WorldCupGrid = ({ currentUser }) => {
                                                         <div className="flex justify-center w-full">
                                                             {user.pts !== null && (
                                                                 <span className={`inline-flex items-center justify-center font-black px-2 py-1 sm:px-5 sm:py-2.5 rounded-lg text-[10px] sm:text-xl shadow-sm ${
-                                                                    user.pts === 5 ? 'text-white bg-gradient-to-r from-green-500 to-emerald-600 border border-green-400/50 shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 
-                                                                    user.pts > 0 ? 'text-blue-100 bg-gradient-to-r from-blue-600 to-indigo-600 border border-blue-400/50 shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 
-                                                                    'text-foreground-muted bg-background-offset border border-border/50'
-                                                                }`}>
-                                                                    {user.pts > 0 ? `+${user.pts}` : '0'}
-                                                                </span>
+    user.pts === 5 ? 'text-white bg-gradient-to-r from-green-500 to-emerald-600 border border-green-400/50 shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 
+    user.pts === 3 ? 'text-blue-100 bg-gradient-to-r from-blue-600 to-indigo-600 border border-blue-400/50 shadow-[0_0_10px_rgba(37,99,235,0.3)]' : 
+    user.pts === 2 ? 'text-white bg-gradient-to-r from-yellow-400 to-yellow-500 border border-yellow-300/50 shadow-[0_0_10px_rgba(250,204,21,0.4)]' :
+    user.pts === 1 ? 'text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-orange-400/50 shadow-[0_0_10px_rgba(249,115,22,0.4)]' :
+    'text-white bg-gradient-to-r from-red-500 to-red-600 border border-red-400/50 shadow-[0_0_10px_rgba(239,68,68,0.4)]'
+}`}>
+    {user.pts > 0 ? `+${user.pts}` : '0'}
+</span>
                                                             )}
                                                         </div>
                                                     </td>
