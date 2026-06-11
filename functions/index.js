@@ -96,7 +96,7 @@ async function runAiNewsGeneration() {
                 .slice(0, 3);
             const recentText = recentMatches.map(m => `${m.homeTeam.name} ${m.score?.fullTime?.home} - ${m.score?.fullTime?.away} ${m.awayTeam.name}`).join(" | ");
 
-            // 1. LEER EL RANKING REAL QUE GUARDÓ REACT EN FIREBASE
+            // 1. LEER EL RANKING REAL QUE GUARDÓ REACT EN FIREBASE SI
             const liveRankingSnap = await db.collection("worldCupAdmin").doc("liveRanking").get();
             const livePointsMap = liveRankingSnap.exists ? liveRankingSnap.data().points || {} : {};
 

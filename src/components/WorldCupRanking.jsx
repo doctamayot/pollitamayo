@@ -55,7 +55,7 @@ const formatShortName = (fullName) => {
     // Separamos el nombre por espacios
     const parts = fullName.trim().split(/\s+/); 
     
-    // Si solo tiene una palabra (ej: "Neymar")
+    // Si solo tiene una palabra (ej: "Neymar")aaa
     if (parts.length === 1) return parts[0];
     
     // Si tiene exactamente dos palabras (ej: "Lionel Messi")
