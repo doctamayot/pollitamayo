@@ -6,6 +6,7 @@ import logocopa from '../assets/logocopa.png';
 import toast from 'react-hot-toast';
 import { generateFullBracket } from '../services/bracketEngine';
 import NewsTicker from '../components/shared/NewsTicker'
+import InfografiaModal from '../components/InfografiaModal'
 
 // --- TRADUCCIONES Y CONSTANTES ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
@@ -113,6 +114,7 @@ const WorldCupGrid = ({ currentUser }) => {
     const [isDbLoading, setIsDbLoading] = useState(true);
     const [isLivePollingActive, setIsLivePollingActive] = useState(false);
     const [isAutoSyncActive, setIsAutoSyncActive] = useState(false);
+    const [reportData, setReportData] = useState(null); // 🟢 NUEVO ESTADO PARA LA INFOGRAFÍA
 
     const scrollContainerRef = useRef(null);
     const lastSyncTime = useRef(0);
@@ -1193,7 +1195,19 @@ const WorldCupGrid = ({ currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* 🟢 LA TABLA AHORA SE MUESTRA SIEMPRE, SIN RESTRICCIONES */}
+                            {/* 🟢 BOTÓN DE INFOGRAFÍA EN LA GRILLA (Pegado a la cabecera sin huecos) */}
+                            {matchStatus === 'FINISHED' && (
+                                <div className="px-4 pb-4 sm:px-6 sm:pb-6 relative z-20 bg-background-offset border-b border-border">
+                                    <button 
+                                        onClick={() => setReportData({ match, ranking: matchSpecificRanking, adminPreds: a, homeCrest, awayCrest, finalHomeName, finalAwayName })}
+                                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-[10px] sm:text-xs py-3 rounded-xl shadow-md hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 uppercase tracking-widest"
+                                    >
+                                        <span>📸</span> Reporte del Partido
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* 🟢 LA TABLA CON EL FONDO CORRECTO (Cero huecos) */}
                             <div className="w-full relative z-10 overflow-hidden bg-background min-h-[150px] flex-grow">
                                 <img src={logocopa} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-80 sm:h-80 object-contain opacity-[0.02] dark:opacity-[0.03] pointer-events-none z-0" alt="" />
 
@@ -1295,6 +1309,7 @@ const WorldCupGrid = ({ currentUser }) => {
                     <p className="text-foreground-muted font-bold text-sm tracking-wider uppercase">No hay partidos para esta fecha.</p>
                 </div>
             )}
+            <InfografiaModal data={reportData} onClose={() => setReportData(null)} />
         </div>
     );
 };
