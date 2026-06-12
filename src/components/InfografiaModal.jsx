@@ -28,13 +28,11 @@ const teamTranslations = {
 
 const translateTeam = (name) => teamTranslations[name] || name;
 
-// 🟢 PUENTE MÁGICO EN ALTA RESOLUCIÓN
 const getProxyUrl = (url) => {
     if (!url) return null;
     return `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=png&w=256&h=256&fit=contain`;
 };
 
-// 🟢 DETECTOR INTELIGENTE DE PUNTAJE GLOBAL ACUMULADO
 const getGlobalPoints = (u) => {
     if (u.points !== undefined && u.points !== null) return Number(u.points);
     if (u.totalPoints !== undefined && u.totalPoints !== null) return Number(u.totalPoints);
@@ -44,7 +42,6 @@ const getGlobalPoints = (u) => {
     return 0;
 };
 
-// 🟢 RENDERIZADOR DE ETIQUETAS ALINEADO A LA IZQUIERDA
 const renderPlayerBadges = (arr) => {
     if (arr.length === 0) return <span className="text-slate-400 font-medium italic text-[10px] mt-1 block">Ninguno</span>;
     return (
@@ -58,7 +55,7 @@ const renderPlayerBadges = (arr) => {
     );
 };
 
-const InfografiaModal = ({ data, onClose }) => {
+const InfografiaModal = ({ data, onClose, isAdmin }) => {
     const cardRef = useRef(null);
 
     if (!data) return null;
@@ -71,13 +68,11 @@ const InfografiaModal = ({ data, onClose }) => {
     const homeScore = parseInt(adminPreds?.home ?? 0);
     const awayScore = parseInt(adminPreds?.away ?? 0);
 
-    // 🟢 CLASIFICACIÓN DE PARTICIPANTES EN ESTE PARTIDO
     const perfectos = ranking.filter(u => u.pts === 5); 
     const ganadores = ranking.filter(u => u.pts === 2 || u.pts === 3); 
     const parciales = ranking.filter(u => u.pts === 1); 
     const perdedores = ranking.filter(u => u.pts === 0); 
 
-    // 🟢 ENCONTRAR LÍDERES DE LA GENERAL
     const maxGlobalPoints = ranking.length > 0 ? Math.max(...ranking.map(getGlobalPoints)) : 0;
     const globalLeaders = ranking.filter(u => getGlobalPoints(u) === maxGlobalPoints);
 
@@ -113,19 +108,51 @@ const InfografiaModal = ({ data, onClose }) => {
     const descargarImagen = () => {
         if (cardRef.current === null) return;
         toast.loading("Procesando infografía HD...", { id: 'img-toast' });
-        
-        toPng(cardRef.current, { cacheBust: true, useCORS: true, quality: 1, pixelRatio: 2 })
-            .then((dataUrl) => {
-                const link = document.createElement('a');
-                link.download = `PolliTamayo_${localTraducido}_vs_${visitanteTraducido}.png`;
-                link.href = dataUrl;
-                link.click();
-                toast.success("¡Infografía guardada! Lista para WhatsApp 🚀", { id: 'img-toast' });
-            })
-            .catch((err) => {
-                console.error(err);
-                toast.error("Error al exportar la imagen", { id: 'img-toast' });
+
+        // 👑 LOGÍSTICA SÍNCRONA DE ALTA VELOCIDAD EXCLUSIVA PARA EL ADMIN
+        if (isAdmin) {
+            // Creamos la promesa de la imagen INMEDIATAMENTE al hacer clic para que Chrome no bloquee el hilo
+            const imagePromise = toPng(cardRef.current, { cacheBust: true, useCORS: true, quality: 1, pixelRatio: 2 })
+                .then(async (dataUrl) => {
+                    // Descarga el archivo físico de fondo
+                    const link = document.createElement('a');
+                    link.download = `PolliTamayo_${localTraducido}_vs_${visitanteTraducido}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                    
+                    // Retorna el binario puro para el portapapeles
+                    const res = await fetch(dataUrl);
+                    return res.blob();
+                });
+
+            // Forzamos al navegador a escuchar la inyección del portapapeles sin esperas asíncronas rotas
+            navigator.clipboard.write([
+                new ClipboardItem({ "image/png": imagePromise })
+            ]).then(() => {
+                toast.success("¡HD guardada y copiada al Portapapeles! Abre el grupo y presiona Ctrl+V 🚀", { id: 'img-toast' });
+                setTimeout(() => {
+                    window.open("https://web.whatsapp.com/", "_blank");
+                }, 1000);
+            }).catch((err) => {
+                console.error("Fallo de portapapeles:", err);
+                toast.error("Imagen descargada, pero tu navegador bloqueó el portapapeles.", { id: 'img-toast' });
             });
+
+        } else {
+            // 👥 FLUJO DE USUARIO REGULAR
+            toPng(cardRef.current, { cacheBust: true, useCORS: true, quality: 1, pixelRatio: 2 })
+                .then((dataUrl) => {
+                    const link = document.createElement('a');
+                    link.download = `PolliTamayo_${localTraducido}_vs_${visitanteTraducido}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                    toast.success("¡Infografía guardada! Lista para WhatsApp 🚀", { id: 'img-toast' });
+                })
+                .catch((err) => {
+                    console.error(err);
+                    toast.error("Error al exportar la imagen", { id: 'img-toast' });
+                });
+        }
     };
 
     return (
@@ -139,7 +166,6 @@ const InfografiaModal = ({ data, onClose }) => {
                 {/* CONTENEDOR DE LA INFOGRAFÍA */}
                 <div ref={cardRef} className="bg-[#f8fafc] overflow-hidden relative w-full rounded-3xl shadow-2xl" style={{ fontFamily: '"Inter", sans-serif' }}>
                     
-                    {/* FONDO DE CANCHA TÁCTICA */}
                     <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #0f172a 1px, transparent 1px)', backgroundSize: '20px 24px' }}></div>
                     <div className="absolute inset-0 opacity-[0.02] pointer-events-none overflow-hidden">
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-[3px] border-slate-900 rounded-full"></div>
@@ -159,13 +185,9 @@ const InfografiaModal = ({ data, onClose }) => {
                     {/* MARCADOR TIPO TABLERO (SOLO BANDERAS) */}
                     <div className="mx-4 sm:mx-8 bg-gradient-to-b from-[#c4f068] to-[#42c56a] p-1 rounded-xl shadow-md relative z-10 border-b-[3px] border-[#36a655]">
                         <div className="bg-[#112d26] rounded-lg py-4 px-6 flex items-center justify-center gap-6 relative overflow-hidden">
-                            
-                            {/* Bandera Local */}
                             <div className="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center shrink-0">
                                 {homeCrest ? <img src={getProxyUrl(homeCrest)} crossOrigin="anonymous" className="w-full h-full object-contain filter drop-shadow-md" alt="" /> : <span className="text-3xl">🛡️</span>}
                             </div>
-                            
-                            {/* Marcador Números */}
                             <div className="flex items-center gap-2">
                                 <div className="bg-[#1e3639] w-12 h-16 rounded-md flex items-center justify-center text-3xl sm:text-4xl font-black text-white shadow-inner">
                                     <span>{homeScore}</span>
@@ -175,8 +197,6 @@ const InfografiaModal = ({ data, onClose }) => {
                                     <span>{awayScore}</span>
                                 </div>
                             </div>
-
-                            {/* Bandera Visitante */}
                             <div className="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center shrink-0">
                                 {awayCrest ? <img src={getProxyUrl(awayCrest)} crossOrigin="anonymous" className="w-full h-full object-contain filter drop-shadow-md" alt="" /> : <span className="text-3xl">🛡️</span>}
                             </div>
@@ -206,12 +226,11 @@ const InfografiaModal = ({ data, onClose }) => {
                         </div>
                     </div>
 
-                    {/* 📋 SECCIÓN: INFOGRAFÍAS EN FILAS CON IMÁGENES TEMÁTICAS REPOTENCIADAS */}
+                    {/* 📋 SECCIÓN: INFOGRAFÍAS EN FILAS */}
                     <div className="flex flex-col gap-3 px-4 sm:px-6 pb-5 relative z-10">
                         
-                        {/* FILA 1: PERFECTOS (5 PUNTOS) */}
+                        {/* FILA 1: PERFECTOS */}
                         <div className="border-2 border-[#c0e6a3] bg-[#eefaf0] rounded-2xl p-3 flex gap-3 items-start text-left shadow-sm">
-                            {/* Ícono Alusivo con Medalla de Puntos */}
                             <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center shrink-0 shadow-md mt-0.5 relative text-2xl border border-white/20">
                                 🏆
                                 <span className="absolute -bottom-1 -right-1 bg-slate-950 text-white text-[7px] font-black px-1 py-0.5 rounded-md border border-white leading-none shadow-sm">5 PTS</span>
@@ -227,9 +246,8 @@ const InfografiaModal = ({ data, onClose }) => {
                             </div>
                         </div>
 
-                        {/* FILA 2: TENDENCIA (2-3 PUNTOS) */}
+                        {/* FILA 2: TENDENCIA */}
                         <div className="border-2 border-[#8adfb8] bg-[#f0fcf7] rounded-2xl p-3 flex gap-3 items-start text-left shadow-sm">
-                            {/* Ícono Alusivo con Medalla de Puntos */}
                             <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-full flex items-center justify-center shrink-0 shadow-md mt-0.5 relative text-2xl border border-white/20">
                                 🎯
                                 <span className="absolute -bottom-1 -right-1 bg-slate-950 text-white text-[7px] font-black px-1 py-0.5 rounded-md border border-white leading-none shadow-sm">2-3 PTS</span>
@@ -245,9 +263,8 @@ const InfografiaModal = ({ data, onClose }) => {
                             </div>
                         </div>
 
-                        {/* FILA 3: PARCIALES (1 PUNTO) */}
+                        {/* FILA 3: PARCIALES */}
                         <div className="border-2 border-[#b3cce6] bg-[#f0f6fc] rounded-2xl p-3 flex gap-3 items-start text-left shadow-sm">
-                            {/* Ícono Alusivo con Medalla de Puntos */}
                             <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full flex items-center justify-center shrink-0 shadow-md mt-0.5 relative text-2xl border border-white/20">
                                 ⚽
                                 <span className="absolute -bottom-1 -right-1 bg-slate-950 text-white text-[7px] font-black px-1 py-0.5 rounded-md border border-white leading-none shadow-sm">1 PT</span>
@@ -263,9 +280,8 @@ const InfografiaModal = ({ data, onClose }) => {
                             </div>
                         </div>
 
-                        {/* FILA 4: SIN PUNTOS (0 PUNTOS) */}
+                        {/* FILA 4: SIN PUNTOS */}
                         <div className="border-2 border-slate-300 bg-slate-50 rounded-2xl p-3 flex gap-3 items-start text-left shadow-sm">
-                            {/* Ícono Alusivo con Medalla de Puntos */}
                             <div className="w-12 h-12 bg-gradient-to-br from-slate-400 to-slate-500 rounded-full flex items-center justify-center shrink-0 shadow-md mt-0.5 relative text-2xl border border-white/20">
                                 🥶
                                 <span className="absolute -bottom-1 -right-1 bg-slate-950 text-white text-[7px] font-black px-1 py-0.5 rounded-md border border-white leading-none shadow-sm">0 PTS</span>
@@ -283,7 +299,6 @@ const InfografiaModal = ({ data, onClose }) => {
 
                     </div>
                     
-                    {/* Pie de Imagen */}
                     <div className="text-center py-2 text-[9px] font-black text-slate-400 bg-white/50 uppercase tracking-[0.2em] relative z-10 border-t border-slate-100">
                         ⚽ PolliTamayo 2026
                     </div>
@@ -294,7 +309,7 @@ const InfografiaModal = ({ data, onClose }) => {
                     onClick={descargarImagen}
                     className="w-full mt-4 bg-[#25D366] text-white font-black text-xs py-3.5 rounded-xl shadow-md hover:bg-[#20b958] transition-colors flex items-center justify-center gap-2 uppercase tracking-widest border-b-[3px] border-[#1ca851]"
                 >
-                    <span>📲</span> Descargar Infografía HD
+                    <span>📲</span> {isAdmin ? 'Descargar y Copiar para WhatsApp' : 'Descargar Infografía HD'}
                 </button>
 
                 {/* BOTÓN CERRAR INFERIOR */}

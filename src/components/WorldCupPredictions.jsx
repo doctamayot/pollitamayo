@@ -68,6 +68,9 @@ const WorldCupPredictions = ({ currentUser }) => {
         { id: 'eventos', label: 'Eventos', icon: '❓', linkedPhase: 'GROUP_STAGE' }
     ];
 
+    
+    
+
     useEffect(() => {
         const fetchMatchesAndData = async () => {
             try {
@@ -224,7 +227,8 @@ const WorldCupPredictions = ({ currentUser }) => {
 
                     if (dbPreds[m.id]?.home !== apiH || dbPreds[m.id]?.away !== apiA) {
                         dbPreds[m.id] = { ...dbPreds[m.id], home: apiH, away: apiA };
-                        hasChanges = true;
+                        hasChanges = true;                       
+                        
                     }
                 });
 
@@ -232,10 +236,13 @@ const WorldCupPredictions = ({ currentUser }) => {
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
                     setPredictions(dbPreds); 
                     toast.success('⚽ ¡Auto-Sync: Marcadores sincronizados con la API!', { id: 'autosync-toast' });
+                    
                     // 2. Recalculamos el ranking en el fondo
                     recalculateAndSaveRanking();
+                    
+                    
                     await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
-                        action: 'API_GOL_DETECTED',
+                        action: 'API_GOL_DETECTED',                        
                         timestamp: new Date().toISOString() 
                     });
                    
@@ -1303,18 +1310,13 @@ const WorldCupPredictions = ({ currentUser }) => {
                 <EventsTab eventPicks={eventPicks} handleEventChange={handleEventChange} isCurrentMainTabLocked={isCurrentMainTabLocked} />
             )}
 
+            
+
             {/* BOTÓN FLOTANTE GUARDAR */}
             {!(activeTab === 'partidos' ? isSubTabLocked(selectedSubTab) : isCurrentMainTabLocked) && (
                 <div>
-                <a 
-                    href="https://wa.me/573144261190?text=Hola,%20estoy%20llenando%20mi%20Polla%20Mundialista%20y%20necesito%20ayuda." 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="fixed bottom-28 md:bottom-10 right-4 md:right-10 z-30 w-14 h-14 bg-[#25D366] rounded-full shadow-[0_0_15px_rgba(37,211,102,0.4)] hover:scale-110 transition-transform flex items-center justify-center border-2 border-white/20 animate-bounce group"
-                >
-                    <img src={wapIcon} alt="Soporte WhatsApp" className="w-8 h-8 object-contain drop-shadow-md group-hover:rotate-12 transition-transform" />
-                </a>
-
+                
+                
                 {/* 🟢 BOTÓN GUARDAR (CENTRO EN MÓVIL, DERECHA EN PC) */}
                 <div className="fixed bottom-28 md:bottom-10 left-1/2 -translate-x-1/2 z-30 flex flex-col gap-3 items-center animate-slide-up w-max">
                     <button onClick={handleSavePredictions} disabled={saving} className="bg-primary text-primary-foreground font-black py-3 px-6 sm:py-4 sm:px-10 rounded-full shadow-[0_15px_30px_-5px_rgba(245,158,11,0.5)] border border-amber-500/50 transition-all hover:scale-110 active:scale-95 flex items-center gap-2 sm:gap-3 disabled:opacity-50 uppercase tracking-tighter text-xs sm:text-base">

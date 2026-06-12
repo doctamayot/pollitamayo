@@ -3,6 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+
 if (admin.apps.length === 0) admin.initializeApp();
 const db = admin.firestore();
 
@@ -340,6 +341,8 @@ exports.generateespnnews = onSchedule({
 // El disparador manual del Admin sigue intacto (Momento 1)
 // 🟢 AHORA ESCUCHA EL TRIGER ULTRA-RÁPIDO DEL AUTO-SYNC O DEL MANUAL
 exports.onLiveTriggerUpdate = onDocumentUpdated("worldCupAdmin/trigger", async (event) => {
-    console.log("🚨 ¡ALERTA DE GOL O CAMBIO EN VIVO! Despertando a Gemini inmediatamente...");
+    console.log("🚨 ¡ALERTA DE GOL O CAMBIO EN VIVO! Despertando a Gemini...");
+    
+    // Simplemente generamos las noticias con la Inteligencia Artificial (Gemini) sin enviar push
     await runAiNewsGeneration();
 });
