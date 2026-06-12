@@ -573,7 +573,7 @@ const WorldCupRanking = ({ currentUser }) => {
             if (isSuperBono) stats.ptsHonorYBonos += 10;
 
             stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
-            ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || logocopa, ...stats });
+            ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa, ...stats });
         });
 
         ranks.sort((a, b) => b.total - a.total);
