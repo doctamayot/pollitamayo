@@ -1309,7 +1309,7 @@ const WorldCupGrid = ({ currentUser }) => {
                     <p className="text-foreground-muted font-bold text-sm tracking-wider uppercase">No hay partidos para esta fecha.</p>
                 </div>
             )}
-            <InfografiaModal data={reportData} onClose={() => setReportData(null)} isAdmin={isAdmin} />
+            <InfografiaModal data={reportData} onClose={() => setReportData(null)} />
         </div>
     );
 };

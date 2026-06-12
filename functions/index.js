@@ -135,42 +135,21 @@ async function runAiNewsGeneration() {
                 [...liveMatches, ...recentMatches].forEach(m => {
                     const pred = data.predictions?.[m.id];
                     if (pred && pred.home !== '' && pred.away !== '') {
-                        picks.push(`${m.homeTeam.name} ${pred.home}-${pred.away} ${m.awayTeam.name}`);
+                        picks.push(`${m.homeTeam.name} vs ${m.awayTeam.name} (Puso: ${pred.home}-${pred.away})`);
                     }
                 });
-
-                const knockout = data.knockoutPicks || {};
-                const extras = data.extraPicks || {};
-                const eventos = data.eventPicks || {};
-
-                const campeon = knockout.campeon?.[0]?.name || 'Nadie';
-                const subcampeon = knockout.subcampeon?.[0]?.name || 'Nadie';
-                const semis = (knockout.semis || []).map(t => t.name).join(", ") || 'Ninguno';
-                const cuartos = (knockout.cuartos || []).map(t => t.name).join(", ") || 'Ninguno';
-
-                const extrasStr = Object.entries(extras)
-                    .filter(([k, v]) => v && v !== '')
-                    .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
-                    .join(", ");
-
-                const eventosSi = Object.entries(eventos)
-                    .filter(([k, v]) => v === 'SI')
-                    .map(([k]) => k.replace(/_/g, ' '));
-                const eventosStr = eventosSi.length > 0 ? `| Eventos: ${eventosSi.join(", ")}` : '';
 
                 return { 
                     name: data.displayName, 
                     points: livePointsMap[data.id] || 0, 
-                    picks: picks.join(", "),
-                    campeon,
-                    futuro: `Campeón: ${campeon} | Sub: ${subcampeon} | Semis: ${semis} | Cuartos: ${cuartos} | Extras (${extrasStr}) ${eventosStr}`
+                    picks: picks.join(", ")
                 };
             });
             
             // Ordenar por puntos de mayor a menor
             parsedUsers.sort((a, b) => b.points - a.points);
             
-            // 🟢 MATEMÁTICA DE EMPATES: Distribución justa de premios reales
+            // 🟢 MATEMÁTICA DE EMPATES Y PREMIOS
             let currentRank = 1;
             let idx = 0;
             while (idx < parsedUsers.length) {
@@ -205,42 +184,46 @@ async function runAiNewsGeneration() {
                 idx = j;
             }
 
-            // 🔥 SOLUCIÓN AL CORTE: Expandir el Top de forma dinámica si hay un empate masivo
-            let dynamicLimit = 5;
-            if (parsedUsers.length > dynamicLimit) {
-                const cutoffPoints = parsedUsers[dynamicLimit - 1].points;
-                while (dynamicLimit < parsedUsers.length && parsedUsers[dynamicLimit].points === cutoffPoints) {
-                    dynamicLimit++;
-                }
-            }
+            // 🟢 SEPARAR LA TABLA EN 3 BLOQUES ESTRATÉGICOS PARA LA IA
+            // 1. Líderes (La Punta)
+            const topPoints = parsedUsers[0]?.points || 0;
+            const lideres = parsedUsers.filter(u => u.points === topPoints);
+            const isSingleLeader = lideres.length === 1;
+            const lideresStr = lideres.map(u => `${u.name} (${u.points} pts, Botín asegurado: ${formatMoney(u.premio)}) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
-            // Datos específicos de la cima para darle contexto brutal a la IA
-            const maxPointsInTorneo = parsedUsers[0]?.points || 0;
-            const totalLideresReales = parsedUsers.filter(u => u.points === maxPointsInTorneo).length;
+            // 2. Mitad de Tabla (El Pelotón)
+            const midIndex = Math.max(0, Math.floor(parsedUsers.length / 2) - 1);
+            const mitadTabla = parsedUsers.slice(midIndex, midIndex + 3);
+            const mitadStr = mitadTabla.map(u => `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
-            const topDynamicList = parsedUsers.slice(0, dynamicLimit).map((u) => {
-                const empateTexto = u.isTied ? `(EMPATE en el puesto #${u.calculatedRank})` : `(Puesto #${u.calculatedRank})`;
-                return `${empateTexto} ${u.name} con ${u.points} pts - Asegurando un botín de ${formatMoney(u.premio)} | Campeón apostado: ${u.campeon} | Marcadores: ${u.picks || 'Ninguno'} | Futuro: ${u.futuro}`;
-            }).join(" \n ");
+            // 3. Coleros (El Fondo)
+            const coleros = parsedUsers.slice(-3);
+            const colerosStr = coleros.map(u => `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
-            prompt = `Eres el presentador estrella de Sportscenter en ESPN. El Mundial está EN JUEGO y tu trabajo es redactar 5 titulares deportivos impactantes para la marquesina de TV de nuestra Polla.
+            prompt = `Eres el presentador estrella de Sportscenter en ESPN (estilo Fernando Palomo). El Mundial está EN JUEGO y debes redactar 5 titulares deportivos impactantes y analíticos para nuestra Polla.
             
-            Datos EN TIEMPO REAL:
-            - BOLSA TOTAL EN JUEGO: ${formatMoney(netPot)}
-            - MARCADORES EN VIVO AHORA MISMO: ${liveText || 'No hay partidos en juego en este instante.'}
-            - ÚLTIMOS RESULTADOS FINALES: ${recentText || 'Aún no hay resultados.'}
-            - ALERTA DE TRANCÓN EN LA PUNTA: ¡Hay exactamente ${totalLideresReales} personas empatadas en el PRIMER LUGAR con ${maxPointsInTorneo} puntos!
-            - LISTADO DE JUGADORES CLAVE (CON EMPATES Y PREMIOS YA CALCULADOS): 
-            ${topDynamicList}
+            ⚽ CONTEXTO DEL TORNEO AHORA MISMO:
+            - BOLSA TOTAL REPARTIÉNDOSE: ${formatMoney(netPot)}
+            - PARTIDOS EN VIVO: ${liveText || 'No hay partidos rodando.'}
+            - ÚLTIMOS RESULTADOS: ${recentText || 'Aún no hay resultados.'}
+            
+            📊 RADIOGRAFÍA DE LA TABLA (Menciona nombres reales de los participantes y sus puntos):
+            - EN LA PUNTA: ${lideresStr}
+            - EN LA MITAD: ${mitadStr}
+            - EN EL FONDO (Coleros): ${colerosStr}
 
-            Instrucciones vitales:
-            1. REGLA DE ORO PARA EL EMPATE MASIVO: Si el número de líderes en la punta es enorme (como ${totalLideresReales} personas), EXÁGERALO con humor en los titulares. Llama a esto "un trancón histórico", "un empate de película", o "guerra total en el liderato". Explica que en este momento el gran botín se está dividiendo en partes milimétricas entre un montón de gente.
-            2. Si hay partidos EN VIVO, NARRA LA TENSIÓN: Habla de cómo un solo gol va a desatar el caos total, destruyendo el empate de los ${totalLideresReales} líderes y enviando a la mitad al abismo.
-            3. HABLA DE LA PLATA: Usa los nombres del listado y los montos exactos de dinero calculados.
-            4. EL MURO DEL VAR (Salseo en vivo): Dedica titulares para hacer bromas picantes sobre las predicciones de los líderes.
-            5. Usa prefijos como "TRANCÓN HISTÓRICO:", "ALERTA DE GOL:", "CIMA COMPARTIDA:", "EL BOTÍN:", "EL VAR:".
-            6. Devuelve ÚNICAMENTE un array JSON válido de strings.
-            7. Por ningun motivo debes dar nombres de paises en ingles, siempre en español todo`;
+            🚨 REGLAS ESTRICTAS E INQUEBRANTABLES:
+            1. ESTADO DE LA PUNTA: ${isSingleLeader ? 'HAY UN LÍDER SOLITARIO Y ABSOLUTO. ESTÁ TOTALMENTE PROHIBIDO usar palabras como "empate en la punta", "comparten liderato" o "trancón".' : 'HAY VARIOS LÍDERES EMPATADOS. Narra la guerra total por dividir el premio.'}
+            2. DISTRIBUCIÓN DE TEMAS EN LOS 5 TITULARES:
+               - Titular 1: Analiza el partido actual/reciente, el marcador y menciona específicamente a un usuario que haya acertado o fallado su predicción (usa la data enviada).
+               - Titular 2: Habla de los líderes y el dineral que se están embolsando (${formatMoney(netPot)} en juego).
+               - Titular 3: Habla del pelotón de la mitad de tabla luchando por subir.
+               - Titular 4: Haz una broma deportiva con los coleros (el fondo de la tabla).
+               - Titular 5: Un análisis general de ESPN sobre la fecha y cómo un gol lo cambia todo.
+            3. NUNCA reveles que eres una Inteligencia Artificial. Eres un periodista deportivo humano.
+            4. NUNCA uses nombres de países en inglés. Todo debe estar en español impecable (Ej: Netherlands es Países Bajos, England es Inglaterra).
+            5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:", "EL VAR:".
+            6. Devuelve ÚNICAMENTE un array JSON válido de strings. No agregues nada más.`;
             
         }
 
@@ -268,7 +251,6 @@ async function runAiNewsGeneration() {
     }
 }
 
-// --- DISPARADORES ---
 // --- DISPARADORES ---
 exports.generateespnnews = onSchedule({
     schedule: "*/5 9-23 * * *", // Revisa cada 5 minutos
@@ -338,7 +320,6 @@ exports.generateespnnews = onSchedule({
     return null;
 });
 
-// El disparador manual del Admin sigue intacto (Momento 1)
 // 🟢 AHORA ESCUCHA EL TRIGER ULTRA-RÁPIDO DEL AUTO-SYNC O DEL MANUAL
 exports.onLiveTriggerUpdate = onDocumentUpdated("worldCupAdmin/trigger", async (event) => {
     console.log("🚨 ¡ALERTA DE GOL O CAMBIO EN VIVO! Despertando a Gemini...");

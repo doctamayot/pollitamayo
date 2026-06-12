@@ -55,7 +55,7 @@ const renderPlayerBadges = (arr) => {
     );
 };
 
-const InfografiaModal = ({ data, onClose, isAdmin }) => {
+const InfografiaModal = ({ data, onClose }) => {
     const cardRef = useRef(null);
 
     if (!data) return null;
@@ -109,50 +109,18 @@ const InfografiaModal = ({ data, onClose, isAdmin }) => {
         if (cardRef.current === null) return;
         toast.loading("Procesando infografía HD...", { id: 'img-toast' });
 
-        // 👑 LOGÍSTICA SÍNCRONA DE ALTA VELOCIDAD EXCLUSIVA PARA EL ADMIN
-        if (isAdmin) {
-            // Creamos la promesa de la imagen INMEDIATAMENTE al hacer clic para que Chrome no bloquee el hilo
-            const imagePromise = toPng(cardRef.current, { cacheBust: true, useCORS: true, quality: 1, pixelRatio: 2 })
-                .then(async (dataUrl) => {
-                    // Descarga el archivo físico de fondo
-                    const link = document.createElement('a');
-                    link.download = `PolliTamayo_${localTraducido}_vs_${visitanteTraducido}.png`;
-                    link.href = dataUrl;
-                    link.click();
-                    
-                    // Retorna el binario puro para el portapapeles
-                    const res = await fetch(dataUrl);
-                    return res.blob();
-                });
-
-            // Forzamos al navegador a escuchar la inyección del portapapeles sin esperas asíncronas rotas
-            navigator.clipboard.write([
-                new ClipboardItem({ "image/png": imagePromise })
-            ]).then(() => {
-                toast.success("¡HD guardada y copiada al Portapapeles! Abre el grupo y presiona Ctrl+V 🚀", { id: 'img-toast' });
-                setTimeout(() => {
-                    window.open("https://web.whatsapp.com/", "_blank");
-                }, 1000);
-            }).catch((err) => {
-                console.error("Fallo de portapapeles:", err);
-                toast.error("Imagen descargada, pero tu navegador bloqueó el portapapeles.", { id: 'img-toast' });
+        toPng(cardRef.current, { cacheBust: true, useCORS: true, quality: 1, pixelRatio: 2 })
+            .then((dataUrl) => {
+                const link = document.createElement('a');
+                link.download = `PolliTamayo_${localTraducido}_vs_${visitanteTraducido}.png`;
+                link.href = dataUrl;
+                link.click();
+                toast.success("¡Infografía descargada exitosamente! 🚀", { id: 'img-toast' });
+            })
+            .catch((err) => {
+                console.error(err);
+                toast.error("Error al exportar la imagen", { id: 'img-toast' });
             });
-
-        } else {
-            // 👥 FLUJO DE USUARIO REGULAR
-            toPng(cardRef.current, { cacheBust: true, useCORS: true, quality: 1, pixelRatio: 2 })
-                .then((dataUrl) => {
-                    const link = document.createElement('a');
-                    link.download = `PolliTamayo_${localTraducido}_vs_${visitanteTraducido}.png`;
-                    link.href = dataUrl;
-                    link.click();
-                    toast.success("¡Infografía guardada! Lista para WhatsApp 🚀", { id: 'img-toast' });
-                })
-                .catch((err) => {
-                    console.error(err);
-                    toast.error("Error al exportar la imagen", { id: 'img-toast' });
-                });
-        }
     };
 
     return (
@@ -309,7 +277,7 @@ const InfografiaModal = ({ data, onClose, isAdmin }) => {
                     onClick={descargarImagen}
                     className="w-full mt-4 bg-[#25D366] text-white font-black text-xs py-3.5 rounded-xl shadow-md hover:bg-[#20b958] transition-colors flex items-center justify-center gap-2 uppercase tracking-widest border-b-[3px] border-[#1ca851]"
                 >
-                    <span>📲</span> {isAdmin ? 'Descargar y Copiar para WhatsApp' : 'Descargar Infografía HD'}
+                    <span>📲</span> Descargar Infografía HD
                 </button>
 
                 {/* BOTÓN CERRAR INFERIOR */}
