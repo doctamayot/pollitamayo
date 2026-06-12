@@ -51,18 +51,9 @@ const specialEvents = [
 
 const formatShortName = (fullName) => {
     if (!fullName) return 'Anon';
-    
-    // Separamos el nombre por espacios
     const parts = fullName.trim().split(/\s+/); 
-    
-    // Si solo tiene una palabra (ej: "Neymar")aaa
     if (parts.length === 1) return parts[0];
-    
-    // Si tiene exactamente dos palabras (ej: "Lionel Messi")
     if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
-    
-    // Si tiene tres o más palabras, tomamos las dos primeras y la inicial de la tercera
-    // (ej: "Juan Carlos Pérez" -> "Juan Carlos P.")
     return `${parts[0]} ${parts[1]} ${parts[2].charAt(0)}.`;
 };
 
@@ -193,7 +184,6 @@ const WorldCupRanking = ({ currentUser }) => {
         return preds;
     }, [adminResults, effectiveMatches]);
 
-    // 🟢 1. OBTENER PARTIDOS OFICIALES EN ORDEN CRONOLÓGICO PARA INSIGNIAS HISTÓRICAS
     const officialMatches = useMemo(() => {
         return effectiveMatches.filter(m => {
             const rH = mergedAdminPreds[m.id]?.home;
@@ -205,7 +195,6 @@ const WorldCupRanking = ({ currentUser }) => {
         }).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
     }, [effectiveMatches, mergedAdminPreds]);
 
-    // 🟢 2. CALCULAR EL HISTORIAL DE POSICIONES (Para "El Dictador" y "El Ancla")
     const historicalRanks = useMemo(() => {
         const userScores = {};
         Object.keys(allPredictions).forEach(uid => userScores[uid] = 0);
@@ -437,7 +426,6 @@ const WorldCupRanking = ({ currentUser }) => {
 
             const stats = { plenosCount: 0, ptsPlenos: 0, ptsOtrosAciertos: 0, ptsHonorYBonos: 0, ptsRondas: 0, ptsExtras: 0, ptsEventos: 0, total: 0 };
 
-            // 🟢 LÓGICA DE INSIGNIAS HISTÓRICAS
             let consecutivePlenos = 0;
             let maxConsecutivePlenos = 0;
 
@@ -490,7 +478,6 @@ const WorldCupRanking = ({ currentUser }) => {
             const isSeco = officialMatches.length >= 5 && stats.plenosCount === 0;
             const isFrancotirador = maxConsecutivePlenos >= 3;
 
-            // Guardamos las insignias en el objeto
             stats.isDictador = isDictador;
             stats.isColero = isColero;
             stats.isSeco = isSeco;
@@ -586,7 +573,7 @@ const WorldCupRanking = ({ currentUser }) => {
             if (isSuperBono) stats.ptsHonorYBonos += 10;
 
             stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
-            ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa, ...stats });
+            ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || logocopa, ...stats });
         });
 
         ranks.sort((a, b) => b.total - a.total);
@@ -598,95 +585,84 @@ const WorldCupRanking = ({ currentUser }) => {
         return ranks;
     }, [allPredictions, effectiveMatches, officialMatches, historicalRanks, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus]);
 
+    // 🟢 NUEVA LÓGICA DE PREMIOS ESTRICTA BASADA EN POSICIONES REALES (1, 2 y 3)
     const premiosRepartidos = useMemo(() => {
-    if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitadTotal: 0, mitadInd: 0, netPot: 0, r1: 1, r2: 0, r3: 0, rMitad: 0 };
-    
-    const netPot = (ranking.length * ENTRY_FEE) * (1 - ADMIN_FEE_PERCENT);
-    const bolsa1 = netPot * PORCENTAJES.p1;
-    const bolsa2 = netPot * PORCENTAJES.p2;
-    const bolsa3 = netPot * PORCENTAJES.p3;
-    const bolsaMitad = netPot * PORCENTAJES.mitad;
+        if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitadTotal: 0, mitadInd: 0, netPot: 0, rMitad: 0 };
+        
+        const netPot = (ranking.length * ENTRY_FEE) * (1 - ADMIN_FEE_PERCENT);
+        const bolsa1 = netPot * PORCENTAJES.p1;
+        const bolsa2 = netPot * PORCENTAJES.p2;
+        const bolsa3 = netPot * PORCENTAJES.p3;
+        const bolsaMitad = netPot * PORCENTAJES.mitad;
 
-    // Contamos cuántos jugadores hay en cada posición
-    const playersByPos = {};
-    ranking.forEach(r => { playersByPos[r.position] = (playersByPos[r.position] || 0) + 1; });
+        // Contamos cuántos jugadores hay estrictamente en las posiciones 1, 2 y 3
+        const playersByPos = {};
+        ranking.forEach(r => { playersByPos[r.position] = (playersByPos[r.position] || 0) + 1; });
 
-    const uniquePositions = [...new Set(ranking.map(r => r.position))].sort((a, b) => a - b);
-    const r1 = uniquePositions[0] || 0;
-    const r2 = uniquePositions[1] || 0;
-    const r3 = uniquePositions[2] || 0;
+        const n1 = playersByPos[1] || 0; // Cuántos están en 1er lugar real
+        const n2 = playersByPos[2] || 0; // Cuántos están en 2do lugar real
+        const n3 = playersByPos[3] || 0; // Cuántos están en 3er lugar real
 
-    let p1Ind = 0, p2Ind = 0, p3Ind = 0;
-    let p1Total = 0, p2Total = 0, p3Total = 0;
+        let p1Ind = 0, p2Ind = 0, p3Ind = 0;
+        let p1Total = 0, p2Total = 0, p3Total = 0;
 
-    const n1 = playersByPos[r1] || 0;
-    const n2 = playersByPos[r2] || 0;
-    const n3 = playersByPos[r3] || 0;
-
-    // Lógica del top 3
-    if (n1 >= 3) {
-        p1Total = bolsa1 + bolsa2 + bolsa3;
-        p1Ind = p1Total / n1;
-    } else if (n1 === 2) {
-        p1Total = bolsa1 + bolsa2;
-        p1Ind = p1Total / 2;
-        p2Total = bolsa3;      
-        p2Ind = bolsa3 / n2;   
-    } else {
-        p1Total = bolsa1;
-        p1Ind = bolsa1;
-        if (n2 >= 2) {
-            p2Total = bolsa2 + bolsa3;
-            p2Ind = p2Total / n2;
-        } else {
-            p2Total = bolsa2;
-            p2Ind = bolsa2;
-            p3Total = bolsa3;
-            p3Ind = bolsa3 / n3;
+        // Regla oficial de "Dead Heat" (Empate deportivo)
+        if (n1 >= 3) {
+            // Si 3 o más empatan de primeros, se llevan todo el podio. No hay plata ni bronce.
+            p1Total = bolsa1 + bolsa2 + bolsa3;
+            p1Ind = p1Total / n1;
+        } else if (n1 === 2) {
+            // Si 2 empatan de primeros, se llevan el oro y la plata. El siguiente gana bronce.
+            p1Total = bolsa1 + bolsa2;
+            p1Ind = p1Total / 2;
+            if (n3 > 0) { // La posición 2 no existe, saltamos al tercero
+                p3Total = bolsa3;      
+                p3Ind = bolsa3 / n3;   
+            }
+        } else if (n1 === 1) {
+            // Un solo líder
+            p1Total = bolsa1;
+            p1Ind = bolsa1;
+            if (n2 >= 2) {
+                // Si varios empatan en 2do lugar, se reparten la plata y el bronce. Nadie gana bronce después.
+                p2Total = bolsa2 + bolsa3;
+                p2Ind = p2Total / n2;
+            } else if (n2 === 1) {
+                // Podio perfecto sin empates
+                p2Total = bolsa2;
+                p2Ind = bolsa2;
+                if (n3 > 0) {
+                    p3Total = bolsa3;
+                    p3Ind = bolsa3 / n3;
+                }
+            }
         }
-    }
 
-    // 🟢 LÓGICA DINÁMICA DE LA MITAD (Basada en la Posición, no en la persona)
-    // 1. Encontramos cuál es la fila de la mitad (Si son 32, es la fila 16)
-    const middleIndex = Math.ceil(ranking.length / 2) - 1;
-    
-    // 2. Extraemos el NÚMERO DE POSICIÓN de esa fila (Ej: Posición 10)
-    const targetMiddlePosition = ranking[middleIndex]?.position || 0;
-    
-    // 3. Revisamos cuántas personas tienen esa misma posición
-    const nMitad = playersByPos[targetMiddlePosition] || 1;
-    
-    // 4. Dividimos el premio de la mitad entre todos los empatados en esa posición
-    const mitadInd = bolsaMitad / nMitad;
+        // Mitad de tabla dinámica
+        const middleIndex = Math.ceil(ranking.length / 2) - 1;
+        const targetMiddlePosition = ranking[middleIndex]?.position || 0;
+        const nMitad = playersByPos[targetMiddlePosition] || 1;
+        const mitadInd = bolsaMitad / nMitad;
 
-    return { 
-        p1Ind, p2Ind, p3Ind, p1Total, p2Total, p3Total, 
-        mitadTotal: bolsaMitad, mitadInd, rMitad: targetMiddlePosition, 
-        netPot, r1, r2, r3 
-    };
-}, [ranking]);
+        return { 
+            p1Ind, p2Ind, p3Ind, p1Total, p2Total, p3Total, 
+            mitadTotal: bolsaMitad, mitadInd, rMitad: targetMiddlePosition, 
+            netPot 
+        };
+    }, [ranking]);
 
-// Agrega esto justo debajo de tu constante de premiosRepartidos
-// 🟢 GUARDAR RANKING PARA LA IA
-    // 🟢 GUARDAR RANKING PARA LA IA
     useEffect(() => {
-        // Este log se imprimirá sí o sí. ¡Nos dirá la verdad!
         console.log("🔍 DIAGNÓSTICO -> isAdmin:", isAdmin, "| Ranking:", ranking.length, "| Email actual:", currentUser?.email);
 
         if (isAdmin && ranking.length > 0) {
             const pointsMap = {};
-            ranking.forEach(u => {
-                pointsMap[u.uid] = u.total; 
-            });
+            ranking.forEach(u => { pointsMap[u.uid] = u.total; });
             
             setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), { points: pointsMap }, { merge: true })
                 .then(() => console.log("✅ Ranking guardado correctamente para la IA en Firebase"))
                 .catch(error => console.error("❌ Error guardando ranking en Firebase:", error));
         }
     }, [ranking, isAdmin, currentUser]);
-
-    // const physicalMiddlePos = ranking.length > 0 ? Math.ceil(ranking.length / 2) : -1;
-    // const middlePlayerUid = physicalMiddlePos !== -1 ? ranking[physicalMiddlePos - 1]?.uid : null;
 
     const PodiumSpot = ({ users, place, prizeTotal, bgGradient, heightClass, medalIcon, delayClass }) => {
         const isTied = users.length > 1;
@@ -742,53 +718,53 @@ const WorldCupRanking = ({ currentUser }) => {
                 <p className="text-foreground-muted font-medium text-sm">Bolsa Real (90%): <strong className="text-green-500 font-black">{formatMoney(premiosRepartidos.netPot)}</strong></p>
             </div>
 
-            
-
             {ranking.length >= 2 && (
                 <div className="flex justify-center items-end h-[280px] sm:h-[380px] mb-12 relative">
                     <img src={logocopa} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 opacity-5 pointer-events-none" alt="" />
-                    <PodiumSpot users={ranking.filter(r => r.position === premiosRepartidos.r2)} place={2} prizeTotal={premiosRepartidos.p2Total} medalIcon="🥈" bgGradient="bg-gradient-to-b from-slate-400 to-slate-600" heightClass="h-[65%]" delayClass="animation-delay-200" />
-                    <PodiumSpot users={ranking.filter(r => r.position === premiosRepartidos.r1)} place={1} prizeTotal={premiosRepartidos.p1Total} medalIcon="👑" bgGradient="bg-gradient-to-b from-yellow-400 to-amber-600" heightClass="h-[85%]" delayClass="animation-delay-100" />
-                    <PodiumSpot users={ranking.filter(r => r.position === premiosRepartidos.r3)} place={3} prizeTotal={premiosRepartidos.p3Total} medalIcon="🥉" bgGradient="bg-gradient-to-b from-amber-600 to-amber-800" heightClass="h-[55%]" delayClass="animation-delay-300" />
+                    {/* El podio ahora se dibuja estrictamente en base a las posiciones reales 1, 2 y 3 */}
+                    <PodiumSpot users={ranking.filter(r => r.position === 2)} place={2} prizeTotal={premiosRepartidos.p2Total} medalIcon="🥈" bgGradient="bg-gradient-to-b from-slate-400 to-slate-600" heightClass="h-[65%]" delayClass="animation-delay-200" />
+                    <PodiumSpot users={ranking.filter(r => r.position === 1)} place={1} prizeTotal={premiosRepartidos.p1Total} medalIcon="👑" bgGradient="bg-gradient-to-b from-yellow-400 to-amber-600" heightClass="h-[85%]" delayClass="animation-delay-100" />
+                    <PodiumSpot users={ranking.filter(r => r.position === 3)} place={3} prizeTotal={premiosRepartidos.p3Total} medalIcon="🥉" bgGradient="bg-gradient-to-b from-amber-600 to-amber-800" heightClass="h-[55%]" delayClass="animation-delay-300" />
                 </div>
             )}
 
             <div className="space-y-4">
                 {ranking.map((user) => {
                     const isExpanded = expandedUser === user.uid;
-                    //const isMiddle = user.uid === middlePlayerUid;
                     const isMiddle = user.position === premiosRepartidos.rMitad;
 
-                    let rewardLabel = null;
-                    if (user.position === premiosRepartidos.r1) rewardLabel = formatMoney(premiosRepartidos.p1Ind);
-                    else if (user.position === premiosRepartidos.r2) rewardLabel = formatMoney(premiosRepartidos.p2Ind);
-                    else if (user.position === premiosRepartidos.r3) rewardLabel = formatMoney(premiosRepartidos.p3Ind);
-                    else if (isMiddle) rewardLabel = formatMoney(premiosRepartidos.mitadInd);
+                    // Dinero individual seguro del usuario
+                    let userPrize = 0;
+                    if (user.position === 1) userPrize = premiosRepartidos.p1Ind;
+                    else if (user.position === 2) userPrize = premiosRepartidos.p2Ind;
+                    else if (user.position === 3) userPrize = premiosRepartidos.p3Ind;
+                    else if (isMiddle) userPrize = premiosRepartidos.mitadInd;
+                    
+                    const rewardLabel = userPrize > 0 ? formatMoney(userPrize) : null;
                     
                     return (
                         <div key={user.uid} className={`bg-card border ${isExpanded ? 'border-primary shadow-lg ring-1 ring-primary/20' : 'border-card-border hover:border-border'} rounded-2xl overflow-hidden transition-all duration-300`}>
                             <div onClick={() => setExpandedUser(isExpanded ? null : user.uid)} className="flex items-center p-3 sm:p-5 cursor-pointer relative overflow-hidden select-none">
-                                {user.position === premiosRepartidos.r1 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-400"></div>}
-                                {user.position === premiosRepartidos.r2 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-400"></div>}
-                                {user.position === premiosRepartidos.r3 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-600"></div>}
+                                {user.position === 1 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-400"></div>}
+                                {user.position === 2 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-400"></div>}
+                                {user.position === 3 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-600"></div>}
                                 
                                 <div className="w-8 sm:w-14 flex justify-center shrink-0 font-black text-lg sm:text-2xl text-foreground-muted/30">{user.position}</div>
                                 
-                                {/* 🟢 AVATAR CON ICONOS SOBREPUESTOS SEGÚN POSICIÓN */}
                                 <div className="relative shrink-0 mr-3 sm:mr-5">
                                     <img src={user.photoURL} className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover shadow-sm border ${
-                                        user.position === premiosRepartidos.r1 ? 'border-yellow-400' : 
-                                        user.position === premiosRepartidos.r2 ? 'border-slate-300' : 
-                                        user.position === premiosRepartidos.r3 ? 'border-amber-600' : 
+                                        user.position === 1 ? 'border-yellow-400' : 
+                                        user.position === 2 ? 'border-slate-300' : 
+                                        user.position === 3 ? 'border-amber-600' : 
                                         user.position === ranking[ranking.length - 1]?.position ? 'border-red-500/50' : 
                                         isMiddle ? 'border-blue-400/50' : 'border-border'
                                     }`} alt="" />
                                     
-                                    {user.position === premiosRepartidos.r1 ? (
+                                    {user.position === 1 ? (
                                         <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="El Rey">👑</span>
-                                    ) : user.position === premiosRepartidos.r2 ? (
+                                    ) : user.position === 2 ? (
                                         <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="Segundo">🥈</span>
-                                    ) : user.position === premiosRepartidos.r3 ? (
+                                    ) : user.position === 3 ? (
                                         <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="Tercero">🥉</span>
                                     ) : user.position === ranking[ranking.length - 1]?.position ? (
                                         <span className="absolute -top-3 -left-3 text-xl sm:text-2xl drop-shadow-md pointer-events-none" title="El Colero Actual">🐢</span>
@@ -799,8 +775,6 @@ const WorldCupRanking = ({ currentUser }) => {
                                 
                                 <div className="flex flex-col flex-1 min-w-0 pr-2">
                                     <span className="font-bold text-[12px] sm:text-lg text-foreground leading-tight truncate">{formatShortName(user.name)}</span>
-                                    
-                                    {/* 🟢 RENDERIZADO DE LAS NUEVAS INSIGNIAS */}
                                  
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                         {user.isDictador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Dictador', desc: 'Líder por 7 partidos seguidos. ¡Intocable!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🗿</span>}
@@ -809,7 +783,7 @@ const WorldCupRanking = ({ currentUser }) => {
                                         {user.isSeco && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Seco', desc: 'Ningún pleno hasta el momento. ¡Cero puntería!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">🌵</span>}
 
                                         {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full ml-1">⚖️ MITAD: {formatMoney(premiosRepartidos.mitadInd)}</span>}
-                                        {rewardLabel && rewardLabel !== "$0" && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full ml-1">GANANDO: {rewardLabel}</span>}
+                                        {rewardLabel && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full ml-1">GANANDO: {rewardLabel}</span>}
                                     </div>
                                 </div>
 
@@ -861,7 +835,6 @@ const WorldCupRanking = ({ currentUser }) => {
                         
                     );
                 })}
-                {/* 🟢 SECCIÓN: GUÍA DE INSIGNIAS */}
             <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-10 shadow-sm">
                 <h3 className="text-foreground font-black text-xs sm:text-sm uppercase tracking-widest mb-3 opacity-60 text-center">Guía de Insignias y Logros</h3>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs text-foreground-muted">
@@ -872,20 +845,18 @@ const WorldCupRanking = ({ currentUser }) => {
                 </div>
             </div>
             </div>
-            {/* 🟢 POP-UP / MODAL DE INSIGNIAS PARA MÓVILES */}
             {activeBadgeInfo && (
                 <div 
                     className="fixed z-[100] bg-slate-800 border border-slate-600 text-white p-2 rounded-xl shadow-2xl flex flex-col items-center pointer-events-none animate-fade-in w-40 text-center"
                     style={{
-                        top: activeBadgeInfo.y - 15, // Un poco más arriba del dedo
-                        left: Math.min(Math.max(activeBadgeInfo.x, 85), window.innerWidth - 85), // Evita que se salga de los bordes
+                        top: activeBadgeInfo.y - 15, 
+                        left: Math.min(Math.max(activeBadgeInfo.x, 85), window.innerWidth - 85), 
                         transform: 'translate(-50%, -100%)'
                     }}
                 >
                     <span className="font-black text-[11px] text-yellow-400 leading-tight mb-1">{activeBadgeInfo.title}</span>
                     <span className="text-[10px] leading-tight text-slate-200">{activeBadgeInfo.desc}</span>
                     
-                    {/* Triangulito de globo de cómic */}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
                 </div>
             )}
