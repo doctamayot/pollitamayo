@@ -7,6 +7,7 @@ import logocopa from '../assets/logocopa.png';
 import StatsBanner from './StatsBanner';
 import NewsTicker from './shared/NewsTicker'
 import wapIcon from '../assets/wap.png';
+import { recalculateAndSaveRanking } from '../services/rankingEngine'; // 🟢 Agrega esto arriba
 
 import { generateFullBracket } from '../services/bracketEngine'; 
 
@@ -231,6 +232,12 @@ const WorldCupPredictions = ({ currentUser }) => {
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
                     setPredictions(dbPreds); 
                     toast.success('⚽ ¡Auto-Sync: Marcadores sincronizados con la API!', { id: 'autosync-toast' });
+                    // 2. Recalculamos el ranking en el fondo
+                    recalculateAndSaveRanking();
+                    await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                        action: 'API_GOL_DETECTED',
+                        timestamp: new Date().toISOString() 
+                    });
                    
                 }
             } catch (error) {
@@ -1007,7 +1014,21 @@ const WorldCupPredictions = ({ currentUser }) => {
             error: 'Error de red al guardar.',
         });
 
-        try { await saveOp; } catch (error) { console.error(error); } finally { setSaving(false); }
+        try { 
+            await saveOp; 
+            // 🟢 NUEVO: Si eres admin, recalculamos el ranking en el fondo para la IA de una vez
+            if (isAdmin) {
+                recalculateAndSaveRanking();
+                await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                    action: 'MANUAL_CHANGE',
+                    timestamp: new Date().toISOString() 
+                });
+            }
+        } catch (error) { 
+            console.error(error); 
+        } finally { 
+            setSaving(false); 
+        }
     };
     const handleClearData = () => {
         if (!window.confirm("⚠️ ¡Atención Admin! Vas a BORRAR TODAS tus respuestas. ¿Continuar?")) return;

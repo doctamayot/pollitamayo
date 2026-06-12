@@ -338,7 +338,8 @@ exports.generateespnnews = onSchedule({
 });
 
 // El disparador manual del Admin sigue intacto (Momento 1)
-exports.onAdminResultsUpdate = onDocumentUpdated("worldCupAdmin/results", async (event) => {
-    console.log("El Admin cambió un marcador manual. Generando noticias...");
+// 🟢 AHORA ESCUCHA EL TRIGER ULTRA-RÁPIDO DEL AUTO-SYNC O DEL MANUAL
+exports.onLiveTriggerUpdate = onDocumentUpdated("worldCupAdmin/trigger", async (event) => {
+    console.log("🚨 ¡ALERTA DE GOL O CAMBIO EN VIVO! Despertando a Gemini inmediatamente...");
     await runAiNewsGeneration();
 });
