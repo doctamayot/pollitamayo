@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { generateFullBracket } from '../services/bracketEngine';
 import NewsTicker from '../components/shared/NewsTicker'
 import InfografiaModal from '../components/InfografiaModal'
+import WorldCupCountdown from './worldcupcomponents/WorldCupCountdown';
 
 // --- TRADUCCIONES Y CONSTANTES ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
@@ -939,6 +940,7 @@ if (isAnyMatchLive) {
                     </div>
                 </div>
             )}
+            <WorldCupCountdown />
             <NewsTicker />
     
             <div className="relative w-full mb-8 flex items-center group">
