@@ -255,10 +255,15 @@ if (isAnyMatchLive) {
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
                     toast.success('⚽ ¡GOL! La Grilla y el Ranking se han actualizado automáticamente.', { id: 'autosync-grid-toast' });
                     
-                    await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
-                        action: 'API_GOL_DETECTED',
-                        timestamp: new Date().toISOString() 
-                    });
+                    setTimeout(async () => {
+                        if (isMountedRef.current) {
+                            console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
+                            await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                                action: 'API_GOL_DETECTED',
+                                timestamp: new Date().toISOString() 
+                            });
+                        }
+                    }, 5000)
                 }
 
                 // Programamos el siguiente ciclo asegurándonos de limpiar el anterior
