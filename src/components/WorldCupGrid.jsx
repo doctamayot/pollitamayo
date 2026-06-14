@@ -63,25 +63,13 @@ const specialEvents = [
     { id: 'leyenda_viva' }, { id: 'drama_final' }, { id: 'penales_final' }
 ];
 
-
-
 const formatShortName = (fullName) => {
     if (!fullName) return 'Anon';
-    
-    // Separamos el nombre por espacios
     const parts = fullName.trim().split(/\s+/); 
-    
-    // Si solo tiene una palabra (ej: "Neymar")
     if (parts.length === 1) return parts[0];
-    
-    // Si tiene exactamente dos palabras: primera completa y la inicial de la segunda
-    // (ej: "Lionel Messi" -> "Lionel M.")
     if (parts.length === 2) {
         return `${parts[0]} ${parts[1].charAt(0)}.`;
     }
-    
-    // Si tiene tres o más palabras: primera completa y la inicial de la tercera (omitiendo la segunda)
-    // (ej: "Juan Carlos Pérez" -> "Juan P.")
     return `${parts[0]} ${parts[2].charAt(0)}.`;
 };
 
@@ -113,14 +101,11 @@ const WorldCupGrid = ({ currentUser }) => {
     const [isApiLoading, setIsApiLoading] = useState(true);
     const [isDbLoading, setIsDbLoading] = useState(true);
     const [isLivePollingActive, setIsLivePollingActive] = useState(false);
-    const [isAutoSyncActive, setIsAutoSyncActive] = useState(false);
-    const [reportData, setReportData] = useState(null); // 🟢 NUEVO ESTADO PARA LA INFOGRAFÍA
+    const [reportData, setReportData] = useState(null);
 
     const scrollContainerRef = useRef(null);
-    const lastSyncTime = useRef(0);
     const prevSimDateRef = useRef(''); 
     const apiFetchedRef = useRef(false); 
-    const autoSyncTimeRef = useRef(0);
 
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
         try {
@@ -128,17 +113,12 @@ const WorldCupGrid = ({ currentUser }) => {
 
             if (isAdmin) {
                 const data = await getWorldCupMatches();
-                console.log("llamando api");
                 if (data && data.matches) {
                     setMatches(data.matches);
-                    // 🟢 CORRECCIÓN: Solo guardamos la data en el apiCache. 
-                    // Ya NO sobrescribimos los resultados manuales del admin aquí. 
-                    // Para eso está el botón de Auto-Sync.
                     await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
                 }
             } else {
                 const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
-                
                 if (cacheDoc.exists() && cacheDoc.data().matches) {
                     setMatches(cacheDoc.data().matches);
                 } else {
@@ -153,7 +133,7 @@ const WorldCupGrid = ({ currentUser }) => {
         }
     }, [isAdmin]);
 
-   useEffect(() => {
+    useEffect(() => {
         if (!apiFetchedRef.current) {
             fetchApiMatches();
             apiFetchedRef.current = true;
@@ -177,54 +157,88 @@ const WorldCupGrid = ({ currentUser }) => {
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, [fetchApiMatches]);
 
+    // 🟢 ROBOT AUTO-SYNC INTELIGENTE (Radar de 10 segundos)
+  const simStatusesString = JSON.stringify(adminResults?.simulation?.matchStatuses || {});
+    const radarTimeoutRef = useRef(null);
+    
+    // 🟢 EL ESCUDO DE PROTECCIÓN ASÍNCRONA
+    const isMountedRef = useRef(true); 
+
     useEffect(() => {
         if (!isAdmin) return;
+        
+        // Cada vez que se monte el componente, el escudo se activa
+        isMountedRef.current = true; 
 
-        const hasLiveMatches = matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
-        setIsLivePollingActive(hasLiveMatches);
-
-        let pollInterval;
-
-        if (hasLiveMatches || isAutoSyncActive) {
-            pollInterval = setInterval(() => {
-                const now = Date.now();
-                if (now - lastSyncTime.current >= 14000) {
-                    lastSyncTime.current = now;
-                    fetchApiMatches(true); 
-                }
-            }, 10000); 
-        } else {
-            pollInterval = setInterval(() => {
-                const now = Date.now();
-                if (now - lastSyncTime.current >= 170000) {
-                    lastSyncTime.current = now;
-                    fetchApiMatches(true);
-                }
-            }, 180000); 
-        }
-
-        return () => clearInterval(pollInterval);
-    }, [matches, isAdmin, fetchApiMatches, isAutoSyncActive]);
-
-    // 🟢 ROBOT AUTO-SYNC
-    useEffect(() => {
-        if (!isAdmin || !isAutoSyncActive) return;
-
-        const performAutoSync = async () => {
-            const now = Date.now();
-            if (now - autoSyncTimeRef.current < 14000) return;
-            autoSyncTimeRef.current = now;
-
+        const performSmartSync = async () => {
             try {
+                // Si por alguna razón se llama y ya está desmontado, frenar de inmediato
+                if (!isMountedRef.current) return;
+
+                const now = Date.now();
+                console.log(`[Radar Predictivo] 📡 Consultando la API... Hora: ${new Date(now).toLocaleTimeString()}`);
+
                 const data = await getWorldCupMatches();
-                if (!data || !data.matches) return;
+                
+                // 🎯 CRÍTICO: Si internet tardó 2 segundos y el participe cambió de pestaña, ¡FRENAR AQUÍ!
+                if (!isMountedRef.current) {
+                    console.log("[Radar Predictivo] 🛑 La petición regresó pero el usuario cambió de pestaña. Abortando loop zombi.");
+                    return;
+                }
+
+                const freshMatches = data.matches;
+                setMatches(freshMatches);
+                await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: freshMatches }, { merge: true });
 
                 const adminDoc = await getDoc(doc(db, 'worldCupAdmin', 'results'));
+                
+                // Volvemos a verificar el escudo por si el guardado de Firebase tardó
+                if (!isMountedRef.current) return;
+
                 let dbPreds = adminDoc.exists() ? (adminDoc.data().predictions || {}) : {};
                 let currentLocks = adminDoc.exists() ? (adminDoc.data().lockedMatches || {}) : {};
-                let hasChanges = false;
+                let simStatuses = adminDoc.exists() ? (adminDoc.data().simulation?.matchStatuses || {}) : {};
 
-                data.matches.forEach(m => {
+                const isAnyMatchLive = freshMatches.some(m => {
+                    const matchId = String(m.id);
+                    const finalStatus = simStatuses[matchId] && simStatuses[matchId] !== '' ? simStatuses[matchId] : m.status;
+                    return finalStatus === 'IN_PLAY' || finalStatus === 'PAUSED';
+                });
+
+                const upcomingMatches = freshMatches.filter(m => m.status === 'SCHEDULED' || m.status === 'TIMED');
+                let timeToNextMatch = Infinity;
+                
+                if (upcomingMatches.length > 0) {
+                    upcomingMatches.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+                    const nextMatchDate = new Date(upcomingMatches[0].utcDate).getTime();
+                    timeToNextMatch = nextMatchDate - now;
+                }
+
+                let nextCheckDelay;
+let statusMsg = "";
+
+if (isAnyMatchLive) {
+    nextCheckDelay = 30000; // 🟢 ANTES: 10000 (Cambiado a 30 Segundos)
+    statusMsg = "¡HAY PARTIDO! Velocidad Ráfaga (30s)";
+} else if (timeToNextMatch <= 0) {
+    nextCheckDelay = 30000; // 🟢 ANTES: 10000 (Cambiado a 30 Segundos)
+    statusMsg = "¡Es la hora cero! Esperando pitazo inicial (30s)";
+} else if (timeToNextMatch <= 5 * 60 * 1000) {
+    nextCheckDelay = 30000; // 30 Segundos (Faltan menos de 5 mins)
+    statusMsg = `Calentando motores. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (30s)`;
+} else if (timeToNextMatch <= 60 * 60 * 1000) {
+    nextCheckDelay = 3 * 60 * 1000; // 3 Minutos (Falta menos de 1 hora)
+    statusMsg = `En la sala de espera. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (3 min)`;
+} else {
+    nextCheckDelay = 15 * 60 * 1000; // 15 Minutos (Faltan horas o días)
+    statusMsg = `Torneo dormido. Próximo partido en horas (15 min)`;
+}
+
+                setIsLivePollingActive(isAnyMatchLive || timeToNextMatch <= 0);
+                console.log(`[Radar Predictivo] 🏎️ Estado: ${statusMsg}`);
+
+                let hasChanges = false;
+                freshMatches.forEach(m => {
                     if (currentLocks[m.id]) return; 
 
                     const apiH = (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) ? m.score.fullTime.home : '';
@@ -236,20 +250,41 @@ const WorldCupGrid = ({ currentUser }) => {
                     }
                 });
 
-                if (hasChanges) {
+                if (hasChanges && isMountedRef.current) {
+                    console.log("[Radar Predictivo] ⚽ 🔥 ¡GOL DETECTADO! Actualizando Firebase...");
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
-                    toast.success('⚽ ¡Auto-Sync: Marcadores sincronizados en la Grilla!', { id: 'autosync-grid-toast' });
+                    toast.success('⚽ ¡GOL! La Grilla y el Ranking se han actualizado automáticamente.', { id: 'autosync-grid-toast' });
+                    
+                    await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                        action: 'API_GOL_DETECTED',
+                        timestamp: new Date().toISOString() 
+                    });
                 }
+
+                // Programamos el siguiente ciclo asegurándonos de limpiar el anterior
+                if (radarTimeoutRef.current) clearTimeout(radarTimeoutRef.current);
+                if (isMountedRef.current) {
+                    radarTimeoutRef.current = setTimeout(performSmartSync, nextCheckDelay);
+                }
+
             } catch (error) {
+                if (!isMountedRef.current) return;
                 console.error("❌ Error en Auto-Sync:", error);
+                if (radarTimeoutRef.current) clearTimeout(radarTimeoutRef.current);
+                radarTimeoutRef.current = setTimeout(performSmartSync, 30000); 
             }
         };
 
-        performAutoSync();
-        const intervalId = setInterval(performAutoSync, 15000);
-        return () => clearInterval(intervalId);
-    }, [isAdmin, isAutoSyncActive]);
+        performSmartSync();
 
+        return () => {
+            isMountedRef.current = false; // 🟢 APAGA EL ESCUDO: Ninguna petición asíncrona pasará de aquí
+            if (radarTimeoutRef.current) {
+                console.log("[Radar Predictivo] 🛑 Destruyendo radar de manera segura.");
+                clearTimeout(radarTimeoutRef.current);
+            }
+        };
+    }, [isAdmin, simStatusesString]);
     const simulatedDate = adminResults?.simulation?.simulatedDate || '';
 
     const effectiveMatches = useMemo(() => {
@@ -435,7 +470,6 @@ const WorldCupGrid = ({ currentUser }) => {
         }, {});
     }, [effectiveMatches]);
 
-    // 🟢 ADMIN CLASIFICADOS PROGRESIVOS PARA EL BRACKET
     const adminQualified32 = useMemo(() => {
         let top2 = []; let thirds = []; let allFinished = true;
         Object.keys(groupMatchesMap).forEach(g => {
@@ -456,7 +490,6 @@ const WorldCupGrid = ({ currentUser }) => {
         return top2;
     }, [groupMatchesMap, mergedAdminPreds, adminResults, getStandings]);
 
-    // 🟢 GENERAMOS EL BRACKET OFICIAL DEL ADMIN UNA VEZ PARA TODA LA GRILLA
     const adminFullBracket = useMemo(() => {
         let teams = adminQualified32 || [];
         const tempTeams = [...teams];
@@ -472,32 +505,27 @@ const WorldCupGrid = ({ currentUser }) => {
         }
     }, [adminQualified32, adminResults]);
 
-    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
-    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
-    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
-    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
-    // 🟢 MOTOR PROGRESIVO DEFINITIVO: Calcula el acumulado exacto hasta una fecha/partido
     const getThirdPlaceTeams = (picksObj) => {
-    if (!picksObj) return [];
-    const teamsMap = new Map();
-    const t3 = Array.isArray(picksObj.tercero) ? picksObj.tercero : (picksObj.tercero ? [picksObj.tercero] : []);
-    const t4 = Array.isArray(picksObj.cuarto) ? picksObj.cuarto : (picksObj.cuarto ? [picksObj.cuarto] : []);
-    [...t3, ...t4].forEach(t => { if (t && t.name) teamsMap.set(t.name, t); });
-    
-    const semifinalistas = picksObj.cuartos || []; 
-    const finalistas = picksObj.semis || [];       
-    if (semifinalistas.length > 0 && finalistas.length > 0) {
-        const deductedTeams = semifinalistas.filter(semiTeam => !finalistas.some(finTeam => finTeam.name === semiTeam.name));
-        deductedTeams.forEach(t => { if (t && t.name) teamsMap.set(t.name, t); });
-    }
-    return Array.from(teamsMap.values());
-};
+        if (!picksObj) return [];
+        const teamsMap = new Map();
+        const t3 = Array.isArray(picksObj.tercero) ? picksObj.tercero : (picksObj.tercero ? [picksObj.tercero] : []);
+        const t4 = Array.isArray(picksObj.cuarto) ? picksObj.cuarto : (picksObj.cuarto ? [picksObj.cuarto] : []);
+        [...t3, ...t4].forEach(t => { if (t && t.name) teamsMap.set(t.name, t); });
+        
+        const semifinalistas = picksObj.cuartos || []; 
+        const finalistas = picksObj.semis || [];        
+        if (semifinalistas.length > 0 && finalistas.length > 0) {
+            const deductedTeams = semifinalistas.filter(semiTeam => !finalistas.some(finTeam => finTeam.name === semiTeam.name));
+            deductedTeams.forEach(t => { if (t && t.name) teamsMap.set(t.name, t); });
+        }
+        return Array.from(teamsMap.values());
+    };
+
     const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
         const pastMatches = effectiveMatches.filter(m => new Date(m.utcDate) <= targetDate);
 
-        // ADMIN CLASIFICADOS PROGRESIVOS HASTA targetDate
         let adminProgTop2 = []; 
         let adminProgThirds = [];
         let allGroupsFinishedUpToDate = true;
@@ -587,7 +615,6 @@ const WorldCupGrid = ({ currentUser }) => {
                 });
             }
 
-            // 🟢 EVALUACIÓN PROGRESIVA DE RONDAS ELIMINATORIAS (Finalistas, Semis, Cuartos, Octavos)
             const koRounds = [
                 { id: 'dieciseisavos', pts: 3, stage: 'LAST_32' }, 
                 { id: 'octavos', pts: 4, stage: 'LAST_16' },
@@ -630,7 +657,6 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
             });
 
-            // 🟢 EVALUACIÓN PROGRESIVA DE CLASIFICADOS A 3ER PUESTO (+4 Pts a los perdedores apenas juegan su Semi)
             const uThirdsList = getThirdPlaceTeams(userData.knockoutPicks);
             let officialThirdPlaceContenders = [];
             let thirdPlaceMatchDates = {};
@@ -653,7 +679,6 @@ const WorldCupGrid = ({ currentUser }) => {
                         const apiMatch = apiMatchesForSemis[index];
                         const matchDate = apiMatch ? new Date(apiMatch.utcDate) : null;
 
-                        // Si un equipo avanzó a la final y el otro no, el perdedor va al 3er puesto
                         if (homeAdvanced && !awayAdvanced) {
                             officialThirdPlaceContenders.push(aName);
                             if (matchDate) thirdPlaceMatchDates[aName] = matchDate;
@@ -677,7 +702,6 @@ const WorldCupGrid = ({ currentUser }) => {
                 });
             }
 
-            // 🟢 PUESTOS DE HONOR (Se asignan en la fecha de sus respectivos partidos)
             const thirdMatch = effectiveMatches.find(m => m.stage === 'THIRD_PLACE');
             if (thirdMatch && new Date(thirdMatch.utcDate) <= targetDate) {
                 const honorSlotsThird = [{ id: 'tercero', pts: 6 }, { id: 'cuarto', pts: 6 }];
@@ -701,16 +725,12 @@ const WorldCupGrid = ({ currentUser }) => {
                 if (isSuperBono) total += 10;
             }
 
-            // 🟢 EVALUACIÓN PROGRESIVA DE EXTRAS Y EVENTOS (Con Timestamps Invisibles)
             extraQuestions.forEach(q => {
                 const answer = userData.extraPicks?.[q.id];
                 const officialAnswer = adminResults?.extraPicks?.[q.id];
-                const timestampStr = adminResults?.timestamps?.[q.id]; // Buscamos el sello invisible
-                
-                // Si es un dato viejo sin sello, asumimos fecha 0. Si tiene sello, usamos la fecha exacta.
+                const timestampStr = adminResults?.timestamps?.[q.id]; 
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                // 🟢 Solo suma los puntos si la Grilla ya llegó a la fecha en que el Admin lo confirmó
                 if (officialAnswer && answer && eventDate <= targetDate) {
                     if (q.manual) {
                         if (isSmartMatch(answer, officialAnswer)) total += 6;
@@ -723,11 +743,9 @@ const WorldCupGrid = ({ currentUser }) => {
             specialEvents.forEach(e => {
                 let answer = userData.eventPicks?.[e.id];
                 let officialAnswer = adminResults?.eventPicks?.[e.id];
-                const timestampStr = adminResults?.timestamps?.[e.id]; // Buscamos el sello invisible
-                
+                const timestampStr = adminResults?.timestamps?.[e.id]; 
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                // 🟢 Solo suma los puntos si la Grilla ya llegó a la fecha en que el Admin lo confirmó
                 if (answer && officialAnswer && eventDate <= targetDate) {
                     answer = String(answer).toUpperCase().trim();
                     officialAnswer = String(officialAnswer).toUpperCase().trim();
@@ -753,7 +771,7 @@ const WorldCupGrid = ({ currentUser }) => {
         });
 
         return ranks;
-    }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo, adminFullBracket]); // 🟢 adminFullBracket añadido a las dependencias
+    }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo, adminFullBracket]);
 
     const matchesByDate = useMemo(() => {
         const grouped = {};
@@ -833,15 +851,12 @@ const WorldCupGrid = ({ currentUser }) => {
             const priorityA = getStatusPriority(a);
             const priorityB = getStatusPriority(b);
             
-            // 1. Primero por estado (En juego > Finalizados > Programados)
             if (priorityA !== priorityB) return priorityA - priorityB;
             
-            // 2. Si ambos están FINALIZADOS, el más reciente (el último que se jugó) va arriba
             if (priorityA === 1) {
                 return new Date(b.utcDate) - new Date(a.utcDate);
             }
             
-            // 3. Si ambos están PROGRAMADOS/EN JUGAR, orden cronológico normal (mañana a noche)
             return new Date(a.utcDate) - new Date(b.utcDate);
         });
     }, [selectedDate, matchesByDate]);
@@ -879,33 +894,14 @@ const WorldCupGrid = ({ currentUser }) => {
                         </p>
                         {isAdmin && isLivePollingActive && (
                             <p className="text-green-500 font-black uppercase text-[8px] sm:text-xs tracking-widest bg-green-500/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full border border-green-500/20 shadow-sm animate-pulse">
-                                🔄 Auto-Sync
+                                🔄 Radar 10s Activado
                             </p>
                         )}
-                       
                     </div>
                 </div>
             </div>
-{isAdmin && (
-                <div className="mb-6 flex justify-center animate-fade-in">
-                    <button
-                        onClick={() => setIsAutoSyncActive(!isAutoSyncActive)}
-                        className={`flex items-center gap-3 px-6 py-3 rounded-full font-black text-sm uppercase tracking-widest shadow-lg transition-all transform hover:scale-105 ${
-                            isAutoSyncActive 
-                            ? 'bg-green-500 text-white shadow-green-500/30 border-2 border-green-400' 
-                            : 'bg-card text-foreground-muted border-2 border-border hover:bg-background-offset'
-                        }`}
-                    >
-                        {isAutoSyncActive ? (
-                            <><span className="animate-spin text-xl">🔄</span> Auto-Sync Activado (15s)</>
-                        ) : (
-                            <><span className="text-xl">📡</span> Activar Auto-Sync API</>
-                        )}
-                    </button>
-                </div>
-            )}
+
             {isAdmin && (
-                
                 <div className="mb-8 bg-purple-900/20 border border-purple-500/30 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(168,85,247,0.05)] animate-fade-in">
                     <div className="flex items-center gap-3">
                         <span className="text-2xl sm:text-3xl animate-pulse">⏱️</span>
@@ -1069,7 +1065,6 @@ const WorldCupGrid = ({ currentUser }) => {
                         let bracketHome = null;
                         let bracketAway = null;
 
-                        // Extraemos los nombres de la caja exacta usando el bracket oficial del Admin
                         if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
                             const currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
 
@@ -1090,7 +1085,6 @@ const WorldCupGrid = ({ currentUser }) => {
                             }
                             
                             if (bMatch) {
-                                // Si es un fantasma, devuelve null para que diga "Por Definir". Si es real, saca el nombre.
                                 bracketHome = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
                                 bracketAway = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
                             }
@@ -1195,7 +1189,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* 🟢 BOTÓN DE INFOGRAFÍA EN LA GRILLA (Pegado a la cabecera sin huecos) */}
+                            {/* 🟢 BOTÓN DE INFOGRAFÍA EN LA GRILLA */}
                             {matchStatus === 'FINISHED' && (
                                 <div className="px-4 pb-4 sm:px-6 sm:pb-6 relative z-20 bg-background-offset border-b border-border">
                                     <button 

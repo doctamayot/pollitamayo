@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, getDoc, setDoc} from 'firebase/firestore'; 
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 import { getAuth } from 'firebase/auth';
@@ -650,19 +650,6 @@ const WorldCupRanking = ({ currentUser }) => {
             netPot 
         };
     }, [ranking]);
-
-    useEffect(() => {
-        console.log("🔍 DIAGNÓSTICO -> isAdmin:", isAdmin, "| Ranking:", ranking.length, "| Email actual:", currentUser?.email);
-
-        if (isAdmin && ranking.length > 0) {
-            const pointsMap = {};
-            ranking.forEach(u => { pointsMap[u.uid] = u.total; });
-            
-            setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), { points: pointsMap }, { merge: true })
-                .then(() => console.log("✅ Ranking guardado correctamente para la IA en Firebase"))
-                .catch(error => console.error("❌ Error guardando ranking en Firebase:", error));
-        }
-    }, [ranking, isAdmin, currentUser]);
 
     const PodiumSpot = ({ users, place, prizeTotal, bgGradient, heightClass, medalIcon, delayClass }) => {
         const isTied = users.length > 1;
