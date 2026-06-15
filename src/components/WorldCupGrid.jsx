@@ -91,6 +91,118 @@ const isSmartMatch = (userText, adminText) => {
     return u === a || (u.length > 3 && (a.includes(u) || u.includes(a)));
 };
 
+// =====================================================================
+// 📺 NUEVO: SCOREBOARD ESTILO TRANSMISIÓN OFICIAL FIFA TV
+// =====================================================================
+const getCountryCode = (name) => {
+    if (!name || name === 'Por definir' || name === 'TBD') return 'TBD';
+    const codes = {
+        "Argentina": "ARG", "Brasil": "BRA", "Colombia": "COL", "Uruguay": "URU",
+        "Ecuador": "ECU", "Chile": "CHI", "Perú": "PER", "Venezuela": "VEN",
+        "Bolivia": "BOL", "Paraguay": "PAR", "España": "ESP", "Alemania": "GER",
+        "Francia": "FRA", "Inglaterra": "ENG", "Portugal": "POR", "Italia": "ITA",
+        "Países Bajos": "NED", "Bélgica": "BEL", "Croacia": "CRO", "Estados Unidos": "USA",
+        "México": "MEX", "Canadá": "CAN", "Japón": "JPN", "Corea del Sur": "KOR",
+        "Marruecos": "MAR", "Senegal": "SEN", "Camerún": "CMR", "Cabo Verde": "CPV"
+    };
+    return codes[name] || name.substring(0, 3).toUpperCase();
+};
+
+const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA, hasO }) => {
+    const [elapsed, setElapsed] = useState(0);
+
+    useEffect(() => {
+        let interval;
+        if (match.status === 'IN_PLAY') {
+            interval = setInterval(() => {
+                const start = new Date(match.utcDate).getTime();
+                const now = new Date().getTime();
+                let diffSeconds = Math.floor((now - start) / 1000);
+
+                if (diffSeconds < 0) diffSeconds = 0;
+                
+                // ⚽ Truco Mágico del 2do Tiempo
+                if (diffSeconds > 3600) {
+                    diffSeconds = 2700 + (diffSeconds - 3600);
+                }
+                
+                setElapsed(diffSeconds);
+            }, 1000);
+        } else if (match.status === 'PAUSED') {
+            setElapsed(2700); // 45:00 Congelado
+        } else if (match.status === 'FINISHED') {
+            setElapsed(5400); // 90:00 Finalizado
+        } else {
+            setElapsed(0);
+        }
+        return () => clearInterval(interval);
+    }, [match.status, match.utcDate]);
+
+    const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+
+    const isPlaying = match.status === 'IN_PLAY';
+    const isPaused = match.status === 'PAUSED';
+    const isFinished = match.status === 'FINISHED';
+
+    return (
+        <div className="flex flex-col items-center w-full my-4 px-2">
+            {/* Etiqueta superior del Grupo (Ajustamos mb-2 para evitar que pise el logo de la FIFA) */}
+            <span className={`text-[8px] sm:text-[10px] font-black px-4 py-1 rounded-t-lg uppercase mb-2 z-0 shadow-inner ${isPlaying ? 'bg-green-500 text-white animate-pulse' : isPaused ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
+            </span>
+
+            {/* Contenedor Principal Transmisión TV (Sin el reloj a la izquierda) */}
+            <div className="flex h-12 sm:h-16 w-full max-w-xl mx-auto rounded-xl sm:rounded-2xl overflow-visible border-2 border-slate-600/30 shadow-2xl relative z-20 bg-[#1e293b]">
+                
+                {/* 🏠 Equipo Local */}
+                <div className="flex-1 flex items-center justify-end bg-gradient-to-r from-slate-800 to-[#2c3e50] px-2 sm:px-4 gap-2 sm:gap-3 rounded-l-lg sm:rounded-l-[14px]">
+                    <span className="text-white font-black text-sm sm:text-xl uppercase tracking-wider">{getCountryCode(homeName)}</span>
+                    {homeCrest ? <img src={homeCrest} className="w-6 h-4 sm:w-8 sm:h-6 object-cover rounded-[2px] shadow-sm border border-white/10" alt="" /> : <span className="opacity-30 text-xs sm:text-base">🛡️</span>}
+                </div>
+
+                {/* ⚽ Marcador Local */}
+                <div className="flex items-center justify-center bg-[#0cf2c4] text-[#0f172a] font-black text-xl sm:text-3xl w-10 sm:w-14 shrink-0 shadow-[inset_-2px_0_5px_rgba(0,0,0,0.1)]">
+                    {hasO ? (rH ?? 0) : '-'}
+                </div>
+
+                {/* 🏆 Escudo Central Sobresaliente */}
+                <div className="flex items-center justify-center bg-[#0f172a] w-12 sm:w-16 shrink-0 z-30 scale-110 sm:scale-125 shadow-2xl rounded-sm border-y border-[#0f172a]">
+                    <img src={logocopa} className="w-8 h-8 sm:w-12 sm:h-12 object-contain drop-shadow-md brightness-110 contrast-125" alt="FIFA" />
+                </div>
+
+                {/* ⚽ Marcador Visitante */}
+                <div className="flex items-center justify-center bg-[#0cf2c4] text-[#0f172a] font-black text-xl sm:text-3xl w-10 sm:w-14 shrink-0 shadow-[inset_2px_0_5px_rgba(0,0,0,0.1)]">
+                    {hasO ? (rA ?? 0) : '-'}
+                </div>
+
+                {/* ✈️ Equipo Visitante */}
+                <div className="flex-1 flex items-center justify-start bg-gradient-to-l from-slate-800 to-[#2c3e50] px-2 sm:px-4 gap-2 sm:gap-3 rounded-r-lg sm:rounded-r-[14px]">
+                    {awayCrest ? <img src={awayCrest} className="w-6 h-4 sm:w-8 sm:h-6 object-cover rounded-[2px] shadow-sm border border-white/10" alt="" /> : <span className="opacity-30 text-xs sm:text-base">🛡️</span>}
+                    <span className="text-white font-black text-sm sm:text-xl uppercase tracking-wider">{getCountryCode(awayName)}</span>
+                </div>
+            </div>
+
+            {/* ⏱️ Zona de Reloj (Color Celeste TV) - ABAJO Y CENTRADA */}
+            {/* ⏱️ Zona de Reloj (Color Celeste TV) - ABAJO Y CENTRADA */}
+<div className=" w-fit mx-auto flex items-center justify-center bg-[#c3e1e5] text-[#0f172a] px-6 py-1.5 mt-[-1px] rounded-b-xl shadow-md z-10 relative border-x-2 border-b-2 border-slate-600/30">
+                <span className="font-black text-sm sm:text-base tabular-nums leading-none tracking-tighter mr-2">
+                    {isFinished ? 'Partido Finalizado' : isPlaying || isPaused ? formatTime(elapsed) : new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: false})}
+                </span>
+                {(isPlaying || isPaused) && !isFinished && (
+                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 leading-none uppercase tracking-widest border-l border-slate-400/50 pl-2">
+                        {isPaused ? 'M. TIEMPO' : 'EN VIVO'}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+};
+// =====================================================================
+
 const WorldCupGrid = ({ currentUser }) => {
     const isAdmin = currentUser?.email === 'doctamayot@gmail.com' || currentUser?.email === 'admin@polli-tamayo.com';
 
@@ -332,41 +444,24 @@ if (isAnyMatchLive) {
                 });
 
                 if (hasChanges && isMountedRef.current) {
-                    console.log("[Radar Predictivo] ⚽ 🔥 ¡GOL DETECTADO! Calculando y actualizando Firebase...");
+                    console.log("[Radar Predictivo] ⚽ 🔥 ¡GOL DETECTADO! Actualizando marcadores...");
                     
-                    // 1. Guardamos el nuevo marcador
+                    // 1. Guardamos el nuevo marcador en la BD
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
-                    
-                    // 2. Calculamos usando el "Teléfono Rojo" (Siempre fresco)
-                    const nowISO = new Date().toISOString();
-                    const currentRanking = calculateProgressiveRankingRef.current(nowISO);
-                    
-                    // 🛡️ SEGURO DE VIDA: Si por alguna razón la lista está vacía, ABORTAR para no borrar Firebase
-                    if (currentRanking.length === 0) {
-                        console.warn("⚠️ [Radar] Ranking vacío detectado. Abortando guardado en BD.");
-                    } else {
-                        const pointsMap = {};
-                        currentRanking.forEach(user => {
-                            pointsMap[user.uid] = user.totalPoints;
-                        });
+                    toast.success('⚽ ¡GOL! Marcadores actualizados automáticamente.', { id: 'autosync-grid-toast' });
 
-                        // 3. Guardamos los puntos en la colección oficial
-                        console.log("[Radar Predictivo] 🧮 Subiendo el Ranking Oficial a la nube...");
-                        await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
-                            points: pointsMap,
-                            lastCalculated: nowISO
-                        }, { merge: true });
-                        
-                        toast.success('⚽ ¡GOL! La Grilla y el Ranking se han actualizado automáticamente.', { id: 'autosync-grid-toast' });
-                    }
-
-                    // 4. AHORA SÍ despertamos a Gemini
-                    console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
-                    await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
-                        action: 'API_GOL_DETECTED',
-                        timestamp: nowISO 
-                    });
+                    // 2. Damos 3 segundos para que el Sincronizador Maestro guarde el ranking y despertamos a Gemini
+                    setTimeout(async () => {
+                        if (isMountedRef.current) {
+                            console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
+                            await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                                action: 'API_GOL_DETECTED',
+                                timestamp: new Date().toISOString() 
+                            });
+                        }
+                    }, 3000);
                 }
+                
                 // Programamos el siguiente ciclo asegurándonos de limpiar el anterior
                 if (radarTimeoutRef.current) clearTimeout(radarTimeoutRef.current);
                 if (isMountedRef.current) {
@@ -630,6 +725,7 @@ if (isAnyMatchLive) {
     const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
+        // 🛡️ FILTRO ELÁSTICO: Si el partido ya empezó o terminó, se cuenta sin importar el reloj
         const pastMatches = effectiveMatches.filter(m => {
             const matchDate = new Date(m.utcDate);
             const isLiveOrFinished = m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED';
@@ -882,11 +978,14 @@ if (isAnyMatchLive) {
 
         return ranks;
     }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo, adminFullBracket]);
-const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
+    
+    // 🟢 EL TELÉFONO ROJO: Para que el radar siempre tenga las matemáticas frescas
+    const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
     useEffect(() => {
         calculateProgressiveRankingRef.current = calculateProgressiveRanking;
     }, [calculateProgressiveRanking]);
 
+    // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Garantiza que Firestore sea un espejo fiel de tu pantalla)
     useEffect(() => {
         if (!isAdmin) return;
 
@@ -915,8 +1014,6 @@ const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
 
         syncLiveRankingToFirestore();
     }, [isAdmin, calculateProgressiveRanking]);
-
-
 
     const matchesByDate = useMemo(() => {
         const grouped = {};
@@ -1026,7 +1123,7 @@ const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
-           
+            
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-[2rem] p-3 sm:p-10 mb-6 sm:mb-8 text-center border border-border shadow-xl relative overflow-hidden flex flex-row items-center justify-center gap-3 sm:gap-6">
                 <div className="absolute top-0 left-0 w-full h-full bg-primary/5 z-0 pointer-events-none"></div>
                 <img src={logocopa} className="w-12 h-12 sm:w-20 sm:h-20 object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] z-10" alt="" />
@@ -1083,7 +1180,7 @@ const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
             <NewsTicker />
     
             <div className="relative w-full mb-8 flex items-center group">
-           
+            
                 <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none"></div>
                 <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none"></div>                
                 <button 
@@ -1275,60 +1372,21 @@ const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
                                 </div>
                             )}
 
-                            <div className={`${isPlaying ? 'bg-green-500/5' : isPaused ? 'bg-amber-500/5' : 'bg-background-offset'} p-4 sm:p-6 border-b border-border relative z-20`}>
-                                <div className="flex justify-between items-center mb-3 sm:mb-5">
-                                    <div className="flex items-center gap-2 sm:gap-4">
-                                        <span className={`text-[9px] sm:text-[10px] font-black px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase ${isPlaying ? 'bg-green-500 text-white animate-pulse' : isPaused ? 'bg-amber-500 text-white animate-pulse' : 'bg-primary/20 text-primary'}`}>
-                                            {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
-                                        </span>
-                                        <span className="hidden sm:flex items-center gap-1.5 text-[10px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-0.5 rounded border border-border/50">
-                                            <span>👨‍⚖️</span> {mainReferee ? mainReferee.name : 'Por Definir'}
-                                        </span>
-                                    </div>
-                                    <span className="text-[10px] sm:text-xs font-bold text-foreground-muted uppercase tracking-widest bg-background/50 px-2 py-1 rounded border border-border/50">
-                                        {new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
-                                    </span>
-                                </div>
+                            <div className={`${isPlaying ? 'bg-green-500/5' : isPaused ? 'bg-amber-500/5' : 'bg-background-offset'} pb-4 sm:pb-6 border-b border-border relative z-20`}>
                                 
-                                <div className="flex items-center justify-between w-full gap-1 sm:gap-4 px-1 sm:px-4">
-                                    <div className="flex-1 flex flex-col items-center justify-start min-w-0">
-                                        {homeCrest ? <img src={homeCrest} className="w-10 h-10 sm:w-18 sm:h-18 relative overflow-hidden mb-2 sm:mb-3 drop-shadow-lg rounded-full border border-border/50 object-cover object-center" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
-                                        <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
-                                            {translateTeam(finalHomeName)}
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="flex flex-col items-center justify-center shrink-0 min-w-[90px] sm:min-w-[140px]">
-                                        {/* 🟢 ETIQUETA DE ESTADO CON PAUSA EXPLÍCITA */}
-                                        <span className={`text-[7px] sm:text-[9px] font-black uppercase tracking-widest mb-2 sm:mb-3 px-2 py-0.5 rounded shadow-sm ${isPlaying ? 'text-green-500 bg-green-500/10 animate-pulse border border-green-500/20' : isPaused ? 'text-amber-500 bg-amber-500/10 animate-pulse border border-amber-500/20' : 'text-foreground-muted bg-background/50 border border-border/50'}`}>
-                                            {isPlaying ? '• EN VIVO' : isPaused ? '⏸ EN PAUSA' : matchStatusTranslations[match.status] || match.status}
-                                        </span>
-                                        
-                                        <div className="flex items-center justify-center gap-1.5 sm:gap-3">
-                                            <div className={`flex items-center justify-center w-9 h-11 sm:w-16 sm:h-20 rounded-lg sm:rounded-2xl font-black text-xl sm:text-4xl shadow-inner border transition-all ${hasO ? 'bg-background-offset text-primary border-primary/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-background text-foreground-muted border-border/50 opacity-50'}`}>
-                                                {hasO ? (rH ?? 0) : '-'}
-                                            </div>
-                                            
-                                            <div className="flex flex-col gap-1 sm:gap-2 opacity-50">
-                                                <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-foreground"></span>
-                                                <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-foreground"></span>
-                                            </div>
-                                            
-                                            <div className={`flex items-center justify-center w-9 h-11 sm:w-16 sm:h-20 rounded-lg sm:rounded-2xl font-black text-xl sm:text-4xl shadow-inner border transition-all ${hasO ? 'bg-background-offset text-primary border-primary/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-background text-foreground-muted border-border/50 opacity-50'}`}>
-                                                {hasO ? (rA ?? 0) : '-'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex-1 flex flex-col items-center justify-start min-w-0">
-                                        {awayCrest ? <img src={awayCrest} className="w-10 h-10 sm:w-18 sm:h-18 relative overflow-hidden mb-2 sm:mb-3 drop-shadow-lg rounded-full border border-border/50 object-cover object-center" alt="" /> : <span className="text-2xl opacity-30 mb-2">🛡️</span>}
-                                        <p className="font-black text-[10px] sm:text-xl text-center w-full leading-tight break-words" style={{ wordBreak: 'break-word' }}>
-                                            {translateTeam(finalAwayName)}
-                                        </p>
-                                    </div>
-                                </div>
+                                {/* 🟢 NUEVO SCOREBOARD ESTILO TV (Reemplaza al encabezado anterior) */}
+                                <TVScoreboard 
+                                    match={match} 
+                                    homeName={finalHomeName} 
+                                    awayName={finalAwayName} 
+                                    homeCrest={homeCrest} 
+                                    awayCrest={awayCrest} 
+                                    rH={rH} 
+                                    rA={rA} 
+                                    hasO={hasO} 
+                                />
 
-                                <div className="mt-4 text-center sm:hidden">
+                                <div className="mt-4 text-center">
                                     <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-1 rounded border border-border/50">
                                         <span>👨‍⚖️</span> Árbitro: {mainReferee ? mainReferee.name : 'Por Definir'}
                                     </span>
@@ -1337,7 +1395,7 @@ const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
 
                             {/* 🟢 BOTÓN DE INFOGRAFÍA EN LA GRILLA */}
                             {matchStatus === 'FINISHED' && (
-                                <div className="px-4 pb-4 sm:px-6 sm:pb-6 relative z-20 bg-background-offset border-b border-border">
+                                <div className="px-4 pb-4 sm:px-6 sm:pb-6 relative z-20 bg-background-offset border-b border-border pt-4">
                                     <button 
                                         onClick={() => setReportData({ match, ranking: matchSpecificRanking, adminPreds: a, homeCrest, awayCrest, finalHomeName, finalAwayName })}
                                         className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-[10px] sm:text-xs py-3 rounded-xl shadow-md hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 uppercase tracking-widest"
