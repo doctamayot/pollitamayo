@@ -5,43 +5,52 @@ const WorldCupCountdown = () => {
     const startDate = new Date('2026-06-11T14:00:00').getTime(); // Partido Inaugural
     const endDate = new Date('2026-07-19T14:00:00').getTime();   // La Gran Final
 
-    const [timeLeft, setTimeLeft] = useState({
-        days: 0, hours: 0, minutes: 0, seconds: 0
-    });
-    
-    // Fases: 'pre' (Esperando inicio), 'active' (Mundial en juego), 'ended' (Mundial terminado)
-    const [phase, setPhase] = useState('pre'); 
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const now = new Date().getTime();
-
-            if (now < startDate) {
-                // FASE 1: Cuenta regresiva para el inicio
-                setPhase('pre');
-                calculateTimeLeft(startDate - now);
-            } else if (now >= startDate && now < endDate) {
-                // FASE 2: Cuenta regresiva para la Final
-                setPhase('active');
-                calculateTimeLeft(endDate - now);
-            } else {
-                // FASE 3: El Mundial se acabó
-                setPhase('ended');
-                clearInterval(interval);
-            }
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [startDate, endDate]);
-
+    // 🌟 Función movida arriba para poder usarla en el estado inicial
     const calculateTimeLeft = (distance) => {
-        setTimeLeft({
+        return {
             days: Math.floor(distance / (1000 * 60 * 60 * 24)),
             hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
             minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
             seconds: Math.floor((distance % (1000 * 60)) / 1000)
-        });
+        };
     };
+
+    // 🌟 ARREGLO: Calculamos el tiempo desde el milisegundo 0 para el estado inicial
+    const [timeLeft, setTimeLeft] = useState(() => {
+        const now = new Date().getTime();
+        if (now < startDate) return calculateTimeLeft(startDate - now);
+        if (now < endDate) return calculateTimeLeft(endDate - now);
+        return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    });
+    
+    // 🌟 ARREGLO: Calculamos la fase inicial desde el milisegundo 0
+    const [phase, setPhase] = useState(() => {
+        const now = new Date().getTime();
+        if (now < startDate) return 'pre';
+        if (now < endDate) return 'active';
+        return 'ended';
+    }); 
+
+    useEffect(() => {
+        const tick = () => {
+            const now = new Date().getTime();
+
+            if (now < startDate) {
+                setPhase('pre');
+                setTimeLeft(calculateTimeLeft(startDate - now));
+            } else if (now >= startDate && now < endDate) {
+                setPhase('active');
+                setTimeLeft(calculateTimeLeft(endDate - now));
+            } else {
+                setPhase('ended');
+            }
+        };
+
+        // El intervalo sigue corriendo cada 1 segundo para mantenerlo actualizado
+        const interval = setInterval(tick, 1000);
+
+        return () => clearInterval(interval);
+    }, [startDate, endDate]);
 
     // Si ya pasó la final, mostramos un mensaje de cierre
     if (phase === 'ended') {

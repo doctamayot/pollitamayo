@@ -13,26 +13,20 @@ import WorldCupCountdown from './worldcupcomponents/WorldCupCountdown';
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
 
 export const teamTranslations = {
-    "Albania": "Albania", "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", 
-    "Austria": "Austria", "Belgium": "Bélgica", "Bolivia": "Bolivia", "Bosnia and Herzegovina": "Bosnia y Herzegovina",
-    "Brazil": "Brasil", "Bulgaria": "Bulgaria", "Cameroon": "Camerún", "Canada": "Canadá", "Cape Verde Islands": "Cabo Verde",
-    "Chile": "Chile", "China": "China", "Colombia": "Colombia", "Costa Rica": "Costa Rica", 
-    "Croatia": "Croacia", "Czechia": "República Checa", "Czech Republic": "República Checa", 
-    "Denmark": "Dinamarca", "Ecuador": "Ecuador", "Egypt": "Egipto", "El Salvador": "El Salvador", 
-    "England": "Inglaterra", "France": "Francia", "Germany": "Alemania", "Ghana": "Ghana", 
-    "Greece": "Grecia", "Guatemala": "Guatemala", "Honduras": "Honduras", "Hungary": "Hungría", 
-    "Iceland": "Islandia", "Iran": "Irán", "Ireland": "Irlanda", "Italy": "Italia", 
-    "Ivory Coast": "Costa de Marfil", "Cote d'Ivoire": "Costa de Marfil", "Jamaica": "Jamaica", 
-    "Japan": "Japón", "Mexico": "México", "Morocco": "Marruecos", "Netherlands": "Países Bajos", 
-    "New Zealand": "Nueva Zelanda", "Nigeria": "Nigeria", "North Korea": "Corea del Norte", 
-    "Norway": "Noruega", "Panama": "Panamá", "Paraguay": "Paraguay", "Peru": "Perú", 
-    "Poland": "Polonia", "Portugal": "Portugal", "Qatar": "Catar", "Republic of Ireland": "República de Irlanda", 
-    "Romania": "Rumania", "Russia": "Rusia", "Saudi Arabia": "Arabia Saudita", "Scotland": "Escocia", 
-    "Senegal": "Senegal", "Serbia": "Serbia", "Slovakia": "Eslovaquia", "Slovenia": "Eslovaquia", 
-    "South Africa": "Sudáfrica", "South Korea": "Corea del Sur", "Spain": "España", "Sweden": "Suecia", 
-    "Switzerland": "Suiza", "Tunisia": "Túnez", "Turkey": "Turquía", "Ukraine": "Ucrania", 
-    "United Arab Emirates": "Emiratos Árabes Unidos", "United States": "Estados Unidos", 
-    "Uruguay": "Uruguay", "Venezuela": "Venezuela", "Wales": "Gales", "Por definir": "Por definir", "TBD": "Por definir"
+    "Algeria": "Argelia", "Argentina": "Argentina", "Australia": "Australia", "Austria": "Austria",
+    "Belgium": "Bélgica", "Bosnia and Herzegovina": "Bosnia y Herzegovina", "Brazil": "Brasil", "Canada": "Canadá",
+    "Ivory Coast": "Costa de Marfil", "Cote d'Ivoire": "Costa de Marfil", "DR Congo": "República Democrática del Congo", "Congo DR": "República Democrática del Congo", 
+    "Colombia": "Colombia", "Cape Verde": "Cabo Verde", "Cape Verde Islands": "Cabo Verde", "Croatia": "Croacia",
+    "Czechia": "República Checa", "Czech Republic": "República Checa", "Curacao": "Curazao",
+    "Ecuador": "Ecuador", "Egypt": "Egipto", "England": "Inglaterra", "Spain": "España",
+    "France": "Francia", "Germany": "Alemania", "Ghana": "Ghana", "Haiti": "Haití",
+    "Iran": "Irán", "Iraq": "Irak", "Jordan": "Jordania", "Japan": "Japón",
+    "South Korea": "Corea del Sur", "Korea Republic": "Corea del Sur", "Saudi Arabia": "Arabia Saudita",
+    "Morocco": "Marruecos", "Mexico": "México", "Netherlands": "Países Bajos", "Norway": "Noruega",
+    "New Zealand": "Nueva Zelanda", "Panama": "Panamá", "Paraguay": "Paraguay", "Portugal": "Portugal",
+    "Qatar": "Qatar", "South Africa": "Sudáfrica", "Scotland": "Escocia", "Senegal": "Senegal",
+    "Switzerland": "Suiza", "Sweden": "Suecia", "Tunisia": "Túnez", "Turkey": "Turquía",
+    "United States": "Estados Unidos", "USA": "Estados Unidos", "Uruguay": "Uruguay", "Uzbekistan": "Uzbekistán", "Por definir": "Por definir", "TBD": "Por definir"
 };
 
 const matchStatusTranslations = {
@@ -96,16 +90,29 @@ const isSmartMatch = (userText, adminText) => {
 // =====================================================================
 const getCountryCode = (name) => {
     if (!name || name === 'Por definir' || name === 'TBD') return 'TBD';
+    
+    // 1. Traducimos el equipo al ESPAÑOL usando nuestro diccionario
+    const translated = translateTeam(name);
+    
+    // 2. Mapeamos el nombre en español a las Siglas Oficiales de TV que enviaste
     const codes = {
-        "Argentina": "ARG", "Brasil": "BRA", "Colombia": "COL", "Uruguay": "URU",
-        "Ecuador": "ECU", "Chile": "CHI", "Perú": "PER", "Venezuela": "VEN",
-        "Bolivia": "BOL", "Paraguay": "PAR", "España": "ESP", "Alemania": "GER",
-        "Francia": "FRA", "Inglaterra": "ENG", "Portugal": "POR", "Italia": "ITA",
-        "Países Bajos": "NED", "Bélgica": "BEL", "Croacia": "CRO", "Estados Unidos": "USA",
-        "México": "MEX", "Canadá": "CAN", "Japón": "JPN", "Corea del Sur": "KOR",
-        "Marruecos": "MAR", "Senegal": "SEN", "Camerún": "CMR", "Cabo Verde": "CPV"
+        "Argelia": "ALG", "Argentina": "ARG", "Australia": "AUS", "Austria": "AUT",
+        "Bélgica": "BEL", "Bosnia y Herzegovina": "BIH", "Brasil": "BRA", "Canadá": "CAN",
+        "Costa de Marfil": "CIV", "República Democrática del Congo": "COD", "Colombia": "COL",
+        "Cabo Verde": "CPV", "Croacia": "CRO", "República Checa": "CZE", "Curazao": "CUW",
+        "Ecuador": "ECU", "Egipto": "EGY", "Inglaterra": "ENG", "España": "ESP",
+        "Francia": "FRA", "Alemania": "GER", "Ghana": "GHA", "Haití": "HAI",
+        "Irán": "IRN", "Irak": "IRQ", "Jordania": "JOR", "Japón": "JPN",
+        "Corea del Sur": "KOR", "Arabia Saudita": "KSA", "Marruecos": "MAR",
+        "México": "MEX", "Países Bajos": "NED", "Noruega": "NOR", "Nueva Zelanda": "NZL",
+        "Panamá": "PAN", "Paraguay": "PAR", "Portugal": "POR", "Qatar": "QAT",
+        "Sudáfrica": "RSA", "Escocia": "SCO", "Senegal": "SEN", "Suiza": "SUI",
+        "Suecia": "SWE", "Túnez": "TUN", "Turquía": "TUR", "Estados Unidos": "USA",
+        "Uruguay": "URU", "Uzbekistán": "UZB"
     };
-    return codes[name] || name.substring(0, 3).toUpperCase();
+
+    // Si está en la lista oficial de 48, saca las siglas FIFA. Si no, saca las 3 primeras letras en español.
+    return codes[translated] || translated.substring(0, 3).toUpperCase();
 };
 
 const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA, hasO }) => {
