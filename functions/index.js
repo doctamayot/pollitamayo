@@ -139,10 +139,22 @@ async function runAiNewsGeneration() {
                     }
                 });
 
+                // 🌟 NUEVO: Extraemos los pronósticos a futuro y extras de este usuario
+                const ko = data.knockoutPicks || {};
+                const campeon = ko.campeon?.[0]?.name || 'Ninguno';
+                const subcampeon = ko.subcampeon?.[0]?.name || 'Ninguno';
+                const tercero = ko.tercero?.[0]?.name || 'Ninguno';
+                const cuarto = ko.cuarto?.[0]?.name || 'Ninguno';
+                
+                // Sacamos un par de extras y eventos al azar para no saturar a la IA
+                const extras = data.extraPicks ? Object.values(data.extraPicks).slice(0, 2).join(", ") : 'Ninguno';
+                const futurePicks = `Campeón: ${campeon}, Subcampeón: ${subcampeon}, 3ro: ${tercero}, 4to: ${cuarto}. Apuestas extras clave: ${extras}`;
+
                 return { 
                     name: data.displayName, 
                     points: livePointsMap[data.id] || 0, 
-                    picks: picks.join(", ")
+                    picks: picks.join(", "),
+                    futurePicks: futurePicks // 🌟 Se lo guardamos al usuario
                 };
             });
             
@@ -189,7 +201,8 @@ async function runAiNewsGeneration() {
             const topPoints = parsedUsers[0]?.points || 0;
             const lideres = parsedUsers.filter(u => u.points === topPoints);
             const isSingleLeader = lideres.length === 1;
-            const lideresStr = lideres.map(u => `${u.name} (${u.points} pts, Botín asegurado: ${formatMoney(u.premio)}) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
+            // 🌟 NUEVO: Le inyectamos "futurePicks" al texto de los líderes
+            const lideresStr = lideres.map(u => `${u.name} (${u.points} pts, Botín asegurado: ${formatMoney(u.premio)}) - Predicciones recientes: ${u.picks || 'Ninguna'} - APUESTAS FINALES Y EXTRAS: ${u.futurePicks}`).join(" | ");
 
             // 2. Mitad de Tabla (El Pelotón)
             const midIndex = Math.max(0, Math.floor(parsedUsers.length / 2) - 1);
@@ -200,7 +213,7 @@ async function runAiNewsGeneration() {
             const coleros = parsedUsers.slice(-3);
             const colerosStr = coleros.map(u => `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
-            prompt = `Eres el presentador estrella de Deportes(estilo Fernando Palomo). El Mundial está EN JUEGO y debes redactar 6 titulares deportivos impactantes y analíticos para nuestra Polla.
+            prompt = `Eres el presentador estrella de Deportes (estilo Fernando Palomo). El Mundial está EN JUEGO y debes redactar 6 titulares deportivos impactantes y analíticos para nuestra Polla.
             
             ⚽ CONTEXTO DEL TORNEO AHORA MISMO:
             - BOLSA TOTAL REPARTIÉNDOSE: ${formatMoney(netPot)}
@@ -214,16 +227,16 @@ async function runAiNewsGeneration() {
 
             🚨 REGLAS ESTRICTAS E INQUEBRANTABLES:
             1. ESTADO DE LA PUNTA: ${isSingleLeader ? 'HAY UN LÍDER SOLITARIO Y ABSOLUTO. ESTÁ TOTALMENTE PROHIBIDO usar palabras como "empate en la punta", "comparten liderato" o "trancón".' : 'HAY VARIOS LÍDERES EMPATADOS. Narra la guerra total por dividir el premio.'}
-            2. DISTRIBUCIÓN DE TEMAS EN LOS 5 TITULARES:
+            2. DISTRIBUCIÓN DE TEMAS EN LOS 6 TITULARES:
                - Titular 1: Analiza el partido actual si no hay actual el mas reciente, si hay gol menciona GOOOOOL del equipo, el marcador y menciona específicamente a un usuario que haya acertado su predicción (usa la data enviada).
                - Titular 2: Habla de los líderes y el dineral que se están embolsando y quienes lo pueden alcanzar (${formatMoney(netPot)} en juego).
                - Titular 3: Habla del pelotón de la mitad de tabla luchando por subir y habla que van a ganar lo mismo que si quedaran de terceros en la polla.
                - Titular 4: Haz una broma deportiva con los coleros (el fondo de la tabla).
                - Titular 5: Un análisis general de Pollitamayo News sobre toda la fecha del dia.
-               - Titular 6: Un análisis de resultados de clasificados, campeon, subcampeon, tercero, cuarto , extras, eventos, que tiene el lider o los lideres de la polla en el momento
+               - Titular 6: DATOS CLAVE: Haz un análisis revelando a quiénes apostó el líder (o líderes) para extras, Campeón, Subcampeón, 3ro, 4to y posiciones finales. Usa la información de "APUESTAS FINALES Y EXTRAS" que te envié arriba en la sección de la punta.
             3. NUNCA reveles que eres una Inteligencia Artificial. Eres un periodista deportivo humano.
             4. NUNCA uses nombres de países en inglés. Todo debe estar en español impecable (Ej: Netherlands es Países Bajos, England es Inglaterra).
-            5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:", "EL VAR:".
+            5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:","EL ORÁCULO:", "DATOS CLAVE:".
             6. Devuelve ÚNICAMENTE un array JSON válido de strings. No agregues nada más.`;
             
         }
