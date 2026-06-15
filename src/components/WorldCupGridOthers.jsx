@@ -26,11 +26,11 @@ const specialEvents = [
     { id: 'el_festival', label: '¿Algún partido tendrá 8 o más goles?' },
     { id: 'muralla_final', label: '¿La final terminará 0-0 en los 90 mins?' },
     { id: 'hat_trick_hero', label: '¿Algún jugador anotará un Hat-Trick?' },
-    { id: 'roja_banquillo', label: '¿Expulsarán a alguien del banquillo?' },
+    { id: 'roja_banquillo', label: '¿Un Director Técnico será expulsado con roja?' },
     { id: 'portero_goleador', label: '¿Anotará un gol algún portero (sin contar penales)?' },
     { id: 'debut_sin_red', label: '¿Algún equipo se irá sin anotar en fase de grupos?' },
-    { id: 'leyenda_viva', label: '¿Anotará gol el jugador más veterano?' },
-    { id: 'drama_final', label: '¿Habrá gol después del minuto 90+5?' },
+    { id: 'leyenda_viva', label: '¿Anotará 3 o mas goles messi o CR7?' },
+    { id: 'drama_final', label: '¿Habrá Roja de un jugador en la final?' },
     { id: 'penales_final', label: '¿La final se decidirá en penales?' }
 ];
 
@@ -129,6 +129,28 @@ const WorldCupGridOthers = ({ currentUser }) => {
         });
     }, [matches, adminResults]);
 
+    // 🟢 NUEVO: Diccionario dinámico de logos (Banderas)
+    const teamCrests = useMemo(() => {
+        const crests = {};
+        effectiveMatches.forEach(m => {
+            if (m.homeTeam?.name) crests[m.homeTeam.name] = m.homeTeam.crest;
+            if (m.awayTeam?.name) crests[m.awayTeam.name] = m.awayTeam.crest;
+        });
+        return crests;
+    }, [effectiveMatches]);
+
+    // 🟢 NUEVO: Renderizador Inteligente de Nombres + Banderas
+    const renderBadge = (name, textClass = "") => {
+        if (!name) return '-';
+        const crest = teamCrests[name];
+        return (
+            <span className="flex items-center gap-1.5 inline-flex text-left">
+                {crest && <img src={crest} alt="" className="w-4 h-4 sm:w-5 sm:h-5 object-contain" />}
+                <span className={`leading-tight ${textClass}`}>{translateTeam(name)}</span>
+            </span>
+        );
+    };
+
     const groupNames = useMemo(() => {
         const groups = new Set();
         effectiveMatches.forEach(m => {
@@ -184,7 +206,6 @@ const WorldCupGridOthers = ({ currentUser }) => {
         });
     }, [groupStageMatches, adminResults]);
 
-    // 🟢 MOTOR PROGRESIVO: Verifica grupo por grupo y extrae a los clasificados a medida que se completan
     const adminQualified32 = useMemo(() => {
         let top2 = []; 
         let thirds = [];
@@ -197,7 +218,6 @@ const WorldCupGridOthers = ({ currentUser }) => {
         
         Object.keys(byGroup).forEach(g => {
             const groupMatches = byGroup[g];
-            // Verificamos si ESTE grupo está completo
             const isGroupFinished = groupMatches.length > 0 && groupMatches.every(m => 
                 adminResults?.predictions?.[m.id]?.home !== undefined && 
                 adminResults?.predictions?.[m.id]?.home !== ''
@@ -213,13 +233,11 @@ const WorldCupGridOthers = ({ currentUser }) => {
             }
         });
 
-        // Solo saca a los 3eros de la sala de espera si TODOS los grupos terminaron
         if (allGroupsFinished && top2.length > 0) {
             thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
             return [...top2, ...thirds.slice(0, 8)];
         }
         
-        // Retorna parcialmente los primeros y segundos confirmados
         return top2;
     }, [groupStageMatches, adminResults, getStandings]);
 
@@ -331,9 +349,9 @@ const WorldCupGridOthers = ({ currentUser }) => {
                         </select>
 
                         <div className="flex flex-col sm:flex-row justify-between items-center bg-card p-4 sm:p-6 rounded-2xl border border-amber-500/20 shadow-lg mb-6 gap-4">
-                            <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-amber-500">Respuesta Oficial (Admin):</span>
-                            <span className="font-black text-sm sm:text-lg text-foreground px-4 py-2 bg-background-offset rounded-xl border border-border shadow-inner text-center">
-                                {adminResults?.extraPicks?.[selectedExtra] ? translateTeam(adminResults.extraPicks[selectedExtra]) : '⏳ Por Definir'}
+                            <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-amber-500">Respuesta Oficial:</span>
+                            <span className="font-black text-sm sm:text-lg text-foreground px-4 py-2 bg-background-offset rounded-xl border border-border shadow-inner text-center flex items-center justify-center">
+                                {adminResults?.extraPicks?.[selectedExtra] ? renderBadge(adminResults.extraPicks[selectedExtra]) : '⏳ Por Definir'}
                             </span>
                         </div>
 
@@ -344,13 +362,15 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                 const aAns = adminResults?.extraPicks?.[selectedExtra];
                                 const isCorrect = uAns && aAns && (qObj.manual ? isSmartMatch(uAns, aAns) : uAns.toLowerCase() === aAns.toLowerCase());
                                 return (
-                                    <div key={u.uid} className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border transition-colors ${isCorrect ? 'bg-amber-500/10 border-amber-500/30' : 'bg-card border-card-border hover:bg-background-offset'}`}>
-                                        <div className="flex items-center gap-3 w-1/3">
+                                    <div key={u.uid} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 rounded-xl border transition-colors ${isCorrect ? 'bg-amber-500/10 border-amber-500/30' : 'bg-card border-card-border hover:bg-background-offset'}`}>
+                                        <div className="flex items-center gap-3 mb-2 sm:mb-0 shrink-0">
                                             <img src={u.photoURL} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-border shrink-0" alt="" />
-                                            <span className="font-bold text-xs sm:text-sm truncate">{formatShortName(u.name)}</span>
+                                            <span className="font-bold text-xs sm:text-sm">{formatShortName(u.name)}</span>
                                         </div>
-                                        <div className="flex items-center justify-end gap-3 w-2/3">
-                                            <span className="text-[10px] sm:text-sm font-bold text-foreground-muted truncate text-right">{uAns ? translateTeam(uAns) : '-'}</span>
+                                        <div className="flex items-center justify-end gap-3 sm:ml-auto pl-11 sm:pl-0">
+                                            <span className="text-[11px] sm:text-sm font-bold text-foreground-muted break-words text-right">
+                                                {renderBadge(uAns)}
+                                            </span>
                                             {isCorrect && <span className="bg-amber-500 text-white text-[10px] sm:text-xs font-black px-2 py-1 rounded shadow-sm shrink-0">+6 pts</span>}
                                         </div>
                                     </div>
@@ -378,7 +398,6 @@ const WorldCupGridOthers = ({ currentUser }) => {
                             if (selectedRound === 'clasificados32') {
                                 aTeamsCurrentRound = adminQualified32;
                             } else if (selectedRound === 'tercer_puesto_match') {
-                                // 🟢 DEDUCCIÓN MATEMÁTICA: Semifinalistas menos los 2 Finalistas = Equipos de 3er puesto
                                 const semisTeams = adminResults?.knockoutPicks?.['cuartos'] || [];
                                 const finalists = adminResults?.knockoutPicks?.['semis'] || [];
                                 if (semisTeams.length === 4 && finalists.length === 2) {
@@ -396,7 +415,9 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                         </h4>
                                         <div className="flex flex-wrap justify-center gap-2">
                                             {aTeamsCurrentRound.length > 0 ? aTeamsCurrentRound.map(t => (
-                                                <span key={t.name} className="bg-card text-foreground border border-border px-2 py-1 rounded text-[10px] sm:text-xs font-bold shadow-sm">{translateTeam(t.name)}</span>
+                                                <span key={t.name} className="bg-card text-foreground border border-border px-2 py-1 rounded shadow-sm inline-flex">
+                                                    {renderBadge(t.name, "text-[10px] sm:text-xs font-bold")}
+                                                </span>
                                             )) : <span className="text-foreground-muted text-xs italic">Aún no hay clasificados confirmados.</span>}
                                         </div>
                                     </div>
@@ -420,7 +441,6 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                                 uThirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
                                                 uTeams = [...uTop2, ...uThirds.slice(0, 8)];
 
-                                                // 🟢 PUNTOS PROGRESIVOS PARA 16VOS: Ya no esperamos a isGroupStageFinished
                                                 if (aTeamsCurrentRound.length > 0) {
                                                     hits = uTeams.filter(ut => aTeamsCurrentRound.some(at => at.name === ut.name)).length;
                                                 }
@@ -451,10 +471,9 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                                     <div className="flex flex-wrap gap-1.5 w-full sm:w-3/4 justify-start sm:justify-end">
                                                         {uTeams.map(ut => {
                                                             const hit = aTeamsCurrentRound.some(at => at.name === ut.name);
-                                                            
                                                             return (
-                                                                <span key={ut.name} className={`px-2 py-1 rounded text-[9px] sm:text-[10px] font-bold border transition-colors ${hit ? 'bg-green-500/20 text-green-500 border-green-500/40' : 'bg-background text-foreground-muted border-border/50'}`}>
-                                                                    {translateTeam(ut.name)}
+                                                                <span key={ut.name} className={`px-2 py-1 rounded inline-flex border transition-colors ${hit ? 'bg-green-500/20 text-green-500 border-green-500/40' : 'bg-background text-foreground-muted border-border/50'}`}>
+                                                                    {renderBadge(ut.name, "text-[9px] sm:text-[10px] font-bold")}
                                                                 </span>
                                                             );
                                                         })}
@@ -480,7 +499,9 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                         <div className="absolute top-0 left-0 w-full h-1 bg-primary/50"></div>
                                         <span className="text-3xl sm:text-4xl mb-2 drop-shadow-md">{slot.icon}</span>
                                         <span className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted mb-1">{slot.label}</span>
-                                        <span className="font-black text-xs sm:text-sm text-foreground">{aTeam ? translateTeam(aTeam.name) : '⏳ TBD'}</span>
+                                        <span className="font-black text-xs sm:text-sm text-foreground flex items-center justify-center">
+                                            {aTeam ? renderBadge(aTeam.name) : '⏳ TBD'}
+                                        </span>
                                     </div>
                                 );
                             })}
@@ -515,8 +536,8 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-3/4">
                                             {userHits.map((h, i) => (
                                                 <div key={i} className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center ${h.hit ? 'bg-green-500/20 border-green-500/40 text-green-500' : 'bg-background border-border/50 text-foreground-muted'}`}>
-                                                    <span className="text-[8px] uppercase font-bold opacity-50 mb-0.5">{h.slot.label}</span>
-                                                    <span className="text-[10px] font-black leading-tight">{h.team ? translateTeam(h.team.name) : '-'}</span>
+                                                    <span className="text-[8px] uppercase font-bold opacity-50 mb-1">{h.slot.label}</span>
+                                                    <span>{h.team ? renderBadge(h.team.name, "text-[10px] font-black") : '-'}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -561,7 +582,7 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                             {isGroupActive ? adminStandings.map((t, i) => (
                                                 <div key={t.name} className="flex items-center gap-1.5 bg-card border border-border px-2 py-1.5 rounded shadow-sm">
                                                     <span className="text-[10px] font-black text-foreground-muted">{i+1}º</span>
-                                                    <span className="text-[10px] sm:text-xs font-bold text-foreground">{translateTeam(t.name)}</span>
+                                                    {renderBadge(t.name, "text-[10px] sm:text-xs font-bold")}
                                                 </div>
                                             )) : <span className="text-foreground-muted text-xs italic">No hay puntajes oficiales aún.</span>}
                                         </div>
@@ -596,9 +617,9 @@ const WorldCupGridOthers = ({ currentUser }) => {
                                                         {userStandings.map((t, i) => {
                                                             const hit = isGroupFinished && adminStandings[i]?.name === t.name;
                                                             return (
-                                                                <div key={t.name} className={`flex items-center gap-1 border px-2 py-1 rounded transition-colors ${hit ? 'bg-green-500/20 border-green-500/40 text-green-500' : 'bg-background border-border/50 text-foreground-muted'}`}>
+                                                                <div key={t.name} className={`flex items-center gap-1.5 border px-2 py-1 rounded transition-colors ${hit ? 'bg-green-500/20 border-green-500/40 text-green-500' : 'bg-background border-border/50 text-foreground-muted'}`}>
                                                                     <span className="text-[9px] font-black opacity-50">{i+1}º</span>
-                                                                    <span className="text-[9px] sm:text-[10px] font-bold leading-none">{translateTeam(t.name)}</span>
+                                                                    {renderBadge(t.name, "text-[9px] sm:text-[10px] font-bold leading-none")}
                                                                 </div>
                                                             );
                                                         })}
