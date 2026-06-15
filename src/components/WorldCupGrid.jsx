@@ -158,9 +158,62 @@ const WorldCupGrid = ({ currentUser }) => {
         return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
     }, [fetchApiMatches]);
 
+    
+
     // 🟢 ROBOT AUTO-SYNC INTELIGENTE (Radar de 10 segundos)
   const simStatusesString = JSON.stringify(adminResults?.simulation?.matchStatuses || {});
     const radarTimeoutRef = useRef(null);
+
+    // 🟢 EL CAFE VIRTUAL: Mantiene la pantalla encendida para el Admin
+    const wakeLockRef = useRef(null);
+
+    useEffect(() => {
+        // Si no es el administrador, no necesitamos gastarle batería
+        if (!isAdmin) return;
+
+        const requestWakeLock = async () => {
+            try {
+                // Verificamos si el navegador moderno soporta esta tecnología
+                if ('wakeLock' in navigator) {
+                    wakeLockRef.current = await navigator.wakeLock.request('screen');
+                    console.log('🌞 [Wake Lock] Pantalla activa: Bloqueo de suspensión ACTIVADO. Puedes irte a dormir.');
+
+                    // Si por alguna razón el sistema lo suelta (ej. batería en 1%), nos avisa
+                    wakeLockRef.current.addEventListener('release', () => {
+                        console.log('🌙 [Wake Lock] Bloqueo liberado (la pantalla puede suspenderse).');
+                    });
+                } else {
+                    console.warn('⚠️ [Wake Lock] Tu navegador actual no soporta mantener la pantalla encendida automáticamente.');
+                }
+            } catch (err) {
+                console.error(`❌ [Wake Lock] Error al pedir pantalla encendida: ${err.name}, ${err.message}`);
+            }
+        };
+
+        requestWakeLock();
+
+        // 🚨 REGLA DEL SISTEMA OPERATIVO: Si minimizas el navegador, el celular suelta el bloqueo.
+        // Así que le decimos que lo vuelva a pedir tan pronto regreses a la pestaña.
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👀 [Wake Lock] Regresaste a la pestaña. Pidiendo pantalla activa de nuevo...');
+                requestWakeLock();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Limpiador: Cuando el Admin cambie a la pestaña de "Ranking" o cierre la app, soltamos la pantalla
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (wakeLockRef.current !== null) {
+                wakeLockRef.current.release()
+                    .then(() => console.log('🛑 [Wake Lock] Componente cerrado. Pantalla liberada.'))
+                    .catch(console.error);
+                wakeLockRef.current = null;
+            }
+        };
+    }, [isAdmin]);
     
     // 🟢 EL ESCUDO DE PROTECCIÓN ASÍNCRONA
     const isMountedRef = useRef(true); 
