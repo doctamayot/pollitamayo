@@ -129,8 +129,8 @@ const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA,
                 if (diffSeconds < 0) diffSeconds = 0;
                 
                 // ⚽ Truco Mágico del 2do Tiempo
-                if (diffSeconds > 3600) {
-                    diffSeconds = 2700 + (diffSeconds - 3600);
+                if (diffSeconds >= 3960) { // 3960 segundos = 66 minutos
+                    diffSeconds = 2700 + (diffSeconds - 3960);
                 }
                 
                 setElapsed(diffSeconds);
@@ -438,24 +438,39 @@ if (isAnyMatchLive) {
                 console.log(`[Radar Predictivo] 🏎️ Estado: ${statusMsg}`);
 
                 let hasChanges = false;
+                // 🛡️ Preparamos un paquete con los estados reales para subir a la nube
+                let currentApiStatuses = adminDoc.exists() ? (adminDoc.data().apiStatuses || {}) : {};
+                let newApiStatuses = { ...currentApiStatuses };
+
                 freshMatches.forEach(m => {
                     if (currentLocks[m.id]) return; 
 
                     const apiH = (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) ? m.score.fullTime.home : '';
                     const apiA = (m.score?.fullTime?.away !== null && m.score?.fullTime?.away !== undefined) ? m.score.fullTime.away : '';
 
+                    // 1. ¿Hubo Gol?
                     if (dbPreds[m.id]?.home !== apiH || dbPreds[m.id]?.away !== apiA) {
                         dbPreds[m.id] = { ...dbPreds[m.id], home: apiH, away: apiA };
+                        hasChanges = true;
+                    }
+
+                    // 2. ¿Cambió el estado? (Ej: Pitazo inicial, Medio Tiempo, Finalizado)
+                    if (currentApiStatuses[m.id] !== m.status) {
+                        newApiStatuses[m.id] = m.status;
                         hasChanges = true;
                     }
                 });
 
                 if (hasChanges && isMountedRef.current) {
-                    console.log("[Radar Predictivo] ⚽ 🔥 ¡GOL DETECTADO! Actualizando marcadores...");
+                    console.log("[Radar Predictivo] ⚽ 🔥 ¡CAMBIO DETECTADO! Actualizando marcadores y estados...");
                     
-                    // 1. Guardamos el nuevo marcador en la BD
-                    await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
-                    toast.success('⚽ ¡GOL! Marcadores actualizados automáticamente.', { id: 'autosync-grid-toast' });
+                    // 1. Guardamos el nuevo marcador y los ESTADOS en la BD que escuchan los usuarios
+                    await setDoc(doc(db, 'worldCupAdmin', 'results'), { 
+                        predictions: dbPreds,
+                        apiStatuses: newApiStatuses 
+                    }, { merge: true });
+                    
+                    toast.success('⚽ Marcadores y Estados sincronizados.', { id: 'autosync-grid-toast' });
 
                     // 2. Damos 3 segundos para que el Sincronizador Maestro guarde el ranking y despertamos a Gemini
                     setTimeout(async () => {
@@ -498,10 +513,16 @@ if (isAnyMatchLive) {
     const effectiveMatches = useMemo(() => {
         return matches.map(m => {
             const simStatus = adminResults?.simulation?.matchStatuses?.[m.id];
+            const apiStatus = adminResults?.apiStatuses?.[m.id]; // 🟢 Leemos el estado en vivo de la BD
+            
+            let finalStatus = m.status;
             if (simStatus && simStatus !== '') {
-                return { ...m, status: simStatus };
+                finalStatus = simStatus; // 1. Manda la Simulación
+            } else if (apiStatus && apiStatus !== '') {
+                finalStatus = apiStatus; // 2. Manda el radar automático
             }
-            return m;
+            
+            return { ...m, status: finalStatus };
         });
     }, [matches, adminResults]);
 

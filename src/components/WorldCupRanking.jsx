@@ -428,6 +428,7 @@ const WorldCupRanking = ({ currentUser }) => {
 
             let consecutivePlenos = 0;
             let maxConsecutivePlenos = 0;
+            let primerPlenoMatchDate = null;
 
             officialMatches.forEach(m => {
                 const p = userData.predictions?.[m.id];
@@ -439,6 +440,9 @@ const WorldCupRanking = ({ currentUser }) => {
                     if (pH === realH && pA === realA) {
                         consecutivePlenos++;
                         if (consecutivePlenos > maxConsecutivePlenos) maxConsecutivePlenos = consecutivePlenos;
+                    if (!primerPlenoMatchDate) {
+                            primerPlenoMatchDate = new Date(m.utcDate).getTime();
+                        }
                     } else { consecutivePlenos = 0; }
                 } else { consecutivePlenos = 0; }
             });
@@ -501,6 +505,7 @@ const WorldCupRanking = ({ currentUser }) => {
             stats.isSeco = isSeco;
             stats.isFrancotirador = isFrancotirador;
             stats.isOraculo = isOraculo; // Asignamos la insignia
+            stats.primerPlenoDate = primerPlenoMatchDate;
 
             let userTop2 = []; let userThirds = [];
             
@@ -596,6 +601,26 @@ const WorldCupRanking = ({ currentUser }) => {
             // 🟢 MANTENEMOS LA FOTO PROTEGIDA userData.photoURL
             ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa, ...stats });
         });
+
+        if (officialMatches.length >= 5) {
+            let latestFirstPlenoDate = -1;
+            
+            // Primero encontramos cuál es la fecha más tardía de un "primer pleno"
+            ranks.forEach(user => {
+                if (!user.isSeco && user.primerPlenoDate > latestFirstPlenoDate) {
+                    latestFirstPlenoDate = user.primerPlenoDate;
+                }
+            });
+
+            // Si encontramos a alguien, le asignamos la insignia
+            if (latestFirstPlenoDate > -1) {
+                ranks.forEach(user => {
+                    if (!user.isSeco && user.primerPlenoDate === latestFirstPlenoDate) {
+                        user.isOasis = true;
+                    }
+                });
+            }
+        }
 
         ranks.sort((a, b) => b.total - a.total);
         let currentRank = 1;
@@ -791,7 +816,7 @@ const WorldCupRanking = ({ currentUser }) => {
                                         {user.isFrancotirador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'Francotirador', desc: 'Acertó 3 marcadores exactos consecutivos.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🎯</span>}
                                         {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: 'Colero general por 7 partidos. Hundiendo la tabla.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
                                         {user.isSeco && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Seco', desc: 'Ningún pleno hasta el momento. ¡Cero puntería!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">🌵</span>}
-
+                                        {user.isOasis && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Oasis', desc: 'El último en lograr un pleno y quitarse el cactus.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🌴</span>}
                                         {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full ml-1">⚖️ MITAD: {formatMoney(premiosRepartidos.mitadInd)}</span>}
                                         {rewardLabel && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full ml-1">GANANDO: {rewardLabel}</span>}
                                     </div>
@@ -849,11 +874,12 @@ const WorldCupRanking = ({ currentUser }) => {
                 <h3 className="text-foreground font-black text-xs sm:text-sm uppercase tracking-widest mb-3 opacity-60 text-center">Guía de Insignias y Logros</h3>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs text-foreground-muted">
                     {/* 🟢 NUEVA INSIGNIA AÑADIDA AL PIE DE PÁGINA */}
-                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🔮</span> <b>El Oráculo:</b> 10 plenos en total</div>
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🔮</span> <b>El Oráculo:</b> 10 plenos o más en total</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🎯</span> <b>Francotirador:</b> 3 plenos consecutivos</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🗿</span> <b>El Dictador:</b> Líder 7 partidos (Logro)</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">⚓</span> <b>El Ancla:</b> Colero 7 partidos (Logro)</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🌵</span> <b>El Seco:</b> Ningún pleno hasta ahora</div>
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🌴</span> <b>El Oasis:</b> Último en quitarse el cactus</div>
                 </div>
             </div>
             </div>

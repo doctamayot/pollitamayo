@@ -5,6 +5,21 @@ import { doc, onSnapshot } from 'firebase/firestore';
 const NewsTicker = () => {
     const [news, setNews] = useState([]);
     const [loading, setLoading] = useState(true);
+    // 🟢 NUEVO: Esta llave reinicia la animación cuando regresas a la pestaña
+    const [visibilityKey, setVisibilityKey] = useState(0);
+
+    // 🟢 NUEVO: Escuchador de visibilidad del navegador
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                // Al regresar a la pestaña, cambiamos la llave para "descongelar" la animación
+                setVisibilityKey(prev => prev + 1);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     useEffect(() => {
         const unsub = onSnapshot(
@@ -67,7 +82,8 @@ const NewsTicker = () => {
                 <div className="absolute left-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-r from-slate-950 to-transparent z-10 pointer-events-none"></div>
                 <div className="absolute right-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-l from-slate-950 to-transparent z-10 pointer-events-none"></div>
 
-                <div className="flex whitespace-nowrap animate-ticker items-center h-full">
+                {/* 🟢 Le inyectamos el visibilityKey para que se reinicie al volver */}
+                <div key={visibilityKey} className="flex whitespace-nowrap animate-ticker items-center h-full">
                     
                     {/* CAJA 1 */}
                     <div className="flex items-center shrink-0">
