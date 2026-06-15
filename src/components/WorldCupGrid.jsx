@@ -729,14 +729,17 @@ if (isAnyMatchLive) {
         return Array.from(teamsMap.values());
     };
 
-    const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
+    const calculateProgressiveRanking = useCallback((targetMatchDateStr, isGlobalLive = false) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
-        // 🛡️ FILTRO ELÁSTICO: Si el partido ya empezó o terminó, se cuenta sin importar el reloj
+        
+        // 🛡️ FILTRO ELÁSTICO CORREGIDO: Sólo aplica para el Sincronizador Global en la nube
         const pastMatches = effectiveMatches.filter(m => {
             const matchDate = new Date(m.utcDate);
-            const isLiveOrFinished = m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED';
-            return matchDate <= targetDate || isLiveOrFinished;
+            if (isGlobalLive && (m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED')) {
+                return true;
+            }
+            return matchDate <= targetDate;
         });
 
         let adminProgTop2 = []; 
@@ -999,7 +1002,8 @@ if (isAnyMatchLive) {
         const syncLiveRankingToFirestore = async () => {
             try {
                 const nowISO = new Date().toISOString();
-                const currentRanking = calculateProgressiveRanking(nowISO);
+                // 🟢 LA MAGIA: Pasamos "true" para usar el filtro elástico SOLO aquí en la base de datos global
+                const currentRanking = calculateProgressiveRanking(nowISO, true);
 
                 if (currentRanking.length > 0) {
                     const pointsMap = {};
