@@ -167,6 +167,8 @@ const WorldCupGrid = ({ currentUser }) => {
     // 🟢 EL CAFE VIRTUAL: Mantiene la pantalla encendida para el Admin
     const wakeLockRef = useRef(null);
 
+    
+
     useEffect(() => {
         if (!isAdmin) return;
         
@@ -335,25 +337,30 @@ if (isAnyMatchLive) {
                     // 1. Guardamos el nuevo marcador
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
                     
-                    // 2. Calculamos el Ranking en tiempo real AHORA MISMO
+                    // 2. Calculamos usando el "Teléfono Rojo" (Siempre fresco)
                     const nowISO = new Date().toISOString();
-                    const currentRanking = calculateProgressiveRanking(nowISO);
+                    const currentRanking = calculateProgressiveRankingRef.current(nowISO);
                     
-                    const pointsMap = {};
-                    currentRanking.forEach(user => {
-                        pointsMap[user.uid] = user.totalPoints;
-                    });
+                    // 🛡️ SEGURO DE VIDA: Si por alguna razón la lista está vacía, ABORTAR para no borrar Firebase
+                    if (currentRanking.length === 0) {
+                        console.warn("⚠️ [Radar] Ranking vacío detectado. Abortando guardado en BD.");
+                    } else {
+                        const pointsMap = {};
+                        currentRanking.forEach(user => {
+                            pointsMap[user.uid] = user.totalPoints;
+                        });
 
-                    // 3. 🚨 LO NUEVO: Guardamos los puntos en la colección oficial para la IA
-                    console.log("[Radar Predictivo] 🧮 Subiendo el Ranking Oficial a la nube...");
-                    await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
-                        points: pointsMap,
-                        lastCalculated: nowISO
-                    }, { merge: true });
+                        // 3. Guardamos los puntos en la colección oficial
+                        console.log("[Radar Predictivo] 🧮 Subiendo el Ranking Oficial a la nube...");
+                        await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
+                            points: pointsMap,
+                            lastCalculated: nowISO
+                        }, { merge: true });
+                        
+                        toast.success('⚽ ¡GOL! La Grilla y el Ranking se han actualizado automáticamente.', { id: 'autosync-grid-toast' });
+                    }
 
-                    toast.success('⚽ ¡GOL! La Grilla y el Ranking se han actualizado automáticamente.', { id: 'autosync-grid-toast' });
-                    
-                    // 4. AHORA SÍ despertamos a Gemini (Sin setTimeout ciego)
+                    // 4. AHORA SÍ despertamos a Gemini
                     console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
                     await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
                         action: 'API_GOL_DETECTED',
@@ -623,7 +630,11 @@ if (isAnyMatchLive) {
     const calculateProgressiveRanking = useCallback((targetMatchDateStr) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
-        const pastMatches = effectiveMatches.filter(m => new Date(m.utcDate) <= targetDate);
+        const pastMatches = effectiveMatches.filter(m => {
+            const matchDate = new Date(m.utcDate);
+            const isLiveOrFinished = m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED';
+            return matchDate <= targetDate || isLiveOrFinished;
+        });
 
         let adminProgTop2 = []; 
         let adminProgThirds = [];
@@ -871,6 +882,41 @@ if (isAnyMatchLive) {
 
         return ranks;
     }, [allPredictions, effectiveMatches, mergedAdminPreds, groupMatchesMap, getStandings, adminResults, usersInfo, adminFullBracket]);
+const calculateProgressiveRankingRef = useRef(calculateProgressiveRanking);
+    useEffect(() => {
+        calculateProgressiveRankingRef.current = calculateProgressiveRanking;
+    }, [calculateProgressiveRanking]);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+
+        const syncLiveRankingToFirestore = async () => {
+            try {
+                const nowISO = new Date().toISOString();
+                const currentRanking = calculateProgressiveRanking(nowISO);
+
+                if (currentRanking.length > 0) {
+                    const pointsMap = {};
+                    currentRanking.forEach(user => {
+                        pointsMap[user.uid] = user.totalPoints;
+                    });
+
+                    // Sube el puntaje real de la pantalla directo a la base de datos
+                    await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
+                        points: pointsMap,
+                        lastCalculated: nowISO
+                    }, { merge: true });
+                    console.log("🧮 [Sincronizador Maestro] liveRanking actualizado en Firestore con éxito.");
+                }
+            } catch (error) {
+                console.error("❌ [Sincronizador Maestro] Error al sincronizar:", error);
+            }
+        };
+
+        syncLiveRankingToFirestore();
+    }, [isAdmin, calculateProgressiveRanking]);
+
+
 
     const matchesByDate = useMemo(() => {
         const grouped = {};
