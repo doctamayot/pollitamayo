@@ -330,21 +330,36 @@ if (isAnyMatchLive) {
                 });
 
                 if (hasChanges && isMountedRef.current) {
-                    console.log("[Radar Predictivo] ⚽ 🔥 ¡GOL DETECTADO! Actualizando Firebase...");
+                    console.log("[Radar Predictivo] ⚽ 🔥 ¡GOL DETECTADO! Calculando y actualizando Firebase...");
+                    
+                    // 1. Guardamos el nuevo marcador
                     await setDoc(doc(db, 'worldCupAdmin', 'results'), { predictions: dbPreds }, { merge: true });
+                    
+                    // 2. Calculamos el Ranking en tiempo real AHORA MISMO
+                    const nowISO = new Date().toISOString();
+                    const currentRanking = calculateProgressiveRanking(nowISO);
+                    
+                    const pointsMap = {};
+                    currentRanking.forEach(user => {
+                        pointsMap[user.uid] = user.totalPoints;
+                    });
+
+                    // 3. 🚨 LO NUEVO: Guardamos los puntos en la colección oficial para la IA
+                    console.log("[Radar Predictivo] 🧮 Subiendo el Ranking Oficial a la nube...");
+                    await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
+                        points: pointsMap,
+                        lastCalculated: nowISO
+                    }, { merge: true });
+
                     toast.success('⚽ ¡GOL! La Grilla y el Ranking se han actualizado automáticamente.', { id: 'autosync-grid-toast' });
                     
-                    setTimeout(async () => {
-                        if (isMountedRef.current) {
-                            console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
-                            await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
-                                action: 'API_GOL_DETECTED',
-                                timestamp: new Date().toISOString() 
-                            });
-                        }
-                    }, 5000)
+                    // 4. AHORA SÍ despertamos a Gemini (Sin setTimeout ciego)
+                    console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
+                    await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                        action: 'API_GOL_DETECTED',
+                        timestamp: nowISO 
+                    });
                 }
-
                 // Programamos el siguiente ciclo asegurándonos de limpiar el anterior
                 if (radarTimeoutRef.current) clearTimeout(radarTimeoutRef.current);
                 if (isMountedRef.current) {

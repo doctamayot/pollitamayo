@@ -193,11 +193,18 @@ async function runAiNewsGeneration() {
                 idx = j;
             }
 
-            // 🟢 SEPARAR LA TABLA EN 3 BLOQUES ESTRATÉGICOS PARA LA IA
+            // 🟢 SEPARAR LA TABLA EN BLOQUES ESTRATÉGICOS PARA LA IA
             const topPoints = parsedUsers[0]?.points || 0;
             const lideres = parsedUsers.filter(u => u.points === topPoints);
             const isSingleLeader = lideres.length === 1;
             const lideresStr = lideres.map(u => `${u.name} (${u.points} pts, Botín asegurado: ${formatMoney(u.premio)}) - Predicciones recientes: ${u.picks || 'Ninguna'} - APUESTAS FINALES Y EXTRAS: ${u.futurePicks}`).join(" | ");
+
+            // 🌟 NUEVO: Los 5 perseguidores (Escoltas) y a cuánto están del líder
+            const perseguidores = parsedUsers.slice(lideres.length, lideres.length + 5);
+            const perseguidoresStr = perseguidores.map(u => {
+                const diferencia = topPoints - u.points;
+                return `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts, a ${diferencia} pts de la punta)`;
+            }).join(" | ");
 
             const midIndex = Math.max(0, Math.floor(parsedUsers.length / 2) - 1);
             const mitadTabla = parsedUsers.slice(midIndex, midIndex + 3);
@@ -215,22 +222,24 @@ async function runAiNewsGeneration() {
             
             📊 RADIOGRAFÍA DE LA TABLA (Menciona nombres reales de los participantes y sus puntos):
             - EN LA PUNTA: ${lideresStr}
+            - 🌟 LOS ESCOLTAS (Inmediatos perseguidores): ${perseguidoresStr || 'Aún no hay escoltas definidos.'}
             - EN LA MITAD: ${mitadStr}
             - EN EL FONDO (Coleros): ${colerosStr}
 
             🚨 REGLAS ESTRICTAS E INQUEBRANTABLES:
             1. ESTADO DE LA PUNTA: ${isSingleLeader ? 'HAY UN LÍDER SOLITARIO Y ABSOLUTO. ESTÁ TOTALMENTE PROHIBIDO usar palabras como "empate en la punta", "comparten liderato" o "trancón".' : 'HAY VARIOS LÍDERES EMPATADOS. Narra la guerra total por dividir el premio.'}
             2. DISTRIBUCIÓN DE TEMAS EN LOS 6 TITULARES:
-               - Titular 1: Analiza el partido actual si no hay actual el mas reciente, si hay gol menciona GOOOOOL del equipo, el marcador y menciona específicamente a un usuario que haya acertado su predicción (usa la data enviada).
-               - Titular 2: Habla de los líderes y el dineral que se están embolsando y quienes lo pueden alcanzar (${formatMoney(netPot)} en juego).
-               - Titular 3: Habla del pelotón de la mitad de tabla luchando por subir y habla que van a ganar lo mismo que si quedaran de terceros en la polla.
+               - Titular 1: Analiza el partido actual si no hay actual el mas reciente, pero si hay actual   si hay gol, pero solo si hay gol en la ultima actualizacion menciona GOOOOOL del equipo, el marcador y menciona específicamente a un usuario que haya acertado su predicción (usa la data enviada).
+               - Titular 2: Habla de los líderes, el dineral que se están embolsando (${formatMoney(netPot)} en juego) y MENCIONA A LOS ESCOLTAS que vienen respirándoles en la nuca, destacando a cuántos puntos exactos están de alcanzarlos para meter presión.
+               - Titular 3: Habla del pelotón de la mitad de tabla y habla que van a ganar un premio de consolacion por quedar en la mitad.
                - Titular 4: Haz una broma deportiva con los coleros (el fondo de la tabla).
                - Titular 5: Un análisis general de Pollitamayo News sobre toda la fecha del dia.
                - Titular 6: DATOS CLAVE: Haz un análisis revelando a quiénes apostó el líder (o líderes) para extras, Campeón, Subcampeón, 3ro, 4to y posiciones finales. Usa la información de "APUESTAS FINALES Y EXTRAS" que te envié arriba en la sección de la punta.
             3. NUNCA reveles que eres una Inteligencia Artificial. Eres un periodista deportivo humano.
             4. NUNCA uses nombres de países en inglés. Todo debe estar en español impecable (Ej: Netherlands es Países Bajos, England es Inglaterra).
-            5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:","EL ORÁCULO:", "DATOS CLAVE:".
-            6. Devuelve ÚNICAMENTE un array JSON válido de strings. No agregues nada más.`;
+            5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:","EL ORÁCULO:", "DATOS CLAVE:", "AL ACECHO:".
+            6. Devuelve ÚNICAMENTE un array JSON válido de strings. No agregues nada más.
+            7. El mundial es del 2026 de la FIFA`;
         }
 
         const result = await model.generateContent(prompt);
@@ -331,14 +340,33 @@ exports.generateespnnews = onSchedule({
         try {
             // 🔑 IMPORTANTE: Reemplaza este texto por tu API KEY real de Football-Data, 
             // o usa process.env.FOOTBALL_API_KEY si lo tienes configurado en Google Cloud.
-            const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY || "TU_API_KEY_DE_FOOTBALL_DATA_AQUI"; 
+            const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY; 
             
             // Llamamos a la API Europea directamente desde el servidor
-            const response = await fetch("https://api.football-data.org/v4/competitions/WC/matches", {
-                headers: { "X-Auth-Token": FOOTBALL_API_KEY }
-            });
+            // 🛡️ BLINDAJE DE CONEXIÓN: Reintentos y disfraz de navegador (User-Agent)
+            let response;
+            let retries = 3;
             
-            if (!response.ok) throw new Error("Error en API externa: " + response.status);
+            while(retries > 0) {
+                try {
+                    response = await fetch("https://api.football-data.org/v4/competitions/WC/matches", {
+                        headers: { 
+                            "X-Auth-Token": FOOTBALL_API_KEY,
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                            "Accept": "application/json"
+                        }
+                    });
+                    if (response.ok) break; // Si respondió bien, salimos del bucle
+                } catch (fetchError) {
+                    console.warn(`⚠️ Intento fallido hacia la API (${4 - retries}/3). Motivo: ${fetchError.message}`);
+                }
+                retries--;
+                if (retries > 0) await new Promise(res => setTimeout(res, 2000)); // Esperar 2 segudos antes de volver a tocar la puerta
+            }
+            
+            if (!response || !response.ok) {
+                throw new Error(`La API externa rechazó la conexión después de 3 intentos. Estado final: ${response?.status}`);
+            }
             
             const data = await response.json();
             const freshMatches = data.matches;
