@@ -3,7 +3,6 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-
 if (admin.apps.length === 0) admin.initializeApp();
 const db = admin.firestore();
 
@@ -139,14 +138,12 @@ async function runAiNewsGeneration() {
                     }
                 });
 
-                // 🌟 NUEVO: Extraemos los pronósticos a futuro y extras de este usuario
                 const ko = data.knockoutPicks || {};
                 const campeon = ko.campeon?.[0]?.name || 'Ninguno';
                 const subcampeon = ko.subcampeon?.[0]?.name || 'Ninguno';
                 const tercero = ko.tercero?.[0]?.name || 'Ninguno';
                 const cuarto = ko.cuarto?.[0]?.name || 'Ninguno';
                 
-                // Sacamos un par de extras y eventos al azar para no saturar a la IA
                 const extras = data.extraPicks ? Object.values(data.extraPicks).slice(0, 2).join(", ") : 'Ninguno';
                 const futurePicks = `Campeón: ${campeon}, Subcampeón: ${subcampeon}, 3ro: ${tercero}, 4to: ${cuarto}. Apuestas extras clave: ${extras}`;
 
@@ -154,7 +151,7 @@ async function runAiNewsGeneration() {
                     name: data.displayName, 
                     points: livePointsMap[data.id] || 0, 
                     picks: picks.join(", "),
-                    futurePicks: futurePicks // 🌟 Se lo guardamos al usuario
+                    futurePicks: futurePicks
                 };
             });
             
@@ -197,19 +194,15 @@ async function runAiNewsGeneration() {
             }
 
             // 🟢 SEPARAR LA TABLA EN 3 BLOQUES ESTRATÉGICOS PARA LA IA
-            // 1. Líderes (La Punta)
             const topPoints = parsedUsers[0]?.points || 0;
             const lideres = parsedUsers.filter(u => u.points === topPoints);
             const isSingleLeader = lideres.length === 1;
-            // 🌟 NUEVO: Le inyectamos "futurePicks" al texto de los líderes
             const lideresStr = lideres.map(u => `${u.name} (${u.points} pts, Botín asegurado: ${formatMoney(u.premio)}) - Predicciones recientes: ${u.picks || 'Ninguna'} - APUESTAS FINALES Y EXTRAS: ${u.futurePicks}`).join(" | ");
 
-            // 2. Mitad de Tabla (El Pelotón)
             const midIndex = Math.max(0, Math.floor(parsedUsers.length / 2) - 1);
             const mitadTabla = parsedUsers.slice(midIndex, midIndex + 3);
             const mitadStr = mitadTabla.map(u => `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
-            // 3. Coleros (El Fondo)
             const coleros = parsedUsers.slice(-3);
             const colerosStr = coleros.map(u => `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
@@ -238,7 +231,6 @@ async function runAiNewsGeneration() {
             4. NUNCA uses nombres de países en inglés. Todo debe estar en español impecable (Ej: Netherlands es Países Bajos, England es Inglaterra).
             5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:","EL ORÁCULO:", "DATOS CLAVE:".
             6. Devuelve ÚNICAMENTE un array JSON válido de strings. No agregues nada más.`;
-            
         }
 
         const result = await model.generateContent(prompt);
@@ -265,9 +257,11 @@ async function runAiNewsGeneration() {
     }
 }
 
-// --- DISPARADORES ---
+// =========================================================================
+// 🚀 EL RADAR INMORTAL DE GOOGLE CLOUD (Autónomo + Heartbeat)
+// =========================================================================
 exports.generateespnnews = onSchedule({
-    schedule: "*/5 9-23 * * *", // Revisa cada 5 minutos
+    schedule: "*/2 9-23 * * *", // 🟢 Ejecutar cada 2 minutos
     timeZone: "America/Bogota"
 }, async (event) => {
     const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();
@@ -276,68 +270,129 @@ exports.generateespnnews = onSchedule({
     const now = new Date();
     const minutes = now.getMinutes();
 
-    // 1. Si el Mundial no ha empezado, refresca la marquesina 1 vez por hora (ej. 3:00, 4:00) y muere.
+    // 1. Si el Mundial no ha empezado, refresca la marquesina 1 vez por hora y muere.
     if (!isTournamentStarted) {
         if (minutes === 0) await runAiNewsGeneration();
         return null;
     }
 
-    // 2. Leer la API y los estados del Admin
+    // 2. Revisar si el Administrador está activo en su navegador (Mecanismo de Latido)
+    const presenceSnap = await db.collection("worldCupAdmin").doc("presence").get();
+    const lastSeenStr = presenceSnap.exists ? presenceSnap.data().adminLastSeen : null;
+    let isAdminOnline = false;
+
+    if (lastSeenStr) {
+        const diffSeconds = (now.getTime() - new Date(lastSeenStr).getTime()) / 1000;
+        // Si el Admin reportó presencia hace menos de 70 segundos, está en línea
+        if (diffSeconds < 70) {
+            isAdminOnline = true;
+        }
+    }
+
+    // 3. Leer la API Cachada y los resultados actuales en la DB
     const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
     const apiMatches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
+    
     const adminResultsSnap = await db.collection("worldCupAdmin").doc("results").get();
-    const simStatuses = adminResultsSnap.exists ? (adminResultsSnap.data().simulation?.matchStatuses || {}) : {};
+    const adminResultsData = adminResultsSnap.exists ? adminResultsSnap.data() : {};
+    const simStatuses = adminResultsData.simulation?.matchStatuses || {};
+    const adminPreds = adminResultsData.predictions || {};
+    const currentLocks = adminResultsData.lockedMatches || {};
 
-    // 3. Filtrar cuáles partidos están jugándose AHORA MISMO
-    const liveMatches = apiMatches.filter(m => {
+    // 4. EL CEREBRO AUTÓNOMO: ¿Hay partido activo o partido que ya debió empezar?
+    const currentTimeMs = now.getTime();
+    const shouldActivateCloudRadar = apiMatches.some(m => {
         const finalStatus = simStatuses[m.id] && simStatuses[m.id] !== '' ? simStatuses[m.id] : m.status;
-        return finalStatus === 'IN_PLAY' || finalStatus === 'PAUSED';
-    });
+        
+        // Gatillo A: La base de datos sabe que está rodando el balón
+        if (finalStatus === 'IN_PLAY' || finalStatus === 'PAUSED') return true;
 
-    // 4. Saber si hay algún partido en cuenta regresiva (a menos de 7 minutos de pitar el inicio)
-    const isAboutToStart = apiMatches.some(m => {
-        const startTime = new Date(m.utcDate);
-        const diffMinutes = (startTime - now) / (1000 * 60);
-        return diffMinutes > 0 && diffMinutes <= 7;
-    });
-
-    // 🧠 LA MAGIA DEL AHORRO: Tomar la "Fotografía" de los marcadores en este segundo exacto
-    let currentStateString = liveMatches.map(m => {
-        const home = m.score?.fullTime?.home ?? 0;
-        const away = m.score?.fullTime?.away ?? 0;
-        return `${m.id}:${home}-${away}`; // Esto crea un texto como: "partido1:1-0 | partido2:0-0"
-    }).join("|");
-
-    if (isAboutToStart) currentStateString += "|STARTING_SOON";
-
-    // 5. Leer la fotografía que guardamos hace 5 minutos en la base de datos
-    const stateDocRef = db.collection("systemAdmin").doc("match_state");
-    const stateSnap = await stateDocRef.get();
-    const lastStateString = stateSnap.exists ? stateSnap.data().lastState : "";
-
-    // 6. LA GRAN DECISIÓN (SÍ Y SOLO SÍ)
-    if (liveMatches.length > 0 || isAboutToStart) {
-        // ¿Cambió el marcador comparado con hace 5 minutos?
-        if (currentStateString !== lastStateString) {
-            console.log("¡GOL O CAMBIO DETECTADO! Despertando a la IA...");
-            await runAiNewsGeneration();
-            await stateDocRef.set({ lastState: currentStateString }); // Guardamos la nueva foto para la próxima
-        } else {
-            console.log("El marcador no ha cambiado. Silenciando a Gemini para ahorrar dinero.");
+        // Gatillo B (El Salvavidas): Dice programado, pero la hora oficial ya fue superada
+        if (finalStatus === 'SCHEDULED' || finalStatus === 'TIMED') {
+            const matchStartTimeMs = new Date(m.utcDate).getTime();
+            if (currentTimeMs >= matchStartTimeMs) {
+                return true; 
+            }
         }
-    } 
-    // 7. Si no hay partidos hoy, mantén la app viva refrescando 1 vez cada hora en punto
-    else if (minutes === 0) {
+        return false;
+    });
+
+    // 5. ÁRBOL DE DECISIÓN FINAL
+    if (isAdminOnline) {
+        console.log("🛡️ [Modo Ahorro] Admin en línea vigilando. Google Cloud en reposo.");
+        // Solo publica noticias genéricas si es la hora en punto para que la app no parezca muerta
+        if (minutes === 0) await runAiNewsGeneration();
+        return null;
+    }
+
+    if (!isAdminOnline && shouldActivateCloudRadar) {
+        console.log("☁️🚨 [Emergencia] ADMIN OFFLINE y partido en curso. ¡La Nube toma el control!");
+
+        try {
+            // 🔑 IMPORTANTE: Reemplaza este texto por tu API KEY real de Football-Data, 
+            // o usa process.env.FOOTBALL_API_KEY si lo tienes configurado en Google Cloud.
+            const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY || "TU_API_KEY_DE_FOOTBALL_DATA_AQUI"; 
+            
+            // Llamamos a la API Europea directamente desde el servidor
+            const response = await fetch("https://api.football-data.org/v4/competitions/WC/matches", {
+                headers: { "X-Auth-Token": FOOTBALL_API_KEY }
+            });
+            
+            if (!response.ok) throw new Error("Error en API externa: " + response.status);
+            
+            const data = await response.json();
+            const freshMatches = data.matches;
+
+            if (!freshMatches) return null;
+
+            // Guardamos el nuevo listado oficial para la app
+            await db.collection("worldCupAdmin").doc("apiCache").set({ matches: freshMatches }, { merge: true });
+
+            let hasChanges = false;
+            let dbPreds = { ...adminPreds };
+
+            // Auditamos todos los marcadores en busca de Goles
+            freshMatches.forEach(m => {
+                if (currentLocks[m.id]) return; // Si el admin lo bloqueó manualmente, no lo tocamos
+
+                const apiH = m.score?.fullTime?.home;
+                const apiA = m.score?.fullTime?.away;
+
+                // Si la API devolvió un marcador válido
+                if (apiH !== null && apiH !== undefined) {
+                    if (dbPreds[m.id]?.home !== apiH || dbPreds[m.id]?.away !== apiA) {
+                        dbPreds[m.id] = { ...dbPreds[m.id], home: apiH, away: apiA };
+                        hasChanges = true;
+                    }
+                }
+            });
+
+            if (hasChanges) {
+                console.log("⚽ ¡GOL DETECTADO POR LA NUBE! Guardando y activando IA...");
+                await db.collection("worldCupAdmin").doc("results").set({ predictions: dbPreds }, { merge: true });
+                
+                // Le damos 5 segundos de gracia a Firestore para re-calcular los puntos (Race Condition)
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                
+                await runAiNewsGeneration();
+            } else {
+                console.log("⏱️ Sin novedades en el marcador durante este minuto.");
+            }
+
+        } catch (err) {
+            console.error("❌ Error en el Radar Autónomo de la Nube:", err);
+        }
+
+    } else if (minutes === 0) {
+        console.log("💤 Torneo dormido y Admin desconectado. Refrescando boletín horario estándar.");
         await runAiNewsGeneration();
     }
 
     return null;
 });
 
-// 🟢 AHORA ESCUCHA EL TRIGER ULTRA-RÁPIDO DEL AUTO-SYNC O DEL MANUAL
+// 🟢 ESCUCHA EL TRIGER ULTRA-RÁPIDO DEL AUTO-SYNC O DEL MANUAL (Navegador Admin)
 exports.onLiveTriggerUpdate = onDocumentUpdated("worldCupAdmin/trigger", async (event) => {
-    console.log("🚨 ¡ALERTA DE GOL O CAMBIO EN VIVO! Despertando a Gemini...");
-    
-    // Simplemente generamos las noticias con la Inteligencia Artificial (Gemini) sin enviar push
+    console.log("🚨 ¡ALERTA DE GOL ENVIADA DESDE EL NAVEGADOR! Despertando a Gemini...");
     await runAiNewsGeneration();
 });

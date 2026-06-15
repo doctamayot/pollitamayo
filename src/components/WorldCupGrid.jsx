@@ -168,6 +168,31 @@ const WorldCupGrid = ({ currentUser }) => {
     const wakeLockRef = useRef(null);
 
     useEffect(() => {
+        if (!isAdmin) return;
+        
+        // Función que le escribe a Firebase "sigo aquí"
+        const reportPresence = async () => {
+            try {
+                // Escribe en la colección worldCupAdmin, documento "presence"
+                await setDoc(doc(db, 'worldCupAdmin', 'presence'), {
+                    adminLastSeen: new Date().toISOString()
+                }, { merge: true });
+            } catch (error) {
+                console.error("❌ [Presence] Error enviando señal de vida a la nube:", error);
+            }
+        };
+
+        // Reportamos inmediatamente al entrar a la Grilla
+        reportPresence();
+
+        // Y luego repetimos el reporte cada 30 segundos rigurosamente
+        const intervalId = setInterval(reportPresence, 30000); 
+
+        // Limpiador: Si cambias de pestaña o cierras la app, dejas de reportar presencia
+        return () => clearInterval(intervalId);
+    }, [isAdmin]);
+
+    useEffect(() => {
         // Si no es el administrador, no necesitamos gastarle batería
         if (!isAdmin) return;
 
