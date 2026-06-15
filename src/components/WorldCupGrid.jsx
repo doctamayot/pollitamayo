@@ -124,7 +124,7 @@ const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA,
             interval = setInterval(() => {
                 const start = new Date(match.utcDate).getTime();
                 const now = new Date().getTime();
-                let diffSeconds = Math.floor((now - start) / 1000);
+                let diffSeconds = Math.floor((now - start) / 1000)-180;
 
                 if (diffSeconds < 0) diffSeconds = 0;
                 
