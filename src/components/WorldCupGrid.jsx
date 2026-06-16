@@ -450,6 +450,8 @@ if (isAnyMatchLive) {
                 let currentApiStatuses = adminDoc.exists() ? (adminDoc.data().apiStatuses || {}) : {};
                 let newApiStatuses = { ...currentApiStatuses };
 
+                let newlyFinishedMatches = [];
+
                 freshMatches.forEach(m => {
                     if (currentLocks[m.id]) return; 
 
@@ -466,9 +468,13 @@ if (isAnyMatchLive) {
                     if (currentApiStatuses[m.id] !== m.status) {
                         newApiStatuses[m.id] = m.status;
                         hasChanges = true;
+                        
+                        // 📸 EL FOTÓGRAFO: Si el nuevo estado es FINISHED y antes no lo era, tomaremos una foto de la historia.
+                        if (m.status === 'FINISHED') {
+                            newlyFinishedMatches.push(m);
+                        }
                     }
                 });
-
                 if (hasChanges && isMountedRef.current) {
                     console.log("[Radar Predictivo] ⚽ 🔥 ¡CAMBIO DETECTADO! Actualizando marcadores y estados...");
                     
@@ -480,7 +486,44 @@ if (isAnyMatchLive) {
                     
                     toast.success('⚽ Marcadores y Estados sincronizados.', { id: 'autosync-grid-toast' });
 
-                    // 2. Damos 3 segundos para que el Sincronizador Maestro guarde el ranking y despertamos a Gemini
+                    // 📸 2. EL FOTÓGRAFO EN ACCIÓN: Guardar la historia si un partido terminó
+                    if (newlyFinishedMatches.length > 0) {
+                        console.log("[Fotógrafo Histórico] 📸 Partido(s) finalizado(s). Tomando snapshot del ranking...");
+                        setTimeout(async () => {
+                            if (!isMountedRef.current) return;
+                            try {
+                                const snapshotsUpdate = {};
+                                
+                                for (const finishedMatch of newlyFinishedMatches) {
+                                    const snapshotRanking = calculateProgressiveRankingRef.current(finishedMatch.utcDate, true);
+                                    const scoresOnly = {};
+                                    snapshotRanking.forEach(user => { scoresOnly[user.uid] = user.totalPoints; });
+
+                                    const homeName = finishedMatch.homeTeam?.name || 'TBD';
+                                    const awayName = finishedMatch.awayTeam?.name || 'TBD';
+
+                                    snapshotsUpdate[`match_${finishedMatch.id}`] = {
+                                        matchId: finishedMatch.id,
+                                        matchName: `${homeName} vs ${awayName}`, // 👈 Guardamos el partido
+                                        dateRecorded: new Date().toISOString(),
+                                        matchDate: finishedMatch.utcDate,
+                                        scores: scoresOnly
+                                    };
+                                }
+
+                                // Se guarda en el documento central de worldCupAdmin
+                                await setDoc(doc(db, 'worldCupAdmin', 'rankingHistory'), { 
+                                    snapshots: snapshotsUpdate 
+                                }, { merge: true });
+                                
+                                console.log(`[Fotógrafo Histórico] ✅ Fotos guardadas en worldCupAdmin/rankingHistory`);
+                            } catch (snapErr) {
+                                console.error("[Fotógrafo Histórico] ❌ Error tomando la foto:", snapErr);
+                            }
+                        }, 2000); 
+                    }
+
+                    // 3. Damos 3 segundos para que el Sincronizador Maestro guarde el ranking y despertamos a Gemini
                     setTimeout(async () => {
                         if (isMountedRef.current) {
                             console.log("[Radar Predictivo] 🤖 Despertando a la IA con el ranking fresco...");
@@ -1159,6 +1202,57 @@ if (isAnyMatchLive) {
         }
     };
 
+    // 📸 BOTÓN DE RESCATE: Genera las fotos de los partidos que ya terminaron
+    // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos de los partidos que de verdad ya terminaron
+    // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos y las guarda en worldCupAdmin
+    const handleTakeRetroactivePhotos = async () => {
+        try {
+            const finishedMatches = effectiveMatches.filter(m => {
+                const isFinished = m.status === 'FINISHED';
+                const hasHomeTeam = m.homeTeam && m.homeTeam.name && m.homeTeam.name !== 'TBD' && !m.homeTeam.name.includes('Winner') && !m.homeTeam.name.includes('Loser');
+                const hasAwayTeam = m.awayTeam && m.awayTeam.name && m.awayTeam.name !== 'TBD' && !m.awayTeam.name.includes('Winner') && !m.awayTeam.name.includes('Loser');
+                return isFinished && hasHomeTeam && hasAwayTeam;
+            });
+
+            if (finishedMatches.length === 0) {
+                toast.error("No hay partidos válidos finalizados para fotografiar.");
+                return;
+            }
+
+            toast.loading(`Generando ${finishedMatches.length} fotos históricas...`, { id: 'retro-photos' });
+            
+            const snapshotsToSave = {};
+
+            for (const match of finishedMatches) {
+                const snapshotRanking = calculateProgressiveRankingRef.current(match.utcDate, false);
+                const scoresOnly = {};
+                snapshotRanking.forEach(user => { scoresOnly[user.uid] = user.totalPoints; });
+
+                const homeName = match.homeTeam?.name || 'TBD';
+                const awayName = match.awayTeam?.name || 'TBD';
+
+                // Guardamos la foto en el objeto maestro
+                snapshotsToSave[`match_${match.id}`] = {
+                    matchId: match.id,
+                    matchName: `${homeName} vs ${awayName}`, // 👈 Aquí guardamos quién jugó
+                    dateRecorded: new Date().toISOString(),
+                    matchDate: match.utcDate,
+                    scores: scoresOnly
+                };
+            }
+
+            // Guardamos TODAS las fotos en un solo documento dentro de worldCupAdmin
+            await setDoc(doc(db, 'worldCupAdmin', 'rankingHistory'), { 
+                snapshots: snapshotsToSave 
+            }, { merge: true });
+            
+            toast.success(`¡Misión cumplida! Historial guardado en worldCupAdmin/rankingHistory.`, { id: 'retro-photos' });
+        } catch (error) {
+            console.error("❌ Error en el viaje temporal:", error);
+            toast.error('Error generando el historial retroactivo.', { id: 'retro-photos' });
+        }
+    };
+
     if (isApiLoading || isDbLoading) return (
         <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
             <img src={logocopa} className="w-20 h-20 mb-6 animate-pulse opacity-50" alt="Cargando" />
@@ -1219,6 +1313,13 @@ if (isAnyMatchLive) {
                                 <span>✖️</span> <span className="hidden sm:inline">Apagar</span>
                             </button>
                         )}
+                        <button 
+                            onClick={handleTakeRetroactivePhotos} 
+                            className="bg-yellow-500/20 text-yellow-400 px-3 py-2 sm:py-2.5 rounded-xl font-black hover:bg-yellow-500/40 transition-colors text-xs flex items-center gap-1.5 uppercase tracking-widest ml-2" 
+                            title="Recuperar fotos del pasado"
+                        >
+                            <span>📸</span> <span className="hidden sm:inline">Recuperar Historial</span>
+                        </button>
                     </div>
                 </div>
             )}

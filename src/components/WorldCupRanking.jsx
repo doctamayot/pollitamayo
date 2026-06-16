@@ -92,16 +92,17 @@ const getThirdPlaceTeams = (picksObj) => {
 const WorldCupRanking = ({ currentUser }) => { 
     const auth = getAuth();
     const userEmail = currentUser?.email || auth.currentUser?.email;
-    const isAdmin = userEmail === 'doctamayot@gmail.com'
+    const isAdmin = userEmail === 'doctamayot@gmail.com';
 
     const [matches, setMatches] = useState([]);
     const [allPredictions, setAllPredictions] = useState({});
     const [usersInfo, setUsersInfo] = useState({});
     const [adminResults, setAdminResults] = useState(null);
+    const [rankingHistoryData, setRankingHistoryData] = useState([]); // 📸 EL ÁLBUM DE FOTOS
     const [expandedUser, setExpandedUser] = useState(null);
     const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
-    const [loadingStatus, setLoadingStatus] = useState({ api: false, preds: false, users: false, admin: false });
-    const isLoading = !loadingStatus.api || !loadingStatus.preds || !loadingStatus.users || !loadingStatus.admin;
+    const [loadingStatus, setLoadingStatus] = useState({ api: false, preds: false, users: false, admin: false, history: false });
+    const isLoading = !loadingStatus.api || !loadingStatus.preds || !loadingStatus.users || !loadingStatus.admin || !loadingStatus.history;
 
     useEffect(() => {
         if (activeBadgeInfo) {
@@ -150,7 +151,24 @@ const WorldCupRanking = ({ currentUser }) => {
             setLoadingStatus(prev => ({ ...prev, admin: true }));
         });
 
-        return () => { unsubPreds(); unsubUsers(); unsubAdmin(); };
+        // 📸 NUEVO: Escuchamos la colección de fotos históricas
+        const unsubHistory = onSnapshot(doc(db, 'worldCupAdmin', 'rankingHistory'), (docSnap) => {
+            if (docSnap.exists() && docSnap.data().snapshots) {
+                // Sacamos todos los objetos del mapa de snapshots
+                const snapshotsObj = docSnap.data().snapshots;
+                const historyList = Object.values(snapshotsObj);
+                
+                // Ordenamos las fotos estrictamente por fecha cronológica
+                historyList.sort((a, b) => new Date(a.matchDate) - new Date(b.matchDate));
+                
+                setRankingHistoryData(historyList);
+            } else {
+                setRankingHistoryData([]);
+            }
+            setLoadingStatus(prev => ({ ...prev, history: true }));
+        });
+
+        return () => { unsubPreds(); unsubUsers(); unsubAdmin(); unsubHistory(); };
     }, [isAdmin]);
 
     const effectiveMatches = useMemo(() => {
@@ -194,49 +212,6 @@ const WorldCupRanking = ({ currentUser }) => {
             return hasOfficialAdminResult || isMatchActiveOrFinished;
         }).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
     }, [effectiveMatches, mergedAdminPreds]);
-
-    const historicalRanks = useMemo(() => {
-        const userScores = {};
-        Object.keys(allPredictions).forEach(uid => userScores[uid] = 0);
-        const history = [];
-
-        officialMatches.forEach(m => {
-            const rH = parseInt(mergedAdminPreds[m.id]?.home);
-            const rA = parseInt(mergedAdminPreds[m.id]?.away);
-            const validResult = !isNaN(rH) && !isNaN(rA);
-
-            if (validResult) {
-                Object.keys(allPredictions).forEach(uid => {
-                    const userData = allPredictions[uid];
-                    if (!userData || !userData.hasPaid || EXCLUDED_EMAILS.includes(userData.email)) return;
-
-                    const p = userData.predictions?.[m.id];
-                    if (p && p.home !== '' && p.away !== '') {
-                        const pH = parseInt(p.home); const pA = parseInt(p.away);
-                        if (pH === rH && pA === rA) userScores[uid] += 5;
-                        else {
-                            const pR = Math.sign(pH - pA); const rR = Math.sign(rH - rA);
-                            if (pR === rR && (pH === rH || pA === rA)) userScores[uid] += 3;
-                            else if (pR === rR) userScores[uid] += 2;
-                            else if (pH === rH || pA === rA) userScores[uid] += 1;
-                        }
-                    }
-                });
-
-                let max = -1; let min = 999999;
-                Object.keys(userScores).forEach(uid => {
-                    const userData = allPredictions[uid];
-                    if (!userData || !userData.hasPaid || EXCLUDED_EMAILS.includes(userData.email)) return;
-                    const s = userScores[uid];
-                    if (s > max) max = s;
-                    if (s < min) min = s;
-                });
-
-                history.push({ topScore: max, bottomScore: min, scores: { ...userScores } });
-            }
-        });
-        return history;
-    }, [officialMatches, allPredictions, mergedAdminPreds]);
 
     const groupStageMatches = useMemo(() => effectiveMatches.filter(m => m.stage === 'GROUP_STAGE'), [effectiveMatches]);
 
@@ -417,9 +392,13 @@ const WorldCupRanking = ({ currentUser }) => {
         return top2;
     }, [byGroup, mergedAdminPreds, adminResults, groupStatus, computeStandings]);
 
+
+    // 🟢 EL CEREBRO DE RANKING (AHORA USA EVENT SOURCING)
     const ranking = useMemo(() => {
         const ranks = [];
+        const usersStats = {};
 
+        // PASO 1: Calcular la radiografía actual y extraer TODOS los puntos visuales
         Object.keys(allPredictions).forEach(uid => {
             const userData = allPredictions[uid];
             if (!userData.hasPaid || EXCLUDED_EMAILS.includes(userData.email)) return;
@@ -440,36 +419,11 @@ const WorldCupRanking = ({ currentUser }) => {
                     if (pH === realH && pA === realA) {
                         consecutivePlenos++;
                         if (consecutivePlenos > maxConsecutivePlenos) maxConsecutivePlenos = consecutivePlenos;
-                    if (!primerPlenoMatchDate) {
+                        if (!primerPlenoMatchDate) {
                             primerPlenoMatchDate = new Date(m.utcDate).getTime();
                         }
                     } else { consecutivePlenos = 0; }
                 } else { consecutivePlenos = 0; }
-            });
-
-            // 🟢 LÓGICA DE INSIGNIAS PERMANENTES APLICADA (Desbloqueo de logros)
-            let isDictador = false;
-            let isColero = false;
-            
-            let rachaDictadorActual = 0;
-            let rachaColeroActual = 0;
-
-            historicalRanks.forEach(step => {
-                // 1. Lógica del Dictador Permanente
-                if (step.scores[uid] === step.topScore && step.topScore > 0) {
-                    rachaDictadorActual++;
-                    if (rachaDictadorActual >= 7) isDictador = true; 
-                } else {
-                    rachaDictadorActual = 0;
-                }
-
-                // 2. Lógica del Colero Permanente
-                if (step.scores[uid] === step.bottomScore) {
-                    rachaColeroActual++;
-                    if (rachaColeroActual >= 7) isColero = true;
-                } else {
-                    rachaColeroActual = 0;
-                }
             });
 
             effectiveMatches.forEach(m => {
@@ -496,19 +450,7 @@ const WorldCupRanking = ({ currentUser }) => {
                 }
             });
 
-            const isSeco = officialMatches.length >= 5 && stats.plenosCount === 0;
-            const isFrancotirador = maxConsecutivePlenos >= 3;
-            const isOraculo = stats.plenosCount >= 10; // 🟢 NUEVA INSIGNIA: 10 Plenos
-
-            stats.isDictador = isDictador;
-            stats.isColero = isColero;
-            stats.isSeco = isSeco;
-            stats.isFrancotirador = isFrancotirador;
-            stats.isOraculo = isOraculo; // Asignamos la insignia
-            stats.primerPlenoDate = primerPlenoMatchDate;
-
             let userTop2 = []; let userThirds = [];
-            
             Object.keys(byGroup).forEach(g => {
                 const groupMatches = byGroup[g];
                 
@@ -596,29 +538,92 @@ const WorldCupRanking = ({ currentUser }) => {
             }
             if (isSuperBono) stats.ptsHonorYBonos += 10;
 
-            stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
-            
-            // 🟢 MANTENEMOS LA FOTO PROTEGIDA userData.photoURL
-            ranks.push({ uid, name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa, ...stats });
+            usersStats[uid] = { userData, stats, maxConsecutivePlenos, primerPlenoMatchDate };
         });
 
-        if (officialMatches.length >= 5) {
-            let latestFirstPlenoDate = -1;
-            
-            // Primero encontramos cuál es la fecha más tardía de un "primer pleno"
-            ranks.forEach(user => {
-                if (!user.isSeco && user.primerPlenoDate > latestFirstPlenoDate) {
-                    latestFirstPlenoDate = user.primerPlenoDate;
+        // PASO 2: ASIGNACIÓN DE INSIGNIAS LEYENDO EL ÁLBUM DE FOTOS DE FIREBASE 📸
+        Object.keys(usersStats).forEach(uid => {
+            let isDictador = false;
+            let isColero = false;
+            let rachaDictadorActual = 0;
+            let rachaColeroActual = 0;
+
+            // Recorremos las fotos históricas desde el partido 1 hasta el último jugado
+            rankingHistoryData.forEach(snapshot => {
+                const scores = snapshot.scores || {};
+                
+                // Encontramos el puntaje más alto y más bajo de la polla EN ESE MOMENTO EXACTO
+                let max = -1;
+                let min = 999999;
+                
+                // Filtramos para solo comparar contra usuarios válidos (que pagaron y no son admin)
+                Object.keys(usersStats).forEach(validUid => {
+                    const s = scores[validUid] || 0;
+                    if (s > max) max = s;
+                    if (s < min) min = s;
+                });
+
+                // ¿Cuántos puntos tenía nuestro usuario en esa foto?
+                const userScore = scores[uid] || 0;
+
+                // LÓGICA ESTRICTA CONSECUTIVA DICTADOR
+                if (userScore === max && max > 0) {
+                    rachaDictadorActual++;
+                    if (rachaDictadorActual >= 7) isDictador = true;
+                } else {
+                    rachaDictadorActual = 0; // Se reinicia si suelta la corona
+                }
+
+                // LÓGICA ESTRICTA CONSECUTIVA COLERO
+                if (userScore === min) {
+                    rachaColeroActual++;
+                    if (rachaColeroActual >= 7) isColero = true;
+                } else {
+                    rachaColeroActual = 0; // Se reinicia si sube de puesto
                 }
             });
 
-            // Si encontramos a alguien, le asignamos la insignia
-            if (latestFirstPlenoDate > -1) {
+            const { userData, stats, maxConsecutivePlenos, primerPlenoMatchDate } = usersStats[uid];
+
+            const isSeco = officialMatches.length >= 5 && stats.plenosCount === 0;
+            const isFrancotirador = maxConsecutivePlenos >= 3;
+            const isOraculo = stats.plenosCount >= 10;
+
+            stats.isDictador = isDictador;
+            stats.isColero = isColero;
+            stats.isSeco = isSeco;
+            stats.isFrancotirador = isFrancotirador;
+            stats.isOraculo = isOraculo;
+            stats.primerPlenoDate = primerPlenoMatchDate;
+            
+            // Re-confirmamos el total final
+            stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
+
+            ranks.push({ 
+                uid, 
+                name: usersInfo[uid]?.displayName || userData.displayName || 'Jugador', 
+                photoURL: usersInfo[uid]?.photoURL || userData.photoURL || logocopa, 
+                ...stats 
+            });
+        });
+
+        // 🟢 EL CANDADO DEL OASIS
+        if (officialMatches.length >= 5) {
+            const anyoneStillSeco = ranks.some(user => user.isSeco);
+            if (!anyoneStillSeco) {
+                let latestFirstPlenoDate = -1;
                 ranks.forEach(user => {
-                    if (!user.isSeco && user.primerPlenoDate === latestFirstPlenoDate) {
-                        user.isOasis = true;
+                    if (user.primerPlenoDate && user.primerPlenoDate > latestFirstPlenoDate) {
+                        latestFirstPlenoDate = user.primerPlenoDate;
                     }
                 });
+                if (latestFirstPlenoDate > -1) {
+                    ranks.forEach(user => {
+                        if (user.primerPlenoDate === latestFirstPlenoDate) {
+                            user.isOasis = true;
+                        }
+                    });
+                }
             }
         }
 
@@ -628,10 +633,11 @@ const WorldCupRanking = ({ currentUser }) => {
             if (i > 0 && r.total < ranks[i - 1].total) currentRank = i + 1;
             r.position = currentRank;
         });
+        
         return ranks;
-    }, [allPredictions, effectiveMatches, officialMatches, historicalRanks, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus]);
+    }, [allPredictions, effectiveMatches, officialMatches, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus, rankingHistoryData]);
 
-    // 🟢 NUEVA LÓGICA DE PREMIOS ESTRICTA BASADA EN POSICIONES REALES (1, 2 y 3)
+    // 🟢 LÓGICA DE PREMIOS ESTRICTA
     const premiosRepartidos = useMemo(() => {
         if (ranking.length === 0) return { p1Ind: 0, p2Ind: 0, p3Ind: 0, p1Total: 0, p2Total: 0, p3Total: 0, mitadTotal: 0, mitadInd: 0, netPot: 0, rMitad: 0 };
         
@@ -641,40 +647,33 @@ const WorldCupRanking = ({ currentUser }) => {
         const bolsa3 = netPot * PORCENTAJES.p3;
         const bolsaMitad = netPot * PORCENTAJES.mitad;
 
-        // Contamos cuántos jugadores hay estrictamente en las posiciones 1, 2 y 3
         const playersByPos = {};
         ranking.forEach(r => { playersByPos[r.position] = (playersByPos[r.position] || 0) + 1; });
 
-        const n1 = playersByPos[1] || 0; // Cuántos están en 1er lugar real
-        const n2 = playersByPos[2] || 0; // Cuántos están en 2do lugar real
-        const n3 = playersByPos[3] || 0; // Cuántos están en 3er lugar real
+        const n1 = playersByPos[1] || 0; 
+        const n2 = playersByPos[2] || 0; 
+        const n3 = playersByPos[3] || 0; 
 
         let p1Ind = 0, p2Ind = 0, p3Ind = 0;
         let p1Total = 0, p2Total = 0, p3Total = 0;
 
-        // Regla oficial de "Dead Heat" (Empate deportivo)
         if (n1 >= 3) {
-            // Si 3 o más empatan de primeros, se llevan todo el podio. No hay plata ni bronce.
             p1Total = bolsa1 + bolsa2 + bolsa3;
             p1Ind = p1Total / n1;
         } else if (n1 === 2) {
-            // Si 2 empatan de primeros, se llevan el oro y la plata. El siguiente gana bronce.
             p1Total = bolsa1 + bolsa2;
             p1Ind = p1Total / 2;
-            if (n3 > 0) { // La posición 2 no existe, saltamos al tercero
+            if (n3 > 0) { 
                 p3Total = bolsa3;      
                 p3Ind = bolsa3 / n3;   
             }
         } else if (n1 === 1) {
-            // Un solo líder
             p1Total = bolsa1;
             p1Ind = bolsa1;
             if (n2 >= 2) {
-                // Si varios empatan en 2do lugar, se reparten la plata y el bronce. Nadie gana bronce después.
                 p2Total = bolsa2 + bolsa3;
                 p2Ind = p2Total / n2;
             } else if (n2 === 1) {
-                // Podio perfecto sin empates
                 p2Total = bolsa2;
                 p2Ind = bolsa2;
                 if (n3 > 0) {
@@ -684,7 +683,6 @@ const WorldCupRanking = ({ currentUser }) => {
             }
         }
 
-        // Mitad de tabla dinámica
         const middleIndex = Math.ceil(ranking.length / 2) - 1;
         const targetMiddlePosition = ranking[middleIndex]?.position || 0;
         const nMitad = playersByPos[targetMiddlePosition] || 1;
@@ -754,7 +752,6 @@ const WorldCupRanking = ({ currentUser }) => {
             {ranking.length >= 2 && (
                 <div className="flex justify-center items-end h-[280px] sm:h-[380px] mb-12 relative">
                     <img src={logocopa} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 opacity-5 pointer-events-none" alt="" />
-                    {/* El podio ahora se dibuja estrictamente en base a las posiciones reales 1, 2 y 3 */}
                     <PodiumSpot users={ranking.filter(r => r.position === 2)} place={2} prizeTotal={premiosRepartidos.p2Total} medalIcon="🥈" bgGradient="bg-gradient-to-b from-slate-400 to-slate-600" heightClass="h-[65%]" delayClass="animation-delay-200" />
                     <PodiumSpot users={ranking.filter(r => r.position === 1)} place={1} prizeTotal={premiosRepartidos.p1Total} medalIcon="👑" bgGradient="bg-gradient-to-b from-yellow-400 to-amber-600" heightClass="h-[85%]" delayClass="animation-delay-100" />
                     <PodiumSpot users={ranking.filter(r => r.position === 3)} place={3} prizeTotal={premiosRepartidos.p3Total} medalIcon="🥉" bgGradient="bg-gradient-to-b from-amber-600 to-amber-800" heightClass="h-[55%]" delayClass="animation-delay-300" />
@@ -766,7 +763,6 @@ const WorldCupRanking = ({ currentUser }) => {
                     const isExpanded = expandedUser === user.uid;
                     const isMiddle = user.position === premiosRepartidos.rMitad;
 
-                    // Dinero individual seguro del usuario
                     let userPrize = 0;
                     if (user.position === 1) userPrize = premiosRepartidos.p1Ind;
                     else if (user.position === 2) userPrize = premiosRepartidos.p2Ind;
@@ -810,13 +806,13 @@ const WorldCupRanking = ({ currentUser }) => {
                                     <span className="font-bold text-[12px] sm:text-lg text-foreground leading-tight truncate">{formatShortName(user.name)}</span>
                                  
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                        {/* 🟢 NUEVA INSIGNIA EL ORÁCULO AÑADIDA AQUÍ */}
                                         {user.isOraculo && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Oráculo', desc: '¡Increíble! Acertó 10 marcadores exactos en total.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🔮</span>}
                                         {user.isDictador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Dictador', desc: 'Líder por 7 partidos seguidos. ¡Intocable!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🗿</span>}
                                         {user.isFrancotirador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'Francotirador', desc: 'Acertó 3 marcadores exactos consecutivos.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🎯</span>}
-                                        {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: 'Colero general por 7 partidos. Hundiendo la tabla.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
+                                        {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: 'Colero general por 7 partidos seguidos. Hundiendo la tabla.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
                                         {user.isSeco && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Seco', desc: 'Ningún pleno hasta el momento. ¡Cero puntería!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">🌵</span>}
                                         {user.isOasis && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Oasis', desc: 'El último en lograr un pleno y quitarse el cactus.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🌴</span>}
+
                                         {isMiddle && <span className="text-[7px] sm:text-[9px] font-black uppercase text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-full border border-blue-500/20 whitespace-nowrap truncate max-w-full ml-1">⚖️ MITAD: {formatMoney(premiosRepartidos.mitadInd)}</span>}
                                         {rewardLabel && <span className="text-[7px] sm:text-[9px] font-black uppercase text-primary bg-primary/5 px-1.5 py-0.5 rounded-full border border-primary/10 whitespace-nowrap truncate max-w-full ml-1">GANANDO: {rewardLabel}</span>}
                                     </div>
@@ -873,7 +869,6 @@ const WorldCupRanking = ({ currentUser }) => {
             <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-10 shadow-sm">
                 <h3 className="text-foreground font-black text-xs sm:text-sm uppercase tracking-widest mb-3 opacity-60 text-center">Guía de Insignias y Logros</h3>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs text-foreground-muted">
-                    {/* 🟢 NUEVA INSIGNIA AÑADIDA AL PIE DE PÁGINA */}
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🔮</span> <b>El Oráculo:</b> 10 plenos o más en total</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🎯</span> <b>Francotirador:</b> 3 plenos consecutivos</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🗿</span> <b>El Dictador:</b> Líder 7 partidos (Logro)</div>
