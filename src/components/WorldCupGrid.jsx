@@ -387,8 +387,16 @@ const WorldCupGrid = ({ currentUser }) => {
                 }
 
                 const freshMatches = data.matches;
-                setMatches(freshMatches);
-                await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: freshMatches }, { merge: true });
+
+// 🛡️ ESCUDO ANTI-CUOTA 1: Solo actualiza React y Firebase si la API trae un cambio real
+setMatches(prevMatches => {
+    if (JSON.stringify(prevMatches) === JSON.stringify(freshMatches)) {
+        return prevMatches; // No hay cambios, cancelamos el re-render para ahorrar memoria
+    }
+    // Si hubo cambios, actualizamos el caché de Firebase en segundo plano
+    setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: freshMatches }, { merge: true }).catch(console.error);
+    return freshMatches;
+});
 
                 const adminDoc = await getDoc(doc(db, 'worldCupAdmin', 'results'));
                 
@@ -1017,13 +1025,13 @@ if (isAnyMatchLive) {
     }, [calculateProgressiveRanking]);
 
     // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Garantiza que Firestore sea un espejo fiel de tu pantalla)
+    // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Con Escudo Anti-Cuota)
     useEffect(() => {
         if (!isAdmin) return;
 
         const syncLiveRankingToFirestore = async () => {
             try {
                 const nowISO = new Date().toISOString();
-                // 🟢 LA MAGIA: Pasamos "true" para usar el filtro elástico SOLO aquí en la base de datos global
                 const currentRanking = calculateProgressiveRanking(nowISO, true);
 
                 if (currentRanking.length > 0) {
@@ -1032,12 +1040,18 @@ if (isAnyMatchLive) {
                         pointsMap[user.uid] = user.totalPoints;
                     });
 
-                    // Sube el puntaje real de la pantalla directo a la base de datos
-                    await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
-                        points: pointsMap,
-                        lastCalculated: nowISO
-                    }, { merge: true });
-                    console.log("🧮 [Sincronizador Maestro] liveRanking actualizado en Firestore con éxito.");
+                    const newPointsString = JSON.stringify(pointsMap);
+
+                    // 🛡️ ESCUDO ANTI-CUOTA 2: Solo gastamos una escritura en Firebase si el ranking matemático realmente se movió
+                    if (window.lastSavedRanking !== newPointsString) {
+                        await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
+                            points: pointsMap,
+                            lastCalculated: nowISO
+                        }, { merge: true });
+                        
+                        window.lastSavedRanking = newPointsString; // Guardamos en la memoria del navegador
+                        console.log("🧮 [Sincronizador Maestro] liveRanking actualizado en Firestore con éxito.");
+                    }
                 }
             } catch (error) {
                 console.error("❌ [Sincronizador Maestro] Error al sincronizar:", error);

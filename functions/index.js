@@ -229,7 +229,7 @@ async function runAiNewsGeneration() {
             🚨 REGLAS ESTRICTAS E INQUEBRANTABLES:
             1. ESTADO DE LA PUNTA: ${isSingleLeader ? 'HAY UN LÍDER SOLITARIO Y ABSOLUTO. ESTÁ TOTALMENTE PROHIBIDO usar palabras como "empate en la punta", "comparten liderato" o "trancón".' : 'HAY VARIOS LÍDERES EMPATADOS. Narra la guerra total por dividir el premio.'}
             2. DISTRIBUCIÓN DE TEMAS EN LOS 6 TITULARES:
-               - Titular 1: Analiza el partido actual si no hay actual el mas reciente, pero si hay actual   si hay gol, pero solo si hay gol en la ultima actualizacion menciona GOOOOOL del equipo, el marcador y menciona específicamente a un usuario que haya acertado su predicción (usa la data enviada).
+               - Titular 1: Analiza el partido actual si no hay actual el mas reciente, el marcador y menciona específicamente a un usuario que haya acertado su predicción (usa la data enviada).
                - Titular 2: Habla de los líderes, el dineral que se están embolsando (${formatMoney(netPot)} en juego) y MENCIONA A LOS ESCOLTAS que vienen respirándoles en la nuca, destacando a cuántos puntos exactos están de alcanzarlos para meter presión.
                - Titular 3: Habla del pelotón de la mitad de tabla y habla que van a ganar un premio de consolacion por quedar en la mitad.
                - Titular 4: Haz una broma deportiva con los coleros (el fondo de la tabla).
