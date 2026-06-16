@@ -9,6 +9,13 @@ import NewsTicker from '../components/shared/NewsTicker'
 import InfografiaModal from '../components/InfografiaModal'
 import WorldCupCountdown from './worldcupcomponents/WorldCupCountdown';
 
+// 📺 IMPORTACIÓN DE LOS LOGOS DE LOS CANALES
+import caracolImg from '../assets/caracol.png';
+import rcnImg from '../assets/rcn.png';
+import directvImg from '../assets/direct.webp';
+import winImg from '../assets/Win.webp';
+import disneyImg from '../assets/disney.png'
+
 // --- TRADUCCIONES Y CONSTANTES ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
 
@@ -111,11 +118,10 @@ const getCountryCode = (name) => {
         "Uruguay": "URU", "Uzbekistán": "UZB"
     };
 
-    // Si está en la lista oficial de 48, saca las siglas FIFA. Si no, saca las 3 primeras letras en español.
     return codes[translated] || translated.substring(0, 3).toUpperCase();
 };
 
-const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA, hasO }) => {
+const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA, hasO, broadcasters }) => {
     const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
@@ -157,12 +163,12 @@ const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA,
 
     return (
         <div className="flex flex-col items-center w-full my-4 px-2">
-            {/* Etiqueta superior del Grupo (Ajustamos mb-2 para evitar que pise el logo de la FIFA) */}
+            {/* Etiqueta superior del Grupo */}
             <span className={`text-[8px] sm:text-[10px] font-black px-4 py-1 rounded-t-lg uppercase mb-2 z-0 shadow-inner ${isPlaying ? 'bg-green-500 text-white animate-pulse' : isPaused ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
                 {match.group ? match.group.replace('GROUP_', 'Grupo ') : stageTranslations[match.stage] || match.stage?.replace(/_/g, ' ') || 'Fase'}
             </span>
 
-            {/* Contenedor Principal Transmisión TV (Sin el reloj a la izquierda) */}
+            {/* Contenedor Principal Transmisión TV */}
             <div className="flex h-12 sm:h-16 w-full max-w-xl mx-auto rounded-xl sm:rounded-2xl overflow-visible border-2 border-slate-600/30 shadow-2xl relative z-20 bg-[#1e293b]">
                 
                 {/* 🏠 Equipo Local */}
@@ -193,9 +199,8 @@ const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA,
                 </div>
             </div>
 
-            {/* ⏱️ Zona de Reloj (Color Celeste TV) - ABAJO Y CENTRADA */}
-            {/* ⏱️ Zona de Reloj (Color Celeste TV) - ABAJO Y CENTRADA */}
-<div className=" w-fit mx-auto flex items-center justify-center bg-[#c3e1e5] text-[#0f172a] px-6 py-1.5 mt-[-1px] rounded-b-xl shadow-md z-10 relative border-x-2 border-b-2 border-slate-600/30">
+            {/* ⏱️ Zona de Reloj (Color Celeste TV) */}
+            <div className="w-fit mx-auto flex items-center justify-center bg-[#c3e1e5] text-[#0f172a] px-6 py-1.5 mt-[-1px] rounded-b-xl shadow-md z-10 relative border-x-2 border-b-2 border-slate-600/30">
                 <span className="font-black text-sm sm:text-base tabular-nums leading-none tracking-tighter mr-2">
                     {isFinished ? 'FT' : isPlaying || isPaused ? formatTime(elapsed) : new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
                 </span>
@@ -205,6 +210,18 @@ const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA,
                     </span>
                 )}
             </div>
+
+            {/* 📺 NUEVO: ZONA DE TRANSMISIÓN OFICIAL */}
+            {broadcasters && broadcasters.length > 0 && (
+                <div className="flex justify-center items-center gap-2 sm:gap-3 mt-3 bg-white/95 rounded-full px-3 sm:px-4 py-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+                    <span className="text-[7px] sm:text-[8px] uppercase font-black text-slate-500 tracking-widest mr-1">📺 TRANSMISIÓN:</span>
+                    {broadcasters.includes('DSPORTS') && <img src={directvImg} className="h-2.5 sm:h-3.5 object-contain drop-shadow-sm" alt="DSports" title="DSports / DGO" />}
+                    {broadcasters.includes('WIN') && <img src={winImg} className="h-2.5 sm:h-3.5 object-contain drop-shadow-sm" alt="Win Sports" title="Win Sports" />}
+                    {broadcasters.includes('CARACOL') && <img src={caracolImg} className="h-2.5 sm:h-3.5 object-contain drop-shadow-sm" alt="Caracol" title="Caracol TV" />}
+                    {broadcasters.includes('RCN') && <img src={rcnImg} className="h-2.5 sm:h-3.5 object-contain drop-shadow-sm" alt="RCN" title="Canal RCN" />}
+                    {broadcasters.includes('DISNEY') && <img src={disneyImg} className="h-2.5 sm:h-3.5 object-contain drop-shadow-sm" alt="Disney+" title="Disney+ / ESPN" />}
+                </div>
+            )}
         </div>
     );
 };
@@ -278,9 +295,8 @@ const WorldCupGrid = ({ currentUser }) => {
     }, [fetchApiMatches]);
 
     
-
     // 🟢 ROBOT AUTO-SYNC INTELIGENTE (Radar de 10 segundos)
-  const simStatusesString = JSON.stringify(adminResults?.simulation?.matchStatuses || {});
+    const simStatusesString = JSON.stringify(adminResults?.simulation?.matchStatuses || {});
     const radarTimeoutRef = useRef(null);
 
     // 🟢 EL CAFE VIRTUAL: Mantiene la pantalla encendida para el Admin
@@ -388,15 +404,15 @@ const WorldCupGrid = ({ currentUser }) => {
 
                 const freshMatches = data.matches;
 
-// 🛡️ ESCUDO ANTI-CUOTA 1: Solo actualiza React y Firebase si la API trae un cambio real
-setMatches(prevMatches => {
-    if (JSON.stringify(prevMatches) === JSON.stringify(freshMatches)) {
-        return prevMatches; // No hay cambios, cancelamos el re-render para ahorrar memoria
-    }
-    // Si hubo cambios, actualizamos el caché de Firebase en segundo plano
-    setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: freshMatches }, { merge: true }).catch(console.error);
-    return freshMatches;
-});
+                // 🛡️ ESCUDO ANTI-CUOTA 1: Solo actualiza React y Firebase si la API trae un cambio real
+                setMatches(prevMatches => {
+                    if (JSON.stringify(prevMatches) === JSON.stringify(freshMatches)) {
+                        return prevMatches; // No hay cambios, cancelamos el re-render para ahorrar memoria
+                    }
+                    // Si hubo cambios, actualizamos el caché de Firebase en segundo plano
+                    setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: freshMatches }, { merge: true }).catch(console.error);
+                    return freshMatches;
+                });
 
                 const adminDoc = await getDoc(doc(db, 'worldCupAdmin', 'results'));
                 
@@ -423,30 +439,29 @@ setMatches(prevMatches => {
                 }
 
                 let nextCheckDelay;
-let statusMsg = "";
+                let statusMsg = "";
 
-if (isAnyMatchLive) {
-    nextCheckDelay = 30000; // 🟢 ANTES: 10000 (Cambiado a 30 Segundos)
-    statusMsg = "¡HAY PARTIDO! Velocidad Ráfaga (30s)";
-} else if (timeToNextMatch <= 0) {
-    nextCheckDelay = 30000; // 🟢 ANTES: 10000 (Cambiado a 30 Segundos)
-    statusMsg = "¡Es la hora cero! Esperando pitazo inicial (30s)";
-} else if (timeToNextMatch <= 5 * 60 * 1000) {
-    nextCheckDelay = 30000; // 30 Segundos (Faltan menos de 5 mins)
-    statusMsg = `Calentando motores. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (30s)`;
-} else if (timeToNextMatch <= 60 * 60 * 1000) {
-    nextCheckDelay = 3 * 60 * 1000; // 3 Minutos (Falta menos de 1 hora)
-    statusMsg = `En la sala de espera. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (3 min)`;
-} else {
-    nextCheckDelay = 15 * 60 * 1000; // 15 Minutos (Faltan horas o días)
-    statusMsg = `Torneo dormido. Próximo partido en horas (15 min)`;
-}
+                if (isAnyMatchLive) {
+                    nextCheckDelay = 30000; // 🟢 30 Segundos
+                    statusMsg = "¡HAY PARTIDO! Velocidad Ráfaga (30s)";
+                } else if (timeToNextMatch <= 0) {
+                    nextCheckDelay = 30000; 
+                    statusMsg = "¡Es la hora cero! Esperando pitazo inicial (30s)";
+                } else if (timeToNextMatch <= 5 * 60 * 1000) {
+                    nextCheckDelay = 30000; 
+                    statusMsg = `Calentando motores. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (30s)`;
+                } else if (timeToNextMatch <= 60 * 60 * 1000) {
+                    nextCheckDelay = 3 * 60 * 1000; 
+                    statusMsg = `En la sala de espera. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (3 min)`;
+                } else {
+                    nextCheckDelay = 15 * 60 * 1000; 
+                    statusMsg = `Torneo dormido. Próximo partido en horas (15 min)`;
+                }
 
                 setIsLivePollingActive(isAnyMatchLive || timeToNextMatch <= 0);
                 console.log(`[Radar Predictivo] 🏎️ Estado: ${statusMsg}`);
 
                 let hasChanges = false;
-                // 🛡️ Preparamos un paquete con los estados reales para subir a la nube
                 let currentApiStatuses = adminDoc.exists() ? (adminDoc.data().apiStatuses || {}) : {};
                 let newApiStatuses = { ...currentApiStatuses };
 
@@ -469,7 +484,7 @@ if (isAnyMatchLive) {
                         newApiStatuses[m.id] = m.status;
                         hasChanges = true;
                         
-                        // 📸 EL FOTÓGRAFO: Si el nuevo estado es FINISHED y antes no lo era, tomaremos una foto de la historia.
+                        // 📸 EL FOTÓGRAFO
                         if (m.status === 'FINISHED') {
                             newlyFinishedMatches.push(m);
                         }
@@ -486,7 +501,7 @@ if (isAnyMatchLive) {
                     
                     toast.success('⚽ Marcadores y Estados sincronizados.', { id: 'autosync-grid-toast' });
 
-                    // 📸 2. EL FOTÓGRAFO EN ACCIÓN: Guardar la historia si un partido terminó
+                    // 📸 2. EL FOTÓGRAFO EN ACCIÓN
                     if (newlyFinishedMatches.length > 0) {
                         console.log("[Fotógrafo Histórico] 📸 Partido(s) finalizado(s). Tomando snapshot del ranking...");
                         setTimeout(async () => {
@@ -504,14 +519,13 @@ if (isAnyMatchLive) {
 
                                     snapshotsUpdate[`match_${finishedMatch.id}`] = {
                                         matchId: finishedMatch.id,
-                                        matchName: `${homeName} vs ${awayName}`, // 👈 Guardamos el partido
+                                        matchName: `${homeName} vs ${awayName}`,
                                         dateRecorded: new Date().toISOString(),
                                         matchDate: finishedMatch.utcDate,
                                         scores: scoresOnly
                                     };
                                 }
 
-                                // Se guarda en el documento central de worldCupAdmin
                                 await setDoc(doc(db, 'worldCupAdmin', 'rankingHistory'), { 
                                     snapshots: snapshotsUpdate 
                                 }, { merge: true });
@@ -552,7 +566,7 @@ if (isAnyMatchLive) {
         performSmartSync();
 
         return () => {
-            isMountedRef.current = false; // 🟢 APAGA EL ESCUDO: Ninguna petición asíncrona pasará de aquí
+            isMountedRef.current = false; 
             if (radarTimeoutRef.current) {
                 console.log("[Radar Predictivo] 🛑 Destruyendo radar de manera segura.");
                 clearTimeout(radarTimeoutRef.current);
@@ -564,7 +578,7 @@ if (isAnyMatchLive) {
     const effectiveMatches = useMemo(() => {
         return matches.map(m => {
             const simStatus = adminResults?.simulation?.matchStatuses?.[m.id];
-            const apiStatus = adminResults?.apiStatuses?.[m.id]; // 🟢 Leemos el estado en vivo de la BD
+            const apiStatus = adminResults?.apiStatuses?.[m.id]; 
             
             let finalStatus = m.status;
             if (simStatus && simStatus !== '') {
@@ -576,6 +590,14 @@ if (isAnyMatchLive) {
             return { ...m, status: finalStatus };
         });
     }, [matches, adminResults]);
+
+    // 📺 DICCIONARIO DE ORDENAMIENTO GLOBAL PARA CANALES (1 a 104)
+    const globalMatchIndexMap = useMemo(() => {
+        const sorted = [...effectiveMatches].sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate) || Number(a.id) - Number(b.id));
+        const map = {};
+        sorted.forEach((m, idx) => map[m.id] = idx + 1);
+        return map;
+    }, [effectiveMatches]);
 
     const mergedAdminPreds = useMemo(() => {
         const preds = { ...(adminResults?.predictions || {}) };
@@ -1068,7 +1090,6 @@ if (isAnyMatchLive) {
     }, [calculateProgressiveRanking]);
 
     // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Garantiza que Firestore sea un espejo fiel de tu pantalla)
-    // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Con Escudo Anti-Cuota)
     useEffect(() => {
         if (!isAdmin) return;
 
@@ -1092,7 +1113,7 @@ if (isAnyMatchLive) {
                             lastCalculated: nowISO
                         }, { merge: true });
                         
-                        window.lastSavedRanking = newPointsString; // Guardamos en la memoria del navegador
+                        window.lastSavedRanking = newPointsString; 
                         console.log("🧮 [Sincronizador Maestro] liveRanking actualizado en Firestore con éxito.");
                     }
                 }
@@ -1202,8 +1223,6 @@ if (isAnyMatchLive) {
         }
     };
 
-    // 📸 BOTÓN DE RESCATE: Genera las fotos de los partidos que ya terminaron
-    // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos de los partidos que de verdad ya terminaron
     // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos y las guarda en worldCupAdmin
     const handleTakeRetroactivePhotos = async () => {
         try {
@@ -1231,17 +1250,15 @@ if (isAnyMatchLive) {
                 const homeName = match.homeTeam?.name || 'TBD';
                 const awayName = match.awayTeam?.name || 'TBD';
 
-                // Guardamos la foto en el objeto maestro
                 snapshotsToSave[`match_${match.id}`] = {
                     matchId: match.id,
-                    matchName: `${homeName} vs ${awayName}`, // 👈 Aquí guardamos quién jugó
+                    matchName: `${homeName} vs ${awayName}`, 
                     dateRecorded: new Date().toISOString(),
                     matchDate: match.utcDate,
                     scores: scoresOnly
                 };
             }
 
-            // Guardamos TODAS las fotos en un solo documento dentro de worldCupAdmin
             await setDoc(doc(db, 'worldCupAdmin', 'rankingHistory'), { 
                 snapshots: snapshotsToSave 
             }, { merge: true });
@@ -1499,6 +1516,58 @@ if (isAnyMatchLive) {
                         ? match.referees.find(r => r.type === 'REFEREE' || r.role === 'REFEREE') || match.referees[0] 
                         : null;
 
+                    // 📺 LÓGICA DE CANALES DE TRANSMISIÓN 📺
+                    // 📺 LÓGICA DE CANALES DE TRANSMISIÓN 📺
+                    let broadcasters = ['DSPORTS']; // Siempre base
+                    const matchNumber = globalMatchIndexMap[match.id];
+
+                    if (!isKnockout) {
+                        const caracolPairs = [
+                            "Suiza-Bosnia y Herzegovina", "Escocia-Marruecos", "Alemania-Costa de Marfil", "Bélgica-Irán", 
+                            "Argentina-Austria", "Colombia-República Democrática del Congo", "Brasil-Escocia", "Ecuador-Alemania", 
+                            "Uruguay-España", "Colombia-Portugal", "México-Sudáfrica", "Estados Unidos-Paraguay", 
+                            "Brasil-Marruecos", "Países Bajos-Japón", "Argentina-Argelia", "Uzbekistán-Colombia"
+                        ];
+
+                        const rcnPairs = [
+                            ...caracolPairs, "España-Cabo Verde" // RCN tiene los mismos de Caracol + España vs Cabo Verde
+                        ];
+
+                        const winPairs = [
+                            "Corea del Sur-República Checa", "Canadá-Bosnia y Herzegovina", "Qatar-Suiza", "Costa de Marfil-Ecuador", 
+                            "Arabia Saudita-Uruguay", "Irak-Noruega", "Inglaterra-Croacia", "México-Corea del Sur", "Turquía-Paraguay", 
+                            "Países Bajos-Suecia", "Ecuador-Curazao", "España-Arabia Saudita", "Noruega-Senegal", "Portugal-Uzbekistán", 
+                            "República Checa-México", "Túnez-Países Bajos", "Noruega-Francia", "Jordania-Argentina"
+                        ];
+
+                        const disneyPairs = [
+                            "México-Sudáfrica", "Canadá-Bosnia y Herzegovina", "Estados Unidos-Paraguay", "Brasil-Marruecos", 
+                            "Alemania-Curazao", "Países Bajos-Japón", "Costa de Marfil-Ecuador", "España-Cabo Verde", 
+                            "Bélgica-Egipto", "Arabia Saudita-Uruguay", "Francia-Senegal", "Argentina-Argelia", 
+                            "Inglaterra-Croacia", "Uzbekistán-Colombia", "Suiza-Bosnia y Herzegovina", "Estados Unidos-Australia", 
+                            "Escocia-Marruecos", "Turquía-Paraguay", "Alemania-Costa de Marfil", "Ecuador-Curazao", 
+                            "España-Arabia Saudita", "Bélgica-Irán", "Uruguay-Cabo Verde", "Argentina-Austria", 
+                            "Portugal-Uzbekistán", "Inglaterra-Ghana", "Colombia-República Democrática del Congo", "Brasil-Escocia", 
+                            "Sudáfrica-Corea del Sur", "Ecuador-Alemania", "Túnez-Países Bajos", "Paraguay-Australia", 
+                            "Noruega-Francia", "Uruguay-España", "Croacia-Ghana", "Colombia-Portugal", "Jordania-Argentina"
+                        ];
+
+                        const pair1 = `${translateTeam(finalHomeName)}-${translateTeam(finalAwayName)}`;
+                        const pair2 = `${translateTeam(finalAwayName)}-${translateTeam(finalHomeName)}`;
+                        
+                        if (caracolPairs.includes(pair1) || caracolPairs.includes(pair2)) broadcasters.push('CARACOL');
+                        if (rcnPairs.includes(pair1) || rcnPairs.includes(pair2)) broadcasters.push('RCN');
+                        if (winPairs.includes(pair1) || winPairs.includes(pair2)) broadcasters.push('WIN');
+                        if (disneyPairs.includes(pair1) || disneyPairs.includes(pair2)) broadcasters.push('DISNEY');
+
+                    } else {
+                        // Partidos de Eliminatoria en TV Abierta (Caracol/RCN)
+                        const openTvKnockouts = [73, 76, 78, 81, 84, 86, 89, 90, 93, 94, 97, 98, 99, 100, 101, 102, 103, 104];
+                        if (openTvKnockouts.includes(matchNumber)) {
+                            broadcasters.push('CARACOL', 'RCN');
+                        }
+                    }
+
                     return (
                         <div key={match.id} className={`bg-card border ${isPlaying ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : isPaused ? 'border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
@@ -1521,7 +1590,7 @@ if (isAnyMatchLive) {
 
                             <div className={`${isPlaying ? 'bg-green-500/5' : isPaused ? 'bg-amber-500/5' : 'bg-background-offset'} pb-4 sm:pb-6 border-b border-border relative z-20`}>
                                 
-                                {/* 🟢 NUEVO SCOREBOARD ESTILO TV (Reemplaza al encabezado anterior) */}
+                                {/* 🟢 NUEVO SCOREBOARD ESTILO TV (Con canales inyectados) */}
                                 <TVScoreboard 
                                     match={match} 
                                     homeName={finalHomeName} 
@@ -1531,18 +1600,19 @@ if (isAnyMatchLive) {
                                     rH={rH} 
                                     rA={rA} 
                                     hasO={hasO} 
+                                    broadcasters={broadcasters}
                                 />
 
-                                <div className="mt-4 text-center">
+                                {/* <div className="mt-4 text-center">
                                     <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground-muted font-bold tracking-widest bg-background px-2.5 py-1 rounded border border-border/50">
                                         <span>👨‍⚖️</span> Árbitro: {mainReferee ? mainReferee.name : 'Por Definir'}
                                     </span>
-                                </div>
+                                </div> */}
                             </div>
 
                             {/* 🟢 BOTÓN DE INFOGRAFÍA EN LA GRILLA */}
                             {matchStatus === 'FINISHED' && (
-                                <div className="px-4 pb-4 sm:px-6 sm:pb-6 relative z-20 bg-background-offset border-b border-border pt-4">
+                                <div className="px-4 pb-4 sm:px-6 sm:pb-6 relative z-20 bg-background-offset border-b border-border pt-[0px]">
                                     <button 
                                         onClick={() => setReportData({ match, ranking: matchSpecificRanking, adminPreds: a, homeCrest, awayCrest, finalHomeName, finalAwayName })}
                                         className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-[10px] sm:text-xs py-3 rounded-xl shadow-md hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 uppercase tracking-widest"
