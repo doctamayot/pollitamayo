@@ -1424,6 +1424,7 @@ const WorldCupGrid = ({ currentUser }) => {
                     const isPaused = matchStatus === 'PAUSED';
 
                     // 🟢 RANKING ESPECÍFICO HASTA ESTE PARTIDO EXACTO
+                    // 🟢 RANKING ESPECÍFICO HASTA ESTE PARTIDO EXACTO
                     const matchSpecificRanking = calculateProgressiveRanking(match.utcDate).map(user => {
                         const uP = allPredictions[user.uid]?.predictions?.[match.id];
                         let pts = null;
@@ -1446,6 +1447,85 @@ const WorldCupGrid = ({ currentUser }) => {
                         }
                         return { ...user, uP, pts };
                     });
+
+                    // 🔥 NUEVO: ESCÁNER DE INSIGNIAS PREDICTIVAS (Con matemática cruzada)
+                    const validPicks = matchSpecificRanking.filter(u => u.uP && u.uP.home !== '');
+                    const scoreFrequencies = {};
+                    const outcomeFrequencies = { H: 0, D: 0, A: 0 };
+                    let currentLeaderPoints = 0;
+
+                    validPicks.forEach(u => {
+                        const h = parseInt(u.uP.home, 10);
+                        const a = parseInt(u.uP.away, 10);
+                        const key = `${h}-${a}`;
+                        
+                        scoreFrequencies[key] = (scoreFrequencies[key] || 0) + 1;
+                        
+                        if (h > a) outcomeFrequencies.H++;
+                        else if (h < a) outcomeFrequencies.A++;
+                        else outcomeFrequencies.D++;
+
+                        if (u.totalPoints > currentLeaderPoints) currentLeaderPoints = u.totalPoints;
+                    });
+
+                    const maxFrequency = Math.max(0, ...Object.values(scoreFrequencies));
+
+                    // Función auxiliar de simulación para el Cohete
+                    const calcSimPts = (uH, uA, realH, realA) => {
+                        if (uH === realH && uA === realA) return 5;
+                        const pR = Math.sign(uH - uA);
+                        const rR = Math.sign(realH - realA);
+                        if (pR === rR && (uH === realH || uA === realA)) return 3;
+                        if (pR === rR) return 2;
+                        if (uH === realH || uA === realA) return 1;
+                        return 0;
+                    };
+
+                    const matchRankingWithBadges = matchSpecificRanking.map(user => {
+                        let gridBadges = [];
+                        if (user.uP && user.uP.home !== '') {
+                            const h = parseInt(user.uP.home, 10);
+                            const a = parseInt(user.uP.away, 10);
+                            const key = `${h}-${a}`;
+                            const outcome = h > a ? 'H' : (h < a ? 'A' : 'D');
+
+                            if (scoreFrequencies[key] === 1) gridBadges.push({ icon: '🐺', title: 'Lobo Solitario: Único con este marcador exacto' });
+                            
+                            if (outcomeFrequencies[outcome] === 1 && scoreFrequencies[key] !== 1) gridBadges.push({ icon: '🦄', title: 'El Visionario: Nadie más confió en este resultado' });
+
+                            if (Math.abs(h - a) >= 4) gridBadges.push({ icon: '💣', title: 'Kamikaze: Apostando a una goleada histórica' });
+                            
+                            if (scoreFrequencies[key] === maxFrequency && maxFrequency > 2) gridBadges.push({ icon: '🐑', title: 'El Rebaño: El marcador más popular de la polla' });
+
+                            // 🚀 Asalto al Trono (Matemática cruzada perfecta)
+                            if (user.totalPoints < currentLeaderPoints) {
+                                const myHypotheticalScore = user.totalPoints + 5; 
+                                let wouldBeLeader = true;
+                                
+                                for (const otherUser of validPicks) {
+                                    if (otherUser.uid === user.uid) continue;
+                                    
+                                    const oH = parseInt(otherUser.uP.home, 10);
+                                    const oA = parseInt(otherUser.uP.away, 10);
+                                    // Simulamos cuántos puntos ganaría el Oponente si NUESTRO marcador es el que se da
+                                    const simPts = calcSimPts(oH, oA, h, a); 
+                                    const otherHypotheticalScore = otherUser.totalPoints + simPts;
+                                    
+                                    if (otherHypotheticalScore > myHypotheticalScore) {
+                                        wouldBeLeader = false;
+                                        break; // Ya no lo alcanzó, rompemos el ciclo
+                                    }
+                                }
+                                
+                                if (wouldBeLeader) {
+                                    gridBadges.push({ icon: '🚀', title: 'Asalto al Trono: Si acierta este pleno exacto, salta al liderato general' });
+                                }
+                            }
+                        }
+                        return { ...user, gridBadges };
+                    });
+
+                    
 
                     // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
                     const isKnockout = match.stage !== 'GROUP_STAGE';
@@ -1636,7 +1716,7 @@ const WorldCupGrid = ({ currentUser }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="text-[10px] sm:text-sm">
-                                        {matchSpecificRanking.map((user) => {
+                                        {matchRankingWithBadges.map((user) => {
                                             const is1st = user.position === 1;
                                             const is2nd = user.position === 2;
                                             const is3rd = user.position === 3;
@@ -1669,7 +1749,20 @@ const WorldCupGrid = ({ currentUser }) => {
                                                                 <img src={user.photoURL} className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 object-cover ${avatarBorder}`} alt="" />
                                                                 {medal && <span className="absolute -top-2.5 -left-2.5 text-[14px] sm:text-xl drop-shadow-md z-10">{medal}</span>}
                                                             </div>
-                                                            <span className={`font-bold truncate text-[11px] sm:text-lg ${nameColor}`}>{formatShortName(user.name)}</span>
+                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                                <span className={`font-bold truncate text-[11px] sm:text-lg ${nameColor}`}>{formatShortName(user.name)}</span>
+                                                                
+                                                                {/* 🔥 INSIGNIAS DE LA GRILLA (DEBAJO DEL NOMBRE) */}
+                                                                {user.gridBadges && user.gridBadges.length > 0 && (
+                                                                    <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mt-0.5 sm:mt-1">
+                                                                        {user.gridBadges.map((b, i) => (
+                                                                            <span key={i} title={b.title} className="text-[11px] sm:text-[14px] cursor-help hover:scale-125 transition-transform drop-shadow-sm">
+                                                                                {b.icon}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     

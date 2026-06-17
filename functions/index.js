@@ -149,8 +149,15 @@ async function runAiNewsGeneration() {
                 const tercero = ko.tercero?.[0]?.name || 'Ninguno';
                 const cuarto = ko.cuarto?.[0]?.name || 'Ninguno';
                 
-                const extras = data.extraPicks ? Object.values(data.extraPicks).slice(0, 2).join(", ") : 'Ninguno';
-                const futurePicks = `Campeón: ${campeon}, Subcampeón: ${subcampeon}, 3ro: ${tercero}, 4to: ${cuarto}. Apuestas extras clave: ${extras}`;
+                // 🟢 NUEVO BLOQUE: Extracción dinámica y aleatoria
+                let randomExtras = 'Ninguna';
+                if (data.extraPicks) {
+                    const extraEntries = Object.entries(data.extraPicks);
+                    // Barajamos las opciones y sacamos 2 al azar cada vez que el radar se dispara
+                    const shuffled = extraEntries.sort(() => 0.5 - Math.random()).slice(0, 2);
+                    randomExtras = shuffled.map(([key, val]) => `${key.replace(/_/g, ' ')}: ${val}`).join(", ");
+                }
+                const futurePicks = `Candidatos en su radar: Campeón ${campeon}, Subcampeón ${subcampeon}. Apuestas extras reveladas en este reporte: ${randomExtras}`;
 
                 return { 
                     name: data.displayName, 
@@ -264,7 +271,11 @@ async function runAiNewsGeneration() {
                - Titular 3: Habla del pelotón de la mitad de tabla y habla que van a ganar un premio de consolacion por quedar en la mitad.
                - Titular 4: Haz una broma deportiva con los coleros (el fondo de la tabla).
                - Titular 5: Un análisis general de Pollitamayo News sobre toda la fecha del dia.
-               - Titular 6: DATOS CLAVE: Haz un análisis revelando a quiénes apostó el líder (o líderes) para extras, Campeón, Subcampeón, 3ro, 4to y posiciones finales. Usa la información de "APUESTAS FINALES Y EXTRAS" que te envié arriba en la sección de la punta.
+               - Titular 6: EL FOCO EN EL LÍDER: Sé dinámico, impredecible y analítico. Elige SOLO UNA de estas opciones para analizar al líder hoy (asegúrate de variar tu elección respecto a reportes pasados):
+                 Opción A) Analiza y opina sobre su candidato a Campeón o Subcampeón. ¿Le ves futuro?
+                 Opción B) Sorpréndete o debate las "apuestas extras reveladas" en sus datos.
+                 Opción C) Comenta su rendimiento específico en los marcadores de los partidos en vivo o recientes.
+                 ¡ESTÁ ESTRICTAMENTE PROHIBIDO HACER UN LISTADO! No menciones todas las opciones. Construye un solo comentario periodístico enfocado en UN solo tema para mantener la frescura de la transmisión.
             3. NUNCA reveles que eres una Inteligencia Artificial. Eres un periodista deportivo humano.
             4. NUNCA uses nombres de países en inglés. Todo debe estar en español impecable (Ej: Netherlands es Países Bajos, England es Inglaterra).
             5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:","EL ORÁCULO:", "DATOS CLAVE:", "AL ACECHO:".
