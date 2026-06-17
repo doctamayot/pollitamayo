@@ -121,6 +121,15 @@ const getCountryCode = (name) => {
     return codes[translated] || translated.substring(0, 3).toUpperCase();
 };
 
+const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
+
+    useEffect(() => {
+        if (activeBadgeInfo) {
+            const timer = setTimeout(() => setActiveBadgeInfo(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [activeBadgeInfo]);
+
 const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA, hasO, broadcasters }) => {
     const [elapsed, setElapsed] = useState(0);
 
@@ -1755,11 +1764,23 @@ const WorldCupGrid = ({ currentUser }) => {
                                                                 {/* 🔥 INSIGNIAS DE LA GRILLA (DEBAJO DEL NOMBRE) */}
                                                                 {user.gridBadges && user.gridBadges.length > 0 && (
                                                                     <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mt-0.5 sm:mt-1">
-                                                                        {user.gridBadges.map((b, i) => (
-                                                                            <span key={i} title={b.title} className="text-[11px] sm:text-[14px] cursor-help hover:scale-125 transition-transform drop-shadow-sm">
-                                                                                {b.icon}
-                                                                            </span>
-                                                                        ))}
+                                                                        {user.gridBadges.map((b, i) => {
+                                                                            const parts = b.title.split(': ');
+                                                                            const badgeTitle = parts[0];
+                                                                            const badgeDesc = parts[1] || '';
+                                                                            return (
+                                                                                <span 
+                                                                                    key={i} 
+                                                                                    onClick={(e) => { 
+                                                                                        e.stopPropagation(); 
+                                                                                        setActiveBadgeInfo({ title: badgeTitle, desc: badgeDesc, x: e.clientX, y: e.clientY }); 
+                                                                                    }} 
+                                                                                    className="text-[11px] sm:text-[14px] cursor-pointer hover:scale-125 transition-transform drop-shadow-sm"
+                                                                                >
+                                                                                    {b.icon}
+                                                                                </span>
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                 )}
                                                             </div>
