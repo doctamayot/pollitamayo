@@ -1766,6 +1766,8 @@ const WorldCupGrid = ({ currentUser }) => {
                                                                 {/* 🔥 INSIGNIAS DE LA GRILLA (DEBAJO DEL NOMBRE) */}
                                                                 {user.gridBadges && user.gridBadges.length > 0 && (
                                                                     <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mt-0.5 sm:mt-1">
+                                                                        {user.gridBadges && user.gridBadges.length > 0 && (
+                                                                    <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mt-0.5 sm:mt-1">
                                                                         {user.gridBadges.map((b, i) => {
                                                                             const parts = b.title.split(': ');
                                                                             const badgeTitle = parts[0];
@@ -1774,15 +1776,24 @@ const WorldCupGrid = ({ currentUser }) => {
                                                                                 <span 
                                                                                     key={i} 
                                                                                     onClick={(e) => { 
+                                                                                        e.preventDefault();
                                                                                         e.stopPropagation(); 
-                                                                                        setActiveBadgeInfo({ title: badgeTitle, desc: badgeDesc, x: e.clientX, y: e.clientY }); 
+                                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                                        setActiveBadgeInfo({ 
+                                                                                            title: badgeTitle, 
+                                                                                            desc: badgeDesc, 
+                                                                                            x: rect.left + (rect.width / 2), 
+                                                                                            y: rect.top 
+                                                                                        }); 
                                                                                     }} 
-                                                                                    className="text-[11px] sm:text-[14px] cursor-pointer hover:scale-125 transition-transform drop-shadow-sm"
+                                                                                    className="text-[13px] sm:text-[16px] cursor-pointer hover:scale-125 transition-transform drop-shadow-sm select-none p-0.5"
                                                                                 >
                                                                                     {b.icon}
                                                                                 </span>
                                                                             );
                                                                         })}
+                                                                    </div>
+                                                                )}
                                                                     </div>
                                                                 )}
                                                             </div>
