@@ -1,5 +1,4 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -14,7 +13,7 @@ const ADMIN_FEE_PERCENT = 0.10;
 async function runAiNewsGeneration() {
     try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); 
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); 
 
         // 1. OBTENER ESTADO DEL TORNEO
         const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();
@@ -117,14 +116,20 @@ async function runAiNewsGeneration() {
         // 🧠 MODO 2: TORNEO ACTIVO (Goles, Ranking y Dinero en vivo)
         // ==========================================
         else {
-            const liveMatches = matches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
-            const liveText = liveMatches.map(m => `EN VIVO: ${m.homeTeam.name} ${m.score?.fullTime?.home ?? 0} - ${m.score?.fullTime?.away ?? 0} ${m.awayTeam.name}`).join(" | ");
+           const liveMatches = matches.filter(m => 
+                (m.status === 'IN_PLAY' || m.status === 'PAUSED') && 
+                m.score?.fullTime?.home !== undefined && m.score?.fullTime?.home !== null
+            );
+            const liveText = liveMatches.map(m => `EN VIVO: ${m.homeTeam.name} ${m.score.fullTime.home} - ${m.score.fullTime.away} ${m.awayTeam.name}`).join(" | ");
 
             const recentMatches = matches
-                .filter(m => m.status === 'FINISHED')
+                .filter(m => 
+                    m.status === 'FINISHED' && 
+                    m.score?.fullTime?.home !== undefined && m.score?.fullTime?.home !== null
+                )
                 .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
                 .slice(0, 3);
-            const recentText = recentMatches.map(m => `${m.homeTeam.name} ${m.score?.fullTime?.home} - ${m.score?.fullTime?.away} ${m.awayTeam.name}`).join(" | ");
+            const recentText = recentMatches.map(m => `${m.homeTeam.name} ${m.score.fullTime.home} - ${m.score.fullTime.away} ${m.awayTeam.name}`).join(" | ");
 
             const liveRankingSnap = await db.collection("worldCupAdmin").doc("liveRanking").get();
             const livePointsMap = liveRankingSnap.exists ? liveRankingSnap.data().points || {} : {};
@@ -199,7 +204,6 @@ async function runAiNewsGeneration() {
             const isSingleLeader = lideres.length === 1;
             const lideresStr = lideres.map(u => `${u.name} (${u.points} pts, Botín asegurado: ${formatMoney(u.premio)}) - Predicciones recientes: ${u.picks || 'Ninguna'} - APUESTAS FINALES Y EXTRAS: ${u.futurePicks}`).join(" | ");
 
-            // 🌟 NUEVO: Los 5 perseguidores (Escoltas) y a cuánto están del líder
             const perseguidores = parsedUsers.slice(lideres.length, lideres.length + 5);
             const perseguidoresStr = perseguidores.map(u => {
                 const diferencia = topPoints - u.points;
@@ -213,6 +217,7 @@ async function runAiNewsGeneration() {
             const coleros = parsedUsers.slice(-3);
             const colerosStr = coleros.map(u => `Puesto #${u.calculatedRank}: ${u.name} (${u.points} pts) - Predicciones recientes: ${u.picks || 'Ninguna'}`).join(" | ");
 
+            // 2. EL PARTIDO DESTACADO SIN ERRORES DE 0-0
             const targetMatch = liveMatches.length > 0 ? liveMatches[0] : (recentMatches.length > 0 ? recentMatches[0] : null);
             let exactGuessers = "Ningún jugador";
             let targetMatchInfo = "Ninguno";
@@ -220,9 +225,11 @@ async function runAiNewsGeneration() {
             if (targetMatch) {
                 const rH = targetMatch.score?.fullTime?.home;
                 const rA = targetMatch.score?.fullTime?.away;
-                targetMatchInfo = `${targetMatch.homeTeam.name} ${rH ?? 0} - ${rA ?? 0} ${targetMatch.awayTeam.name}`;
                 
+                // Si el marcador existe de verdad, armamos la información
                 if (rH !== undefined && rH !== null && rA !== undefined && rA !== null) {
+                    targetMatchInfo = `${targetMatch.homeTeam.name} ${rH} - ${rA} ${targetMatch.awayTeam.name}`;
+                    
                     const winners = [];
                     usersData.forEach(u => {
                         const p = u.predictions?.[targetMatch.id];
@@ -288,159 +295,6 @@ async function runAiNewsGeneration() {
         console.error("Error crítico en IA detectado:", e); 
     }
 }
-
-// =========================================================================
-// 🚀 EL RADAR INMORTAL DE GOOGLE CLOUD (Autónomo + Heartbeat)
-// =========================================================================
-exports.generateespnnews = onSchedule({
-    schedule: "*/2 9-23 * * *", // 🟢 Ejecutar cada 2 minutos
-    timeZone: "America/Bogota"
-}, async (event) => {
-    const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();
-    const isTournamentStarted = settingsSnap.exists ? settingsSnap.data().predictionsClosed === true : false;
-    
-    const now = new Date();
-    const minutes = now.getMinutes();
-
-    // 1. Si el Mundial no ha empezado, refresca la marquesina 1 vez por hora y muere.
-    if (!isTournamentStarted) {
-        if (minutes === 0) await runAiNewsGeneration();
-        return null;
-    }
-
-    // 2. Revisar si el Administrador está activo en su navegador (Mecanismo de Latido)
-    const presenceSnap = await db.collection("worldCupAdmin").doc("presence").get();
-    const lastSeenStr = presenceSnap.exists ? presenceSnap.data().adminLastSeen : null;
-    let isAdminOnline = false;
-
-    if (lastSeenStr) {
-        const diffSeconds = (now.getTime() - new Date(lastSeenStr).getTime()) / 1000;
-        // Si el Admin reportó presencia hace menos de 70 segundos, está en línea
-        if (diffSeconds < 70) {
-            isAdminOnline = true;
-        }
-    }
-
-    // 3. Leer la API Cachada y los resultados actuales en la DB
-    const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
-    const apiMatches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
-    
-    const adminResultsSnap = await db.collection("worldCupAdmin").doc("results").get();
-    const adminResultsData = adminResultsSnap.exists ? adminResultsSnap.data() : {};
-    const simStatuses = adminResultsData.simulation?.matchStatuses || {};
-    const adminPreds = adminResultsData.predictions || {};
-    const currentLocks = adminResultsData.lockedMatches || {};
-
-    // 4. EL CEREBRO AUTÓNOMO: ¿Hay partido activo o partido que ya debió empezar?
-    const currentTimeMs = now.getTime();
-    const shouldActivateCloudRadar = apiMatches.some(m => {
-        const finalStatus = simStatuses[m.id] && simStatuses[m.id] !== '' ? simStatuses[m.id] : m.status;
-        
-        // Gatillo A: La base de datos sabe que está rodando el balón
-        if (finalStatus === 'IN_PLAY' || finalStatus === 'PAUSED') return true;
-
-        // Gatillo B (El Salvavidas): Dice programado, pero la hora oficial ya fue superada
-        if (finalStatus === 'SCHEDULED' || finalStatus === 'TIMED') {
-            const matchStartTimeMs = new Date(m.utcDate).getTime();
-            if (currentTimeMs >= matchStartTimeMs) {
-                return true; 
-            }
-        }
-        return false;
-    });
-
-    // 5. ÁRBOL DE DECISIÓN FINAL
-    if (isAdminOnline) {
-        console.log("🛡️ [Modo Ahorro] Admin en línea vigilando. Google Cloud en reposo.");
-        // Solo publica noticias genéricas si es la hora en punto para que la app no parezca muerta
-        if (minutes === 0) await runAiNewsGeneration();
-        return null;
-    }
-
-    if (!isAdminOnline && shouldActivateCloudRadar) {
-        console.log("☁️🚨 [Emergencia] ADMIN OFFLINE y partido en curso. ¡La Nube toma el control!");
-
-        try {
-            // 🔑 IMPORTANTE: Reemplaza este texto por tu API KEY real de Football-Data, 
-            // o usa process.env.FOOTBALL_API_KEY si lo tienes configurado en Google Cloud.
-            const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY; 
-            
-            // Llamamos a la API Europea directamente desde el servidor
-            // 🛡️ BLINDAJE DE CONEXIÓN: Reintentos y disfraz de navegador (User-Agent)
-            let response;
-            let retries = 3;
-            
-            while(retries > 0) {
-                try {
-                    response = await fetch("https://api.football-data.org/v4/competitions/WC/matches", {
-                        headers: { 
-                            "X-Auth-Token": FOOTBALL_API_KEY,
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                            "Accept": "application/json"
-                        }
-                    });
-                    if (response.ok) break; // Si respondió bien, salimos del bucle
-                } catch (fetchError) {
-                    console.warn(`⚠️ Intento fallido hacia la API (${4 - retries}/3). Motivo: ${fetchError.message}`);
-                }
-                retries--;
-                if (retries > 0) await new Promise(res => setTimeout(res, 2000)); // Esperar 2 segudos antes de volver a tocar la puerta
-            }
-            
-            if (!response || !response.ok) {
-                throw new Error(`La API externa rechazó la conexión después de 3 intentos. Estado final: ${response?.status}`);
-            }
-            
-            const data = await response.json();
-            const freshMatches = data.matches;
-
-            if (!freshMatches) return null;
-
-            // Guardamos el nuevo listado oficial para la app
-            await db.collection("worldCupAdmin").doc("apiCache").set({ matches: freshMatches }, { merge: true });
-
-            let hasChanges = false;
-            let dbPreds = { ...adminPreds };
-
-            // Auditamos todos los marcadores en busca de Goles
-            freshMatches.forEach(m => {
-                if (currentLocks[m.id]) return; // Si el admin lo bloqueó manualmente, no lo tocamos
-
-                const apiH = m.score?.fullTime?.home;
-                const apiA = m.score?.fullTime?.away;
-
-                // Si la API devolvió un marcador válido
-                if (apiH !== null && apiH !== undefined) {
-                    if (dbPreds[m.id]?.home !== apiH || dbPreds[m.id]?.away !== apiA) {
-                        dbPreds[m.id] = { ...dbPreds[m.id], home: apiH, away: apiA };
-                        hasChanges = true;
-                    }
-                }
-            });
-
-            if (hasChanges) {
-                console.log("⚽ ¡GOL DETECTADO POR LA NUBE! Guardando y activando IA...");
-                await db.collection("worldCupAdmin").doc("results").set({ predictions: dbPreds }, { merge: true });
-                
-                // Le damos 5 segundos de gracia a Firestore para re-calcular los puntos (Race Condition)
-                await new Promise(resolve => setTimeout(resolve, 5000));
-                
-                await runAiNewsGeneration();
-            } else {
-                console.log("⏱️ Sin novedades en el marcador durante este minuto.");
-            }
-
-        } catch (err) {
-            console.error("❌ Error en el Radar Autónomo de la Nube:", err);
-        }
-
-    } else if (minutes === 0) {
-        console.log("💤 Torneo dormido y Admin desconectado. Refrescando boletín horario estándar.");
-        await runAiNewsGeneration();
-    }
-
-    return null;
-});
 
 // 🟢 ESCUCHA EL TRIGER ULTRA-RÁPIDO DEL AUTO-SYNC O DEL MANUAL (Navegador Admin)
 exports.onLiveTriggerUpdate = onDocumentUpdated("worldCupAdmin/trigger", async (event) => {
