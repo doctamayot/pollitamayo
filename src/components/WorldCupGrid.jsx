@@ -1852,6 +1852,20 @@ const WorldCupGrid = ({ currentUser }) => {
                 </div>
             )}
             <InfografiaModal data={reportData} onClose={() => setReportData(null)} />
+                {activeBadgeInfo && (
+                <div 
+                    className="fixed z-[99999] bg-slate-800 border border-slate-600 text-white p-3 rounded-xl shadow-2xl flex flex-col items-center pointer-events-none animate-fade-in w-48 text-center"
+                    style={{
+                        top: activeBadgeInfo.y - 10, 
+                        left: Math.min(Math.max(activeBadgeInfo.x, 100), window.innerWidth - 100), 
+                        transform: 'translate(-50%, -100%)'
+                    }}
+                >
+                    <span className="font-black text-[12px] text-yellow-400 leading-tight mb-1">{activeBadgeInfo.title}</span>
+                    <span className="text-[11px] leading-tight text-slate-200">{activeBadgeInfo.desc}</span>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
+                </div>
+            )}
         </div>
     );
 };
