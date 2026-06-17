@@ -542,44 +542,48 @@ const WorldCupRanking = ({ currentUser }) => {
         });
 
         // PASO 2: ASIGNACIÓN DE INSIGNIAS LEYENDO EL ÁLBUM DE FOTOS DE FIREBASE 📸
+        // PASO 2: ASIGNACIÓN DE INSIGNIAS LEYENDO EL ÁLBUM DE FOTOS DE FIREBASE 📸
         Object.keys(usersStats).forEach(uid => {
             let isDictador = false;
             let isColero = false;
             let rachaDictadorActual = 0;
             let rachaColeroActual = 0;
+            
+            // 🟢 NUEVO: Guardamos la racha MÁXIMA que logró el usuario
+            let maxRachaDictador = 0;
+            let maxRachaColero = 0;
 
             // Recorremos las fotos históricas desde el partido 1 hasta el último jugado
             rankingHistoryData.forEach(snapshot => {
                 const scores = snapshot.scores || {};
                 
-                // Encontramos el puntaje más alto y más bajo de la polla EN ESE MOMENTO EXACTO
                 let max = -1;
                 let min = 999999;
                 
-                // Filtramos para solo comparar contra usuarios válidos (que pagaron y no son admin)
                 Object.keys(usersStats).forEach(validUid => {
                     const s = scores[validUid] || 0;
                     if (s > max) max = s;
                     if (s < min) min = s;
                 });
 
-                // ¿Cuántos puntos tenía nuestro usuario en esa foto?
                 const userScore = scores[uid] || 0;
 
-                // LÓGICA ESTRICTA CONSECUTIVA DICTADOR
+                // LÓGICA DICTADOR (Guardando el máximo histórico)
                 if (userScore === max && max > 0) {
                     rachaDictadorActual++;
-                    if (rachaDictadorActual >= 7) isDictador = true;
+                    if (rachaDictadorActual > maxRachaDictador) maxRachaDictador = rachaDictadorActual;
+                    if (maxRachaDictador >= 7) isDictador = true;
                 } else {
-                    rachaDictadorActual = 0; // Se reinicia si suelta la corona
+                    rachaDictadorActual = 0; // Solo reiniciamos la racha temporal, el maxRacha sobrevive
                 }
 
-                // LÓGICA ESTRICTA CONSECUTIVA COLERO
+                // LÓGICA COLERO (Guardando el máximo histórico)
                 if (userScore === min) {
                     rachaColeroActual++;
-                    if (rachaColeroActual >= 7) isColero = true;
+                    if (rachaColeroActual > maxRachaColero) maxRachaColero = rachaColeroActual;
+                    if (maxRachaColero >= 7) isColero = true;
                 } else {
-                    rachaColeroActual = 0; // Se reinicia si sube de puesto
+                    rachaColeroActual = 0; 
                 }
             });
 
@@ -595,6 +599,10 @@ const WorldCupRanking = ({ currentUser }) => {
             stats.isFrancotirador = isFrancotirador;
             stats.isOraculo = isOraculo;
             stats.primerPlenoDate = primerPlenoMatchDate;
+            
+            // 🟢 NUEVO: Inyectamos el récord máximo en los stats
+            stats.maxRachaDictador = maxRachaDictador;
+            stats.maxRachaColero = maxRachaColero;
             
             // Re-confirmamos el total final
             stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
@@ -807,9 +815,9 @@ const WorldCupRanking = ({ currentUser }) => {
                                  
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                         {user.isOraculo && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Oráculo', desc: '¡Increíble! Acertó 10 marcadores exactos en total.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🔮</span>}
-                                        {user.isDictador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Dictador', desc: 'Líder por 7 partidos seguidos. ¡Intocable!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🗿</span>}
+                                        {user.isDictador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Dictador', desc: `¡Logro desbloqueado! Llegó a dominar la cima por ${user.maxRachaDictador} partidos consecutivos.`, x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🗿</span>}
                                         {user.isFrancotirador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'Francotirador', desc: 'Acertó 3 marcadores exactos consecutivos.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🎯</span>}
-                                        {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: 'Colero general por 7 partidos seguidos. Hundiendo la tabla.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
+                                        {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: `¡Hundió la tabla! Estuvo de colero durante ${user.maxRachaColero} partidos consecutivos.`, x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
                                         {user.isSeco && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Seco', desc: 'Ningún pleno hasta el momento. ¡Cero puntería!', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">🌵</span>}
                                         {user.isOasis && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Oasis', desc: 'El último en lograr un pleno y quitarse el cactus.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🌴</span>}
 
