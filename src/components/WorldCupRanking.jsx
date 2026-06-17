@@ -543,20 +543,24 @@ const WorldCupRanking = ({ currentUser }) => {
 
         // PASO 2: ASIGNACIÓN DE INSIGNIAS LEYENDO EL ÁLBUM DE FOTOS DE FIREBASE 📸
         // PASO 2: ASIGNACIÓN DE INSIGNIAS LEYENDO EL ÁLBUM DE FOTOS DE FIREBASE 📸
+let maxPlenosGlobal = 0;
+        Object.values(usersStats).forEach(u => {
+            if (u.stats.plenosCount > maxPlenosGlobal) {
+                maxPlenosGlobal = u.stats.plenosCount;
+            }
+        });
+
         Object.keys(usersStats).forEach(uid => {
             let isDictador = false;
             let isColero = false;
             let rachaDictadorActual = 0;
             let rachaColeroActual = 0;
             
-            // 🟢 NUEVO: Guardamos la racha MÁXIMA que logró el usuario
             let maxRachaDictador = 0;
             let maxRachaColero = 0;
 
-            // Recorremos las fotos históricas desde el partido 1 hasta el último jugado
             rankingHistoryData.forEach(snapshot => {
                 const scores = snapshot.scores || {};
-                
                 let max = -1;
                 let min = 999999;
                 
@@ -568,16 +572,14 @@ const WorldCupRanking = ({ currentUser }) => {
 
                 const userScore = scores[uid] || 0;
 
-                // LÓGICA DICTADOR (Guardando el máximo histórico)
                 if (userScore === max && max > 0) {
                     rachaDictadorActual++;
                     if (rachaDictadorActual > maxRachaDictador) maxRachaDictador = rachaDictadorActual;
                     if (maxRachaDictador >= 7) isDictador = true;
                 } else {
-                    rachaDictadorActual = 0; // Solo reiniciamos la racha temporal, el maxRacha sobrevive
+                    rachaDictadorActual = 0; 
                 }
 
-                // LÓGICA COLERO (Guardando el máximo histórico)
                 if (userScore === min) {
                     rachaColeroActual++;
                     if (rachaColeroActual > maxRachaColero) maxRachaColero = rachaColeroActual;
@@ -592,19 +594,21 @@ const WorldCupRanking = ({ currentUser }) => {
             const isSeco = officialMatches.length >= 5 && stats.plenosCount === 0;
             const isFrancotirador = maxConsecutivePlenos >= 3;
             const isOraculo = stats.plenosCount >= 10;
+            
+            // 🟢 Evaluamos si este usuario en particular es el Rey León
+            const isReyPlenos = maxPlenosGlobal > 0 && stats.plenosCount === maxPlenosGlobal;
 
             stats.isDictador = isDictador;
             stats.isColero = isColero;
             stats.isSeco = isSeco;
             stats.isFrancotirador = isFrancotirador;
             stats.isOraculo = isOraculo;
+            stats.isReyPlenos = isReyPlenos; // Guardamos el león
             stats.primerPlenoDate = primerPlenoMatchDate;
             
-            // 🟢 NUEVO: Inyectamos el récord máximo en los stats
             stats.maxRachaDictador = maxRachaDictador;
             stats.maxRachaColero = maxRachaColero;
             
-            // Re-confirmamos el total final
             stats.total = stats.ptsPlenos + stats.ptsOtrosAciertos + stats.ptsHonorYBonos + stats.ptsRondas + stats.ptsExtras + stats.ptsEventos;
 
             ranks.push({ 
@@ -815,6 +819,7 @@ const WorldCupRanking = ({ currentUser }) => {
                                  
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                         {user.isOraculo && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Oráculo', desc: '¡Increíble! Acertó 10 marcadores exactos en total.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🔮</span>}
+                                        {user.isReyPlenos && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El León', desc: `Rey de la selva y de los plenos. Líder actual con ${user.plenosCount} marcadores exactos.`, x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🦁</span>}
                                         {user.isDictador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Dictador', desc: `¡Logro desbloqueado! Llegó a dominar la cima por ${user.maxRachaDictador} partidos consecutivos.`, x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🗿</span>}
                                         {user.isFrancotirador && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'Francotirador', desc: 'Acertó 3 marcadores exactos consecutivos.', x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base drop-shadow-sm cursor-pointer active:scale-125 transition-transform">🎯</span>}
                                         {user.isColero && <span onClick={(e) => { e.stopPropagation(); setActiveBadgeInfo({ title: 'El Ancla', desc: `¡Hundió la tabla! Estuvo de colero durante ${user.maxRachaColero} partidos consecutivos.`, x: e.clientX, y: e.clientY }); }} className="text-sm sm:text-base opacity-70 cursor-pointer active:scale-125 transition-transform">⚓</span>}
@@ -878,6 +883,7 @@ const WorldCupRanking = ({ currentUser }) => {
                 <h3 className="text-foreground font-black text-xs sm:text-sm uppercase tracking-widest mb-3 opacity-60 text-center">Guía de Insignias y Logros</h3>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs text-foreground-muted">
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🔮</span> <b>El Oráculo:</b> 10 plenos o más en total</div>
+                    <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🦁</span> <b>El León:</b> Mayor cantidad de plenos actual</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🎯</span> <b>Francotirador:</b> 3 plenos consecutivos</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">🗿</span> <b>El Dictador:</b> Líder 7 partidos (Logro)</div>
                     <div className="flex items-center gap-1.5 bg-background-offset px-3 py-1.5 rounded-lg border border-border/50"><span className="text-base sm:text-lg">⚓</span> <b>El Ancla:</b> Colero 7 partidos (Logro)</div>
