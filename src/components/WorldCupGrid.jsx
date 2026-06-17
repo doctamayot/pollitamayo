@@ -121,14 +121,7 @@ const getCountryCode = (name) => {
     return codes[translated] || translated.substring(0, 3).toUpperCase();
 };
 
-const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
 
-    useEffect(() => {
-        if (activeBadgeInfo) {
-            const timer = setTimeout(() => setActiveBadgeInfo(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [activeBadgeInfo]);
 
 const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA, hasO, broadcasters }) => {
     const [elapsed, setElapsed] = useState(0);
@@ -248,6 +241,15 @@ const WorldCupGrid = ({ currentUser }) => {
     const [isDbLoading, setIsDbLoading] = useState(true);
     const [isLivePollingActive, setIsLivePollingActive] = useState(false);
     const [reportData, setReportData] = useState(null);
+
+    const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
+
+    useEffect(() => {
+        if (activeBadgeInfo) {
+            const timer = setTimeout(() => setActiveBadgeInfo(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [activeBadgeInfo]);
 
     const scrollContainerRef = useRef(null);
     const prevSimDateRef = useRef(''); 
