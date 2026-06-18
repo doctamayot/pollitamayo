@@ -1460,10 +1460,21 @@ const WorldCupGrid = ({ currentUser }) => {
                     });
 
                     // 🔥 NUEVO: ESCÁNER DE INSIGNIAS PREDICTIVAS (Con matemática cruzada)
+                   // 🔥 NUEVO: ESCÁNER DE INSIGNIAS PREDICTIVAS (Con matemática cruzada corregida)
                     const validPicks = matchSpecificRanking.filter(u => u.uP && u.uP.home !== '');
                     const scoreFrequencies = {};
                     const outcomeFrequencies = { H: 0, D: 0, A: 0 };
-                    let currentLeaderPoints = 0;
+                    
+                    // Función auxiliar de simulación para el Cohete
+                    const calcSimPts = (uH, uA, realH, realA) => {
+                        if (uH === realH && uA === realA) return 5;
+                        const pR = Math.sign(uH - uA);
+                        const rR = Math.sign(realH - realA);
+                        if (pR === rR && (uH === realH || uA === realA)) return 3;
+                        if (pR === rR) return 2;
+                        if (uH === realH || uA === realA) return 1;
+                        return 0;
+                    };
 
                     validPicks.forEach(u => {
                         const h = parseInt(u.uP.home, 10);
@@ -1475,22 +1486,9 @@ const WorldCupGrid = ({ currentUser }) => {
                         if (h > a) outcomeFrequencies.H++;
                         else if (h < a) outcomeFrequencies.A++;
                         else outcomeFrequencies.D++;
-
-                        if (u.totalPoints > currentLeaderPoints) currentLeaderPoints = u.totalPoints;
                     });
 
                     const maxFrequency = Math.max(0, ...Object.values(scoreFrequencies));
-
-                    // Función auxiliar de simulación para el Cohete
-                    const calcSimPts = (uH, uA, realH, realA) => {
-                        if (uH === realH && uA === realA) return 5;
-                        const pR = Math.sign(uH - uA);
-                        const rR = Math.sign(realH - realA);
-                        if (pR === rR && (uH === realH || uA === realA)) return 3;
-                        if (pR === rR) return 2;
-                        if (uH === realH || uA === realA) return 1;
-                        return 0;
-                    };
 
                     const matchRankingWithBadges = matchSpecificRanking.map(user => {
                         let gridBadges = [];
@@ -1508,34 +1506,47 @@ const WorldCupGrid = ({ currentUser }) => {
                             
                             if (scoreFrequencies[key] === maxFrequency && maxFrequency > 2) gridBadges.push({ icon: '🐑', title: 'El Rebaño: El marcador más popular de la polla' });
 
-                            // 🚀 Asalto al Trono (Matemática cruzada perfecta)
-                            if (user.totalPoints < currentLeaderPoints) {
-                                const myHypotheticalScore = user.totalPoints + 5; 
+                            // 🚀 Asalto al Trono (Bug matemático corregido)
+                            if (matchStatus !== 'FINISHED') {
+                                // 1. Restamos los puntos que YA está sumando en este partido para obtener su base real
+                                const myBasePoints = user.totalPoints - (user.pts || 0);
+                                const myHypotheticalScore = myBasePoints + 5; 
+                                
                                 let wouldBeLeader = true;
+                                let isCurrentlyBehindSomeone = false;
                                 
                                 for (const otherUser of validPicks) {
                                     if (otherUser.uid === user.uid) continue;
                                     
+                                    // Sacamos la base del oponente de la misma manera
+                                    const otherBasePoints = otherUser.totalPoints - (otherUser.pts || 0);
+                                    
+                                    // Verificamos si en realidad íbamos perdiendo contra alguien antes del partido
+                                    if (otherBasePoints > myBasePoints) {
+                                        isCurrentlyBehindSomeone = true;
+                                    }
+
                                     const oH = parseInt(otherUser.uP.home, 10);
                                     const oA = parseInt(otherUser.uP.away, 10);
+                                    
                                     // Simulamos cuántos puntos ganaría el Oponente si NUESTRO marcador es el que se da
                                     const simPts = calcSimPts(oH, oA, h, a); 
-                                    const otherHypotheticalScore = otherUser.totalPoints + simPts;
+                                    const otherHypotheticalScore = otherBasePoints + simPts;
                                     
                                     if (otherHypotheticalScore > myHypotheticalScore) {
                                         wouldBeLeader = false;
-                                        break; // Ya no lo alcanzó, rompemos el ciclo
+                                        break; 
                                     }
                                 }
                                 
-                                if (wouldBeLeader) {
-                                    gridBadges.push({ icon: '🚀', title: 'Asalto al Trono: Si acierta este pleno exacto, salta al liderato general' });
+                                // Se lo damos SOLO si iba perdiendo contra alguien y este resultado hipotético lo vuelve líder absoluto
+                                if (wouldBeLeader && isCurrentlyBehindSomeone) {
+                                    gridBadges.push({ icon: '🚀', title: 'Asalto al Trono: Si acierta este pleno exacto, salta a la punta del torneo' });
                                 }
                             }
                         }
                         return { ...user, gridBadges };
                     });
-
                     
 
                     // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
