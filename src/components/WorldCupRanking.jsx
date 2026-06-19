@@ -512,12 +512,29 @@ const WorldCupRanking = ({ currentUser }) => {
             }
 
             extraQuestions.forEach(q => {
-                const u = userData.extraPicks?.[q.id]; const a = adminResults?.extraPicks?.[q.id];
-                if (u && a && (q.manual ? isSmartMatch(u, a) : u.toLowerCase() === a.toLowerCase())) stats.ptsExtras += 6;
+                const u = userData.extraPicks?.[q.id]; 
+                const a = adminResults?.extraPicks?.[q.id];
+                
+                if (u && a) {
+                    // Dividimos la respuesta del admin por si guardó varios (ej: Brasil, Francia)
+                    const officialList = a.split(/[,|]/).map(item => item.trim().toLowerCase());
+                    const cleanAnswer = u.trim().toLowerCase();
+
+                    if (q.manual) {
+                        // isSmartMatch evalúa cada opción oficial contra la respuesta del usuario
+                        const isMatch = officialList.some(officialItem => isSmartMatch(cleanAnswer, officialItem));
+                        if (isMatch) stats.ptsExtras += 6;
+                    } else {
+                        // Búsqueda directa en la lista de opciones válidas
+                        if (officialList.includes(cleanAnswer)) stats.ptsExtras += 6;
+                    }
+                }
             });
+
             specialEvents.forEach(e => {
                 let u = userData.eventPicks?.[e.id]; 
                 let a = adminResults?.eventPicks?.[e.id];
+                
                 if (u && a) {
                     u = String(u).toUpperCase().trim();
                     a = String(a).toUpperCase().trim();

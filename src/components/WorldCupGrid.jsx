@@ -1053,10 +1053,17 @@ const WorldCupGrid = ({ currentUser }) => {
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
                 if (officialAnswer && answer && eventDate <= targetDate) {
+                    // Dividimos la respuesta del admin por comas o barras verticales (ej. "Messi, Kane" o "Argentina|Francia")
+                    const officialList = officialAnswer.split(/[,|]/).map(item => item.trim().toLowerCase());
+                    const cleanAnswer = answer.trim().toLowerCase();
+
                     if (q.manual) {
-                        if (isSmartMatch(answer, officialAnswer)) total += 6;
+                        // isSmartMatch evalúa cada opción oficial contra la respuesta del usuario
+                        const isMatch = officialList.some(officialItem => isSmartMatch(cleanAnswer, officialItem));
+                        if (isMatch) total += 6;
                     } else {
-                        if (officialAnswer.toLowerCase() === answer.toLowerCase()) total += 6;
+                        // Búsqueda directa en la lista de opciones válidas
+                        if (officialList.includes(cleanAnswer)) total += 6;
                     }
                 }
             });

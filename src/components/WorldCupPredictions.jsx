@@ -774,7 +774,31 @@ const WorldCupPredictions = ({ currentUser }) => {
 
     const handleExtraChange = (extraId, value) => {
         if (isCurrentMainTabLocked) return;
-        setExtraPicks(prev => ({ ...prev, [extraId]: value }));
+        
+        setExtraPicks(prev => {
+            // 1. Identificamos si esta pregunta es de escribir (texto libre) o de seleccionar
+            const question = extraQuestions.find(q => q.id === extraId);
+            const isTextField = question?.manual === true || question?.type === 'player';
+
+            // 2. Si es Admin, NO es texto libre, y eligió algo en el select: Acumulamos empates
+            if (isAdmin && value !== '' && !isTextField) {
+                const currentStr = prev[extraId] || '';
+                if (!currentStr) return { ...prev, [extraId]: value };
+                
+                let selectedArray = currentStr.split(',').map(i => i.trim());
+                
+                if (selectedArray.includes(value)) {
+                    selectedArray = selectedArray.filter(i => i !== value); 
+                } else {
+                    selectedArray.push(value); 
+                }
+                
+                return { ...prev, [extraId]: selectedArray.join(', ') };
+            }
+            
+            // 3. Si es un campo de texto (goleador, asistidor) o un usuario normal: Guarda exactamente lo que escribes
+            return { ...prev, [extraId]: value };
+        });
     };
 
     const handleEventChange = (eventId, value) => {
@@ -1301,8 +1325,9 @@ const WorldCupPredictions = ({ currentUser }) => {
             )}
 
             {/* 3. PESTAÑA: EXTRAS */}
+            {/* 3. PESTAÑA: EXTRAS */}
             {activeTab === 'extras' && (
-                <ExtrasTab extraPicks={extraPicks} handleExtraChange={handleExtraChange} isCurrentMainTabLocked={isCurrentMainTabLocked} allTeams={allTeams} matchesByGroup={matchesByGroup} />
+                <ExtrasTab extraPicks={extraPicks} handleExtraChange={handleExtraChange} isCurrentMainTabLocked={isCurrentMainTabLocked} allTeams={allTeams} matchesByGroup={matchesByGroup} isAdmin={isAdmin} />
             )}
 
             {/* 4. PESTAÑA: EVENTOS */}
