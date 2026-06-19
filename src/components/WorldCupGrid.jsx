@@ -454,10 +454,10 @@ const WorldCupGrid = ({ currentUser }) => {
 
                 if (isAnyMatchLive) {
                     nextCheckDelay = 15000; // 🟢 30 Segundos
-                    statusMsg = "¡HAY PARTIDO! Velocidad Ráfaga (30s)";
+                    statusMsg = "¡HAY PARTIDO! Velocidad Ráfaga (15s)";
                 } else if (timeToNextMatch <= 0) {
                     nextCheckDelay = 15000; 
-                    statusMsg = "¡Es la hora cero! Esperando pitazo inicial (30s)";
+                    statusMsg = "¡Es la hora cero! Esperando pitazo inicial (15s)";
                 } else if (timeToNextMatch <= 5 * 60 * 1000) {
                     nextCheckDelay = 15000; 
                     statusMsg = `Calentando motores. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (30s)`;
@@ -1298,8 +1298,11 @@ const WorldCupGrid = ({ currentUser }) => {
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
+            <div className="fixed left-0 top-0 z-[100] w-full bg-background/95 backdrop-blur-xl pt-2 pb-2 mb-6 shadow-2xl border-b border-border/50 rounded-b-2xl">
+                <NewsTicker />
+            </div>
             
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-[2rem] p-3 sm:p-10 mb-6 sm:mb-8 text-center border border-border shadow-xl relative overflow-hidden flex flex-row items-center justify-center gap-3 sm:gap-6">
+            <div className="sm:mt-10 bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-[2rem] p-3 sm:p-10 mb-6 sm:mb-8 text-center border border-border shadow-xl relative overflow-hidden flex flex-row items-center justify-center gap-3 sm:gap-6">
                 <div className="absolute top-0 left-0 w-full h-full bg-primary/5 z-0 pointer-events-none"></div>
                 <img src={logocopa} className="w-12 h-12 sm:w-20 sm:h-20 object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] z-10" alt="" />
                 
@@ -1359,7 +1362,10 @@ const WorldCupGrid = ({ currentUser }) => {
                 </div>
             )}
             <WorldCupCountdown />
-            <NewsTicker />
+           
+
+            {/* 🟢 BARRA DE NOTICIAS CLAVADA PERFECTAMENTE */}
+            
     
             <div className="relative w-full mb-8 flex items-center group">
             
