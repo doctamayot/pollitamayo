@@ -334,7 +334,7 @@ const WorldCupGrid = ({ currentUser }) => {
         reportPresence();
 
         // Y luego repetimos el reporte cada 30 segundos rigurosamente
-        const intervalId = setInterval(reportPresence, 30000); 
+        const intervalId = setInterval(reportPresence, 3000000); 
 
         // Limpiador: Si cambias de pestaña o cierras la app, dejas de reportar presencia
         return () => clearInterval(intervalId);
@@ -453,13 +453,13 @@ const WorldCupGrid = ({ currentUser }) => {
                 let statusMsg = "";
 
                 if (isAnyMatchLive) {
-                    nextCheckDelay = 30000; // 🟢 30 Segundos
+                    nextCheckDelay = 15000; // 🟢 30 Segundos
                     statusMsg = "¡HAY PARTIDO! Velocidad Ráfaga (30s)";
                 } else if (timeToNextMatch <= 0) {
-                    nextCheckDelay = 30000; 
+                    nextCheckDelay = 15000; 
                     statusMsg = "¡Es la hora cero! Esperando pitazo inicial (30s)";
                 } else if (timeToNextMatch <= 5 * 60 * 1000) {
-                    nextCheckDelay = 30000; 
+                    nextCheckDelay = 15000; 
                     statusMsg = `Calentando motores. Pitazo en ${Math.ceil(timeToNextMatch/60000)} min (30s)`;
                 } else if (timeToNextMatch <= 60 * 60 * 1000) {
                     nextCheckDelay = 3 * 60 * 1000; 
@@ -570,7 +570,7 @@ const WorldCupGrid = ({ currentUser }) => {
                 if (!isMountedRef.current) return;
                 console.error("❌ Error en Auto-Sync:", error);
                 if (radarTimeoutRef.current) clearTimeout(radarTimeoutRef.current);
-                radarTimeoutRef.current = setTimeout(performSmartSync, 30000); 
+                radarTimeoutRef.current = setTimeout(performSmartSync, 15000); 
             }
         };
 
