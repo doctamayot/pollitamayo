@@ -1651,14 +1651,13 @@ const WorldCupGrid = ({ currentUser }) => {
 
                         const disneyPairs = [
                             "México-Sudáfrica", "Canadá-Bosnia y Herzegovina", "Estados Unidos-Paraguay", "Brasil-Marruecos", 
-                            "Alemania-Curazao", "Países Bajos-Japón", "Costa de Marfil-Ecuador", "España-Cabo Verde", 
-                            "Bélgica-Egipto", "Arabia Saudita-Uruguay", "Francia-Senegal", "Argentina-Argelia", 
-                            "Inglaterra-Croacia", "Uzbekistán-Colombia", "Suiza-Bosnia y Herzegovina", "Estados Unidos-Australia", 
-                            "Escocia-Marruecos", "Turquía-Paraguay", "Alemania-Costa de Marfil", "Ecuador-Curazao", 
-                            "España-Arabia Saudita", "Bélgica-Irán", "Uruguay-Cabo Verde", "Argentina-Austria", 
-                            "Portugal-Uzbekistán", "Inglaterra-Ghana", "Colombia-República Democrática del Congo", "Brasil-Escocia", 
-                            "Sudáfrica-Corea del Sur", "Ecuador-Alemania", "Túnez-Países Bajos", "Paraguay-Australia", 
-                            "Noruega-Francia", "Uruguay-España", "Croacia-Ghana", "Colombia-Portugal", "Jordania-Argentina"
+                            "Países Bajos-Japón", "Costa de Marfil-Ecuador", "España-Cabo Verde", 
+                             "Arabia Saudita-Uruguay",  "Argentina-Argelia", 
+                             "Uzbekistán-Colombia", "Suiza-Bosnia y Herzegovina",  
+                             "Alemania-Costa de Marfil", "Ecuador-Curazao", 
+                            "España-Arabia Saudita", "Bélgica-Irán",  "Argentina-Austria", 
+                            , "Colombia-República Democrática del Congo", "Brasil-Escocia", 
+                            "Ecuador-Alemania","Uruguay-España",  "Colombia-Portugal", "Jordania-Argentina"
                         ];
 
                         const pair1 = `${translateTeam(finalHomeName)}-${translateTeam(finalAwayName)}`;
