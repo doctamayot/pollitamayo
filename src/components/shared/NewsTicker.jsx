@@ -52,10 +52,10 @@ const NewsTicker = () => {
             const content = parts.slice(1).join(':'); 
             return (
                 <>
-                    <span className="text-amber-400 font-black italic tracking-widest uppercase text-[10px] sm:text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">
+                    <span className="text-amber-400 font-black italic tracking-widest uppercase text-[12px] sm:text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">
                         {prefix}:
                     </span>
-                    <span className="text-white font-semibold ml-1.5 sm:ml-2 text-[14px] sm:text-[15px] tracking-wide">
+                    <span className="text-white font-semibold ml-1.5 sm:ml-2 text-[13px] sm:text-[15px] tracking-wide">
                         {content}
                     </span>
                 </>
@@ -70,13 +70,13 @@ const NewsTicker = () => {
         <div className="w-full relative mt-6 sm:mt-8 mb-0 z-50"> 
             
             {/* 🚨 PESTAÑA CENTRAL "BREAKING NEWS" SOBSITE LA BARRA */}
-            <div className="absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-red-700 to-red-600 text-white font-black uppercase text-[8px] sm:text-xs tracking-widest px-6 sm:px-10 py-1 sm:py-1.5 rounded-t-lg z-30 border-t border-x border-amber-500/50 shadow-[0_-5px_15px_rgba(220,38,38,0.3)] flex items-center justify-center">
+            <div className="  absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-red-700 to-red-600 text-white font-black uppercase text-[8px] sm:text-xs tracking-widest px-6 sm:px-10 py-1 sm:py-1.5 rounded-t-lg z-30 border-t border-x border-amber-500/50 shadow-[0_-5px_15px_rgba(220,38,38,0.3)] flex items-center justify-center">
                 <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-2 animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
                 <span className="mt-0.5">ÚLTIMA HORA</span>
             </div>
 
             {/* 🌀 CONTENEDOR DEL TEXTO RODANTE */}
-            <div className="w-full bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-y border-amber-500/30 overflow-hidden relative flex items-center h-9 sm:h-12 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
+            <div className="-mt-4 w-full bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-y border-amber-500/30 overflow-hidden relative flex items-center h-9 sm:h-12 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
                 
                 {/* EFECTOS DE SOMBRA LATERAL (Ahora en ambos lados porque el texto cruza de punta a punta) */}
                 <div className="absolute left-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-r from-slate-950 to-transparent z-10 pointer-events-none"></div>
@@ -127,7 +127,7 @@ const NewsTicker = () => {
                     100% { transform: translateX(-50%); }
                 }
                 .animate-ticker {
-                    animation: ticker 220s linear infinite;
+                    animation: ticker 250s linear infinite;
                     width: max-content;
                 }
                 .animate-ticker:hover {
