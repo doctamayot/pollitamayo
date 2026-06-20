@@ -127,7 +127,7 @@ const NewsTicker = () => {
                     100% { transform: translateX(-50%); }
                 }
                 .animate-ticker {
-                    animation: ticker 250s linear infinite;
+                    animation: ticker 230s linear infinite;
                     width: max-content;
                 }
                 .animate-ticker:hover {
