@@ -1047,13 +1047,18 @@ const WorldCupPredictions = ({ currentUser }) => {
 
         try { 
             await saveOp; 
-            // 🟢 NUEVO: Si eres admin, recalculamos el ranking en el fondo para la IA de una vez
             if (isAdmin) {
+                // 1. Mandamos a recalcular la matemática pesada
                 recalculateAndSaveRanking();
-                await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
-                    action: 'MANUAL_CHANGE',
-                    timestamp: new Date().toISOString() 
-                });
+                
+                // 2. 🟢 Le damos 3 segundos exactos a la PC para terminar de guardar en Firebase
+                // ANTES de presionar el botón de pánico que despierta a la IA.
+                setTimeout(async () => {
+                    await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { 
+                        action: 'MANUAL_CHANGE',
+                        timestamp: new Date().toISOString() 
+                    });
+                }, 3000);
             }
         } catch (error) { 
             console.error(error); 
