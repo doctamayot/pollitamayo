@@ -204,10 +204,12 @@ const TVScoreboard = ({ match, homeName, awayName, homeCrest, awayCrest, rH, rA,
             {/* ⏱️ Zona de Reloj (Color Celeste TV) */}
             <div className="w-fit mx-auto flex items-center justify-center bg-[#c3e1e5] text-[#0f172a] px-6 py-1.5 mt-[-1px] rounded-b-xl shadow-md z-10 relative border-x-2 border-b-2 border-slate-600/30">
                 <span className="font-black text-sm sm:text-base tabular-nums leading-none tracking-tighter mr-2">
-                    {isFinished ? 'FT' : isPlaying || isPaused ? formatTime(elapsed) : new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
+                    {isFinished ? 'Finalizado' : isPlaying || isPaused ? formatTime(elapsed) : new Date(match.utcDate).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
                 </span>
                 {(isPlaying || isPaused) && !isFinished && (
-                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 leading-none uppercase tracking-widest border-l border-slate-400/50 pl-2">
+                    <span className={`text-[9px] sm:text-[10px] font-black leading-none uppercase tracking-widest border-l border-slate-400/50 pl-2 ${
+                        isPaused ? 'text-slate-700' : 'text-green-600 animate-pulse drop-shadow-sm'
+                    }`}>
                         {isPaused ? 'M. TIEMPO' : 'EN VIVO'}
                     </span>
                 )}
