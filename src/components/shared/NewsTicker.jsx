@@ -67,7 +67,7 @@ const NewsTicker = () => {
 
     return (
         /* Agregamos un mt-6 (margin-top) al contenedor principal para darle espacio a la pestaña que sobresale hacia arriba */
-        <div className="w-full relative mt-6 sm:mt-8 mb-2 z-50"> 
+        <div className="w-full relative mt-6 sm:mt-8 mb-0 z-50"> 
             
             {/* 🚨 PESTAÑA CENTRAL "BREAKING NEWS" SOBSITE LA BARRA */}
             <div className="absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-red-700 to-red-600 text-white font-black uppercase text-[8px] sm:text-xs tracking-widest px-6 sm:px-10 py-1 sm:py-1.5 rounded-t-lg z-30 border-t border-x border-amber-500/50 shadow-[0_-5px_15px_rgba(220,38,38,0.3)] flex items-center justify-center">

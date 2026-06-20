@@ -1298,7 +1298,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
-             <div className="fixed left-0 top-14 md:top-0 z-[100] w-full bg-background/95 backdrop-blur-xl pt-2 pb-2 mb-6 shadow-2xl border-b border-border/50 rounded-b-2xl">
+             <div className="fixed left-0 top-15 md:top-0 z-[100] w-full bg-background/95 backdrop-blur-xl pt-2 pb-2 mb-6 shadow-2xl border-b border-border/50 rounded-b-2xl">
                 <NewsTicker />
             </div>
             
