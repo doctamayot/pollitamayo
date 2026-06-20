@@ -8,6 +8,7 @@ import { generateFullBracket } from '../services/bracketEngine';
 import NewsTicker from '../components/shared/NewsTicker'
 import InfografiaModal from '../components/InfografiaModal'
 import WorldCupCountdown from './worldcupcomponents/WorldCupCountdown';
+import PollaExpressScreen from '../components/PollaExpressScreen';
 
 // 📺 IMPORTACIÓN DE LOS LOGOS DE LOS CANALES
 import caracolImg from '../assets/caracol.png';
@@ -245,6 +246,7 @@ const WorldCupGrid = ({ currentUser }) => {
     const [reportData, setReportData] = useState(null);
 
     const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
+    const [activePollaMatch, setActivePollaMatch] = useState(null);
 
     useEffect(() => {
         if (activeBadgeInfo) {
@@ -1689,6 +1691,7 @@ const WorldCupGrid = ({ currentUser }) => {
                         <div key={match.id} className={`bg-card border ${isPlaying ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : isPaused ? 'border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'border-border'} rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-xl relative flex flex-col`}>
                             
                             {isAdmin && (
+                                <>
                                 <div className="absolute top-3 right-3 z-50 mt-[-10px]">
                                     <select 
                                         className="bg-purple-900 text-purple-100 text-[9px] font-bold p-1 rounded-lg outline-none border border-purple-500/50 shadow-md cursor-pointer hover:bg-purple-800 transition-colors"
@@ -1703,6 +1706,16 @@ const WorldCupGrid = ({ currentUser }) => {
                                         <option value="FINISHED">🏁 Finalizado</option>
                                     </select>
                                 </div>
+                                <div className="absolute top-3 left-3 z-50 mt-[-10px]">
+                                        <button 
+                                            onClick={() => setActivePollaMatch({ match, rH, rA, matchStatus })}
+                                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[9px] sm:text-[10px] font-black px-2 py-1.5 rounded-lg shadow-lg border border-amber-300/50 hover:scale-110 transition-transform tracking-widest uppercase flex items-center gap-1"
+                                            title="Abrir Polla Express"
+                                        >
+                                            🎲 Polla Express
+                                        </button>
+                                    </div>
+                                    </>
                             )}
 
                             <div className={`${isPlaying ? 'bg-green-500/5' : isPaused ? 'bg-amber-500/5' : 'bg-background-offset'} pb-4 sm:pb-6 border-b border-border relative z-20`}>
@@ -1891,6 +1904,16 @@ const WorldCupGrid = ({ currentUser }) => {
                     <span className="text-[11px] leading-tight text-slate-200">{activeBadgeInfo.desc}</span>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
                 </div>
+            )}
+            {/* 🟢 RENDER DE LA PANTALLA COMPLETA (Falso Cambio de Ruta) */}
+            {activePollaMatch && (
+                <PollaExpressScreen 
+                    match={activePollaMatch.match}
+                    rH={activePollaMatch.rH}
+                    rA={activePollaMatch.rA}
+                    matchStatus={activePollaMatch.matchStatus}
+                    onClose={() => setActivePollaMatch(null)}
+                />
             )}
         </div>
     );
