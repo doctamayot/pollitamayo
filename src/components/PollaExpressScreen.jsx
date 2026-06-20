@@ -19,7 +19,6 @@ const teamTranslations = {
 };
 const translateTeam = (name) => teamTranslations[name] || name;
 
-// 🟢 EL ORDEN EXACTO QUE PEDISTE PARA LA MESA
 const PRIORITY_SCORES = [
     "0-0", "1-0", "0-1", "2-0", "0-2", "1-1", "2-1", "1-2", 
     "3-0", "0-3", "3-1", "1-3", "2-2", "4-0", "4-1", "4-2", "5-0", "6-0"
@@ -96,11 +95,31 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
         }
     };
 
+    // 🟢 NUEVA LÓGICA INTELIGENTE PARA AGREGAR REZAGADOS
     const handleAddPlayer = (e) => {
         e.preventDefault();
         if (isLocked) return;
         if (!newPlayerName.trim()) return;
-        const newPlayers = [...pollaData.players, { id: Date.now().toString(), name: newPlayerName.trim(), turn: null, score: null }];
+
+        let assignedTurn = null;
+        let assignedHidden = null;
+
+        // Si la fase ya pasó, le damos el último turno automáticamente y se salta el sorteo
+        if (pollaData.phase !== 'REGISTRATION') {
+            const currentMaxTurn = Math.max(0, ...pollaData.players.map(p => p.turn || p.hiddenTurn || 0));
+            assignedTurn = currentMaxTurn + 1;
+            assignedHidden = currentMaxTurn + 1;
+            toast.success(`${newPlayerName.toUpperCase()} agregado de último (Turno ${assignedTurn})`, { icon: '🏃‍♂️' });
+        }
+
+        const newPlayers = [...pollaData.players, { 
+            id: Date.now().toString(), 
+            name: newPlayerName.trim(), 
+            turn: assignedTurn, 
+            hiddenTurn: assignedHidden,
+            score: null 
+        }];
+        
         updateFirebase({ players: newPlayers });
         setNewPlayerName('');
     };
@@ -124,8 +143,12 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
         }
         
         const pool = turns.map((t, index) => ({ id: index, turn: t, assignedTo: null }));
+        
+        const playersWithHiddenTurns = pollaData.players.map((p, index) => ({
+            ...p, hiddenTurn: turns[index] // Guardamos el turno oculto por si queremos revelarlo luego
+        }));
 
-        updateFirebase({ phase: 'DRAW', cardPool: pool });
+        updateFirebase({ phase: 'DRAW', cardPool: pool, players: playersWithHiddenTurns });
     };
 
     const handlePickCard = (cardId) => {
@@ -184,7 +207,6 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
         });
 
         const newAvailableScores = pollaData.availableScores.filter(s => s !== scoreAssigned);
-        
         const oldPlayer = pollaData.players.find(p => p.id === playerId);
         if (oldPlayer.score) newAvailableScores.push(oldPlayer.score);
 
@@ -192,26 +214,33 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
     };
 
     const getSurvivalStatus = (predScoreStr) => {
-        if (!predScoreStr) return { isAlive: true, message: 'Esperando marcador' };
+        if (!predScoreStr) return { category: 'PENDING', priority: 4, message: 'Esperando marcador', color: 'text-slate-400 border-slate-700 bg-slate-800/80' };
         
         const [pH, pA] = predScoreStr.split('-').map(Number);
         const realH = parseInt(liveScore.home);
         const realA = parseInt(liveScore.away);
         
-        if (isNaN(realH) || isNaN(realA)) return { isAlive: true, message: 'LISTO PARA LA BATALLA', color: 'text-slate-400 border-slate-700' };
+        if (isNaN(realH) || isNaN(realA)) return { category: 'PENDING', priority: 4, message: 'LISTO PARA LA BATALLA', color: 'text-slate-400 border-slate-700 bg-slate-800/80' };
         
         if (liveScore.status === 'FINISHED') {
-            if (pH === realH && pA === realA) return { isAlive: true, message: '¡GANADOR! 🏆', color: 'text-green-500 bg-green-900/20 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.3)]' };
-            return { isAlive: false, message: 'ELIMINADO ☠️', color: 'text-red-500 opacity-30 bg-red-900/10 border-red-900/30' };
+            if (pH === realH && pA === realA) return { category: 'EXACT', priority: 1, message: '¡GANADOR! 🏆', color: 'text-green-500 bg-green-900/40 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' };
+            return { category: 'DEAD', priority: 5, message: 'ELIMINADO ☠️', color: 'text-red-400 bg-slate-900 border-red-900/80' };
         }
 
-        if (liveScore.status === 'IN_PLAY' || liveScore.status === 'PAUSED') {
-            if (realH > pH || realA > pA) {
-                return { isAlive: false, message: 'ELIMINADO ☠️', color: 'text-red-500 opacity-30 bg-red-900/20 border-red-900/30' };
-            }
+        if (realH > pH || realA > pA) {
+            return { category: 'DEAD', priority: 5, message: 'ELIMINADO ☠️', color: 'text-red-400 bg-slate-900 border-red-900/80' };
+        }
+
+        if (realH === pH && realA === pA) {
+            return { category: 'EXACT', priority: 1, message: '¡ACERTANDO! 🎯', color: 'text-green-400 bg-green-900/30 border-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]' };
+        }
+
+        const diffTotal = (pH - realH) + (pA - realA);
+        if (diffTotal === 1) {
+            return { category: 'ONE_AWAY', priority: 2, message: 'A 1 GOL ⚽', color: 'text-cyan-400 bg-cyan-900/20 border-cyan-500/50' };
         }
         
-        return { isAlive: true, message: 'VIVO 🔥', color: 'text-green-400 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.1)]' };
+        return { category: 'ALIVE', priority: 3, message: 'VIVO 🔥', color: 'text-amber-400 border-amber-500/30 bg-slate-800/80' };
     };
 
     if (loading) return null;
@@ -222,29 +251,20 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
     }));
 
     const sortedPlayers = playersWithStatus.sort((a, b) => {
-        if (a.status.isAlive && !b.status.isAlive) return -1;
-        if (!a.status.isAlive && b.status.isAlive) return 1;
-        return (a.turn || 99) - (b.turn || 99);
+        if (a.status.priority !== b.status.priority) return a.status.priority - b.status.priority;
+        return (a.turn || 99) - (b.turn || 99); 
     });
 
     const totalPot = pollaData.players.length * (pollaData.entryFee || 0);
 
-    // 🟢 ORDENADOR INTELIGENTE DE MARCADORES (Prioridad Primero, Resto al Final)
     const sortedAvailableScores = [...pollaData.availableScores].sort((a, b) => {
         const indexA = PRIORITY_SCORES.indexOf(a);
         const indexB = PRIORITY_SCORES.indexOf(b);
-
-        // Si ambos están en la lista VIP, se ordenan según tu lista
         if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-        // Si solo A está en la lista, va primero
         if (indexA !== -1) return -1;
-        // Si solo B está en la lista, va primero
         if (indexB !== -1) return 1;
-
-        // Si NINGUNO de los dos está en la lista VIP (Ej: 7-7), los organizamos numéricamente
         const [aH, aA] = a.split('-').map(Number);
         const [bH, bA] = b.split('-').map(Number);
-        
         if (aH !== bH) return aH - bH;
         return aA - bA;
     });
@@ -364,9 +384,9 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                             
                             <div className="flex flex-col lg:flex-row gap-8 flex-1">
                                 
-                                <div className="w-full lg:w-72 bg-slate-800/50 rounded-3xl p-4 border border-slate-700 shrink-0 h-fit">
+                                <div className="w-full lg:w-72 bg-slate-800/50 rounded-3xl p-4 border border-slate-700 shrink-0 h-fit flex flex-col">
                                     <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 text-center border-b border-slate-700 pb-2">Pendientes por Carta</h4>
-                                    <div className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-2 flex-1">
                                         {pollaData.players.map(p => {
                                             const hasTurn = p.turn !== null;
                                             return (
@@ -385,6 +405,17 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                                             )
                                         })}
                                     </div>
+                                    
+                                    {/* 🟢 CAJA PARA AGREGAR REZAGADOS EN EL SORTEO */}
+                                    {!isLocked && (
+                                        <form onSubmit={handleAddPlayer} className="flex gap-2 mt-6 pt-4 border-t border-slate-700 shrink-0">
+                                            <input 
+                                                type="text" value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)}
+                                                placeholder="➕ Agregar tarde..." className="flex-1 bg-slate-900 text-white px-3 py-2 rounded-xl outline-none focus:ring-2 ring-amber-500 text-xs font-bold uppercase border border-slate-700"
+                                            />
+                                            <button type="submit" className="bg-amber-500 text-slate-900 font-black px-3 rounded-xl hover:bg-amber-400 shadow-md">+</button>
+                                        </form>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 flex flex-wrap justify-center content-start gap-4">
@@ -441,41 +472,64 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                     {pollaData.phase === 'PICKING' && (
                         <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
                             
-                            {/* TABLA DE JUGADORES (SUPERVIVENCIA ORDENADA) */}
-                            <div className="flex-1 space-y-3 overflow-y-auto pr-2 hide-scrollbar">
-                                <h3 className="text-2xl font-black text-amber-500 uppercase border-b border-slate-800 pb-4 mb-4 sticky top-0 bg-slate-900 z-10">
-                                    🛡️ Gladiadores
+                            {/* TABLA DE JUGADORES (SUPERVIVENCIA ORDENADA E INTELIGENTE) */}
+                            <div className="flex-1 space-y-3 overflow-y-auto pr-2 hide-scrollbar flex flex-col">
+                                <h3 className="text-2xl font-black text-amber-500 uppercase border-b border-slate-800 pb-4 mb-4 sticky top-0 bg-slate-900 z-10 shrink-0">
+                                    🛡️ POLLEROS
                                 </h3>
                                 
-                                {sortedPlayers.map(p => {
-                                    const isDead = !p.status.isAlive;
-                                    
-                                    return (
-                                        <div 
-                                            key={p.id} 
-                                            onDragOver={e => e.preventDefault()}
-                                            onDrop={e => handleDrop(e, p.id)}
-                                            className={`flex items-center gap-4 bg-slate-800/80 border-2 p-3 sm:p-4 rounded-2xl transition-colors ${
-                                                !p.score ? 'border-dashed border-amber-500/50' : p.status.color
-                                            }`}
-                                        >
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black border shrink-0 text-xl shadow-sm ${isDead ? 'bg-slate-900 border-slate-800 text-slate-700' : 'bg-slate-950 border-slate-700 text-amber-500'}`}>
-                                                {p.turn}
-                                            </div>
-                                            
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className={`font-bold text-xl truncate uppercase ${isDead ? 'text-slate-600 line-through decoration-red-900/50 decoration-2' : 'text-white'}`}>
-                                                    {p.name}
-                                                </h4>
-                                                <p className={`text-[10px] font-black tracking-widest uppercase mt-0.5 ${isDead ? 'text-red-900' : ''}`}>{p.status.message}</p>
-                                            </div>
+                                <div className="flex-1 space-y-3">
+                                    {sortedPlayers.map(p => {
+                                        const isDead = p.status.category === 'DEAD';
+                                        const isExact = p.status.category === 'EXACT';
+                                        const isOneAway = p.status.category === 'ONE_AWAY';
+                                        
+                                        return (
+                                            <div 
+                                                key={p.id} 
+                                                onDragOver={e => e.preventDefault()}
+                                                onDrop={e => handleDrop(e, p.id)}
+                                                className={`flex items-center gap-4 border-2 p-3 sm:p-4 rounded-2xl transition-all duration-300 ${!p.score ? 'border-dashed border-amber-500/50 bg-slate-800/80' : p.status.color}`}
+                                            >
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black border shrink-0 text-xl shadow-sm ${
+                                                    isDead ? 'bg-slate-950 border-red-900/50 text-red-500/50' :
+                                                    isExact ? 'bg-green-500 text-slate-900 border-green-400' :
+                                                    isOneAway ? 'bg-cyan-950 border-cyan-500 text-cyan-400' :
+                                                    'bg-slate-950 border-slate-700 text-amber-500'
+                                                }`}>
+                                                    {p.turn}
+                                                </div>
+                                                
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={`font-bold text-xl truncate uppercase ${isDead ? 'text-red-400/80 line-through decoration-red-600 decoration-2' : 'text-white'}`}>
+                                                        {p.name}
+                                                    </h4>
+                                                    <p className={`text-[10px] font-black tracking-widest uppercase mt-0.5 ${p.status.color.split(' ')[0]}`}>{p.status.message}</p>
+                                                </div>
 
-                                            <div className={`w-24 h-14 rounded-xl border flex items-center justify-center font-black text-3xl shadow-inner shrink-0 ${isDead ? 'bg-slate-900 border-slate-800 text-slate-700 line-through decoration-red-900/50 decoration-4' : 'bg-slate-950 border-slate-700 text-white'}`}>
-                                                {p.score || '...'}
+                                                <div className={`w-24 h-14 rounded-xl border flex items-center justify-center font-black text-3xl shadow-inner shrink-0 transition-transform duration-300 ${
+                                                    isDead ? 'bg-slate-950 border-red-900/50 text-red-500/60 line-through decoration-red-600 decoration-4' : 
+                                                    isExact ? 'bg-green-950 border-green-500 text-green-400 scale-105' :
+                                                    isOneAway ? 'bg-cyan-950 border-cyan-500/50 text-cyan-200' :
+                                                    'bg-slate-950 border-slate-700 text-white'
+                                                }`}>
+                                                    {p.score || '...'}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )
-                                })}
+                                        )
+                                    })}
+                                </div>
+
+                                {/* 🟢 CAJA PARA AGREGAR REZAGADOS EN LA MESA */}
+                                {!isLocked && (
+                                    <form onSubmit={handleAddPlayer} className="flex gap-2 mt-4 pt-4 border-t border-slate-800 shrink-0">
+                                        <input 
+                                            type="text" value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)}
+                                            placeholder="➕ Agregar jugador tarde..." className="flex-1 bg-slate-950 text-white px-4 py-3 rounded-xl outline-none focus:ring-2 ring-amber-500 text-sm font-bold uppercase border border-slate-700"
+                                        />
+                                        <button type="submit" className="bg-amber-500 text-slate-900 font-black px-6 rounded-xl hover:bg-amber-400 text-xl shadow-md">+</button>
+                                    </form>
+                                )}
                             </div>
 
                             {/* MESA DE MARCADORES MANUAL */}
@@ -492,7 +546,6 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                                         <button type="submit" className="bg-indigo-600 text-white font-black px-6 rounded-xl hover:bg-indigo-500 text-2xl shrink-0 shadow-md transition-transform active:scale-95">+</button>
                                     </form>
 
-                                    {/* 🟢 RENDERIZADO DE MARCADORES ORDENADOS CON PRIORIDAD */}
                                     <div className="flex flex-wrap gap-2 justify-center overflow-y-auto hide-scrollbar content-start flex-1 pr-2">
                                         {sortedAvailableScores.map(score => {
                                             const isPriority = PRIORITY_SCORES.includes(score);
