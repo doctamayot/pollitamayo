@@ -55,7 +55,7 @@ const NewsTicker = () => {
                     <span className="text-amber-400 font-black italic tracking-widest uppercase text-[10px] sm:text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">
                         {prefix}:
                     </span>
-                    <span className="text-white font-semibold ml-1.5 sm:ml-2 text-[15px] sm:text-[15px] tracking-wide">
+                    <span className="text-white font-semibold ml-1.5 sm:ml-2 text-[14px] sm:text-[15px] tracking-wide">
                         {content}
                     </span>
                 </>
@@ -127,7 +127,7 @@ const NewsTicker = () => {
                     100% { transform: translateX(-50%); }
                 }
                 .animate-ticker {
-                    animation: ticker 120s linear infinite;
+                    animation: ticker 220s linear infinite;
                     width: max-content;
                 }
                 .animate-ticker:hover {
