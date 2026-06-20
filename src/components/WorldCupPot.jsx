@@ -8,7 +8,7 @@ const WorldCupPot = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Quitamos el 'where' para escuchar a TODOS los inscritos en la polla
+        // Quitamos el 'where' para escuchar a TODOS los inscritos en la polla y como es
         const q = query(collection(db, 'worldCupPredictions'));
         
         const unsubscribe = onSnapshot(q, (snapshot) => {

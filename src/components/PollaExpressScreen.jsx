@@ -294,7 +294,7 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                     </div>
                     
                     <h2 className="text-white font-black text-xl sm:text-2xl uppercase tracking-widest flex items-center gap-2 drop-shadow-md z-10 mt-6 sm:mt-0">
-                        <span>🎲</span> POLLA EXPRESS
+                        <span>🎲</span> POLLA PARTIDO
                     </h2>
 
                     <div className="flex items-center gap-4 sm:gap-8 z-10 mt-2">
