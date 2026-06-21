@@ -224,7 +224,7 @@ const LiveBracketScreen = ({ bracket, effectiveMatches, onClose }) => {
                             {final.map((match, i) => <MatchBox key={i} match={match} />)}
                         </div>
                         <div className="relative mt-20">
-                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-amber-600 font-black tracking-widest text-[10px] uppercase">🥉 Tercer Lugar</span>
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-amber-600 font-black tracking-widest text-[10px] uppercase">🥉 Tercero</span>
                             {third.map((match, i) => <MatchBox key={i} match={match} />)}
                         </div>
                     </div>
