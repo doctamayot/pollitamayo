@@ -1427,9 +1427,7 @@ const WorldCupGrid = ({ currentUser }) => {
                     </button>
                 </div>
 
-                <div className="mt-4">
-                    <NewsTicker />
-                </div>
+                
             </div>
            
 
