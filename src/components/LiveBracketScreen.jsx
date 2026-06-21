@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import logocopa from '../assets/logocopa.png';
 
 // 🟢 DICCIONARIO DE TRADUCCIONES PARA EL VISOR
@@ -22,15 +22,85 @@ const teamTranslations = {
 
 const translateTeam = (name) => {
     if (!name) return 'Por definir';
-    return teamTranslations[name] || name; // Si no está (ej: "Ganador Llave 02"), deja el original
+    return teamTranslations[name] || name; 
 };
 
-const LiveBracketScreen = ({ bracket, onClose }) => {
+// ⏱️ FORMATEADOR OFICIAL HORA COLOMBIA (AM/PM)
+const formatMatchDate = (utcStr) => {
+    if (!utcStr) return 'Por definir';
+    const d = new Date(utcStr);
+    const day = d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }).replace('.', '');
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${day} - ${time}`;
+};
+
+const LiveBracketScreen = ({ bracket, effectiveMatches, onClose }) => {
     if (!bracket) return null;
 
-    // 🌳 EL MAPA VISUAL PERFECTO: 
-    // Reordenamos las llaves de la FIFA para que formen un árbol binario limpio en pantalla.
-    // Ej: M89 (Octavos 1) enfrenta a M74 y M77, así que los ponemos juntos de primeros.
+    // 🧠 NUEVO ESCÁNER DE ENLACE INTELIGENTE POR EQUIPOS
+    const matchDatesMap = useMemo(() => {
+        const map = {};
+        if (!effectiveMatches || !bracket) return map;
+
+        const allApiMatches = [...effectiveMatches];
+        const clean = (str) => str?.toLowerCase().trim() || '';
+
+        // Recorremos cada etapa del árbol matemático
+        ['dieciseisavos', 'octavos', 'cuartos', 'semis', 'final', 'tercero'].forEach(roundKey => {
+            const roundMatches = bracket[roundKey] || {};
+            
+            Object.entries(roundMatches).forEach(([bKey, bMatch]) => {
+                const bHome = clean(bMatch.home?.name);
+                const bAway = clean(bMatch.away?.name);
+
+                // 🎯 PASO A: Intentamos emparejar buscando los mismos dos equipos en la API
+                let foundMatch = allApiMatches.find(m => {
+                    const apiHome = clean(m.homeTeam?.name);
+                    const apiAway = clean(m.awayTeam?.name);
+                    
+                    return (bHome && bAway && apiHome && apiAway) && (
+                        (apiHome === bHome && apiAway === bAway) || 
+                        (apiHome === bAway && apiAway === bHome)
+                    );
+                });
+
+                // 🗓️ PASO B (PLAN DE RESPALDO): Si no hay cruces definidos aún, emparejamos por orden cronológico real
+                if (!foundMatch) {
+                    const stageKeyMap = {
+                        dieciseisavos: ['LAST_32', 'ROUND_OF_32'],
+                        octavos: ['LAST_16'],
+                        cuartos: ['QUARTER_FINALS'],
+                        semis: ['SEMI_FINALS'],
+                        final: ['FINAL'],
+                        tercero: ['THIRD_PLACE']
+                    };
+                    const allowedStages = stageKeyMap[roundKey] || [];
+                    
+                    // Ordenamos la API estrictamente por fecha de juego cronológica
+                    const stageApiMatches = allApiMatches
+                        .filter(m => allowedStages.includes(m.stage))
+                        .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+
+                    // Ordenamos las llaves del motor de forma numérica (M73, M74...)
+                    const bracketKeysSorted = Object.keys(roundMatches)
+                        .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
+                    
+                    const idx = bracketKeysSorted.indexOf(bKey);
+                    if (idx !== -1 && stageApiMatches[idx]) {
+                        foundMatch = stageApiMatches[idx];
+                    }
+                }
+
+                if (foundMatch) {
+                    map[bKey] = foundMatch.utcDate;
+                }
+            });
+        });
+
+        return map;
+    }, [effectiveMatches, bracket]);
+
+    // 🌳 EL MAPA VISUAL PERFECTO
     const order32 = ['M74', 'M77', 'M73', 'M75', 'M83', 'M84', 'M81', 'M82', 'M76', 'M78', 'M79', 'M80', 'M86', 'M88', 'M85', 'M87'];
     const order16 = ['M89', 'M90', 'M93', 'M94', 'M91', 'M92', 'M95', 'M96'];
     const order8  = ['M97', 'M98', 'M99', 'M100'];
@@ -38,22 +108,20 @@ const LiveBracketScreen = ({ bracket, onClose }) => {
 
     const getOrdered = (obj, order) => {
         if (!obj) return [];
-        return order.map(k => obj[k]).filter(Boolean);
+        return order.map(k => obj[k] ? { ...obj[k], idFifa: k } : null).filter(Boolean);
     };
 
-    // Extraemos los partidos en el orden mágico
     const r32 = getOrdered(bracket.dieciseisavos, order32);
     const r16 = getOrdered(bracket.octavos, order16);
     const qf = getOrdered(bracket.cuartos, order8);
     const sf = getOrdered(bracket.semis, order4);
-    const final = Object.values(bracket.final || {});
-    const third = Object.values(bracket.tercero || {});
+    const final = getOrdered(bracket.final, ['M104']);
+    const third = getOrdered(bracket.tercero, ['M103']);
 
     // Componente interno para dibujar cada "Cajita" de partido
     const MatchBox = ({ match }) => {
         if (!match) return null;
         
-        // 🟢 Nombres Traducidos
         const rawHome = match.home && !match.home.isPlaceholder ? match.home.name : (match.placeholderHome || 'Por definir');
         const rawAway = match.away && !match.away.isPlaceholder ? match.away.name : (match.placeholderAway || 'Por definir');
         
@@ -63,14 +131,25 @@ const LiveBracketScreen = ({ bracket, onClose }) => {
         const homeCrest = match.home && !match.home.isPlaceholder ? match.home.crest : null;
         const awayCrest = match.away && !match.away.isPlaceholder ? match.away.crest : null;
 
+        // Extraemos la fecha sincronizada por el escáner
+        const rawUtcDate = matchDatesMap[match.idFifa];
+        const matchDate = formatMatchDate(rawUtcDate);
+
         return (
             <div className="bg-slate-900 border border-slate-700 rounded-xl p-2 w-48 sm:w-56 shadow-md flex flex-col gap-1 relative z-10 hover:border-amber-500 hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors">
-                <div className="text-[9px] text-amber-500 font-black tracking-widest uppercase text-center mb-1 border-b border-slate-800 pb-1">
-                    {match.label}
+                
+                {/* Cabecera del partido con Fecha Sincronizada */}
+                <div className="flex justify-between items-center mb-1 border-b border-slate-800 pb-1 px-1">
+                    <span className="text-[9px] text-amber-500 font-black tracking-widest uppercase">
+                        {match.label}
+                    </span>
+                    <span className="text-[8px] text-slate-400 font-bold tracking-wider flex items-center gap-1">
+                        🗓️ {matchDate}
+                    </span>
                 </div>
                 
                 {/* Equipo Local */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mt-0.5">
                     <div className="w-5 h-4 bg-slate-800 rounded-sm overflow-hidden shrink-0 border border-slate-700 flex items-center justify-center">
                         {homeCrest ? <img src={homeCrest} alt="" className="w-full h-full object-cover" /> : <span className="text-[8px]">🛡️</span>}
                     </div>

@@ -1984,6 +1984,7 @@ const WorldCupGrid = ({ currentUser }) => {
                 <LiveBracketScreen 
                     bracket={projectedFullBracket} 
                     onClose={() => setShowLiveBracket(false)} 
+                    effectiveMatches={effectiveMatches}
                 />
             )}
         </div>
