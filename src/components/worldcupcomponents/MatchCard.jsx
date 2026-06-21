@@ -13,20 +13,19 @@ const MatchCard = ({
     allTeams, 
     isAdmin, 
     handleScoreChange, 
+    handleCustomTeamChange, // 🟢 LA NUEVA FUNCIÓN
     lockedMatches, 
     handleToggleLockMatch,
-    stageMatches // 🟢 RECIBIMOS LA LISTA DE PARTIDOS DE ESTA FASE
+    stageMatches
 }) => {
     
     const isKnockout = match.stage !== 'GROUP_STAGE';
 
-    // 1. DATOS DE LA API (Solo valen en Fase de Grupos)
     const homeOriginal = match.homeTeam?.name;
     const awayOriginal = match.awayTeam?.name;
     const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
     const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
     
-    // 2. 🟢 EXTRACCIÓN OBLIGATORIA DEL ÁRBOL DE CLASIFICADOS DEL ADMIN
     const getAdminBracketTeam = (side) => {
         if (!adminFullBracket || !stageMatches) return null;
         
@@ -40,11 +39,9 @@ const MatchCard = ({
 
         if (!roundKey || !adminFullBracket[roundKey]) return null;
 
-        // 🟢 Calculamos la posición matemática original del partido ignorando el orden visual por fechas
         const currentStageSorted = [...stageMatches].sort((a, b) => Number(a.id) - Number(b.id));
         const absoluteIndex = currentStageSorted.findIndex(m => m.id === match.id);
 
-        // Ordenamos las llaves numéricamente (M1, M2, M3...)
         const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
             .sort((a, b) => {
                 const numA = parseInt(a.replace(/\D/g, '')) || 0;
@@ -56,7 +53,6 @@ const MatchCard = ({
         const actualIndex = (roundKey === 'final' || roundKey === 'tercero') ? 0 : (absoluteIndex >= 0 ? absoluteIndex : 0);
         const bMatch = bracketMatchValues[actualIndex]; 
         
-        // 🟢 Ignoramos a los "fantasmas" (isPlaceholder) para que la tarjeta diga "Por Definir"
         if (bMatch && bMatch[side] && !bMatch[side].isPlaceholder) {
             return bMatch[side].name;
         }
@@ -66,12 +62,13 @@ const MatchCard = ({
     const bracketHome = getAdminBracketTeam('home');
     const bracketAway = getAdminBracketTeam('away');
 
-    // 3. 🟢 LEY DE HIERRO:
-    // Si es ronda final (isKnockout), la tarjeta SOLO muestra lo que diga el Árbol (Bracket).
-    const displayHome = isKnockout ? (bracketHome || '') : (!isUnknownHome ? homeOriginal : '');
-    const displayAway = isKnockout ? (bracketAway || '') : (!isUnknownAway ? awayOriginal : '');
+    // 🟢 LEY DE HIERRO: Si el Admin forzó un equipo, ese manda sobre todos.
+    const customHome = predictions?.[match.id]?.customHomeTeam || '';
+    const customAway = predictions?.[match.id]?.customAwayTeam || '';
 
-    // Escudos
+    const displayHome = isKnockout ? (customHome || bracketHome || '') : (customHome || (!isUnknownHome ? homeOriginal : ''));
+    const displayAway = isKnockout ? (customAway || bracketAway || '') : (customAway || (!isUnknownAway ? awayOriginal : ''));
+
     const homeCrest = allTeams.find(t => t.name === displayHome)?.crest || (!isKnockout && !isUnknownHome ? match.homeTeam?.crest : null);
     const awayCrest = allTeams.find(t => t.name === displayAway)?.crest || (!isKnockout && !isUnknownAway ? match.awayTeam?.crest : null);
 
@@ -131,10 +128,21 @@ const MatchCard = ({
                             <span className={`font-bold text-sm sm:text-base truncate ${!displayHome ? 'text-foreground-muted italic' : 'text-foreground'}`}>
                                 {displayHome ? translateTeam(displayHome) : 'Por Definir'}
                             </span>
+                            {/* 🔮 SELECTOR MODO DIOS (Solo Admin y Rondas Finales) */}
+                            {isAdmin && isKnockout && (
+                                <select
+                                    className="mt-0.5 bg-background border border-purple-500/50 text-[9px] text-purple-400 font-bold p-0.5 rounded outline-none w-24 shadow-sm"
+                                    value={customHome}
+                                    onChange={(e) => handleCustomTeamChange(match.id, 'home', e.target.value)}
+                                >
+                                    <option value="">⚙️ Lógica Auto</option>
+                                    {allTeams.map(t => <option key={t.name} value={t.name}>{translateTeam(t.name)}</option>)}
+                                </select>
+                            )}
                         </div>
                     </div>
                     <input 
-                        type="number" className="w-12 h-12 sm:w-14 sm:h-14 text-center bg-background border border-card-border rounded-xl text-xl sm:text-2xl font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner disabled:opacity-50" 
+                        type="number" className="w-12 h-12 sm:w-14 sm:h-14 text-center bg-background border border-card-border rounded-xl text-xl sm:text-2xl font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner disabled:opacity-50 shrink-0" 
                         placeholder="-" disabled={isLocked || (!displayHome && !allowTbdInput)}
                         value={predictions[match.id]?.home ?? ''} onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)} 
                     />
@@ -150,10 +158,21 @@ const MatchCard = ({
                             <span className={`font-bold text-sm sm:text-base truncate ${!displayAway ? 'text-foreground-muted italic' : 'text-foreground'}`}>
                                 {displayAway ? translateTeam(displayAway) : 'Por Definir'}
                             </span>
+                            {/* 🔮 SELECTOR MODO DIOS (Solo Admin y Rondas Finales) */}
+                            {isAdmin && isKnockout && (
+                                <select
+                                    className="mt-0.5 bg-background border border-purple-500/50 text-[9px] text-purple-400 font-bold p-0.5 rounded outline-none w-24 shadow-sm"
+                                    value={customAway}
+                                    onChange={(e) => handleCustomTeamChange(match.id, 'away', e.target.value)}
+                                >
+                                    <option value="">⚙️ Lógica Auto</option>
+                                    {allTeams.map(t => <option key={t.name} value={t.name}>{translateTeam(t.name)}</option>)}
+                                </select>
+                            )}
                         </div>
                     </div>
                     <input 
-                        type="number" className="w-12 h-12 sm:w-14 sm:h-14 text-center bg-background border border-card-border rounded-xl text-xl sm:text-2xl font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner disabled:opacity-50" 
+                        type="number" className="w-12 h-12 sm:w-14 sm:h-14 text-center bg-background border border-card-border rounded-xl text-xl sm:text-2xl font-black text-foreground focus:ring-2 focus:ring-primary shadow-inner disabled:opacity-50 shrink-0" 
                         placeholder="-" disabled={isLocked || (!displayAway && !allowTbdInput)}
                         value={predictions[match.id]?.away ?? ''} onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)} 
                     />

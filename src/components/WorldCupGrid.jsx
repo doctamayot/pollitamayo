@@ -9,6 +9,7 @@ import NewsTicker from '../components/shared/NewsTicker'
 import InfografiaModal from '../components/InfografiaModal'
 import WorldCupCountdown from './worldcupcomponents/WorldCupCountdown';
 import PollaExpressScreen from '../components/PollaExpressScreen';
+import LiveBracketScreen from '../components/LiveBracketScreen'; // Ajusta la ruta si es necesario
 
 // 📺 IMPORTACIÓN DE LOS LOGOS DE LOS CANALES
 import caracolImg from '../assets/caracol.png';
@@ -247,6 +248,7 @@ const WorldCupGrid = ({ currentUser }) => {
 
     const [activeBadgeInfo, setActiveBadgeInfo] = useState(null);
     const [activePollaMatch, setActivePollaMatch] = useState(null);
+    const [showLiveBracket, setShowLiveBracket] = useState(false);
 
     useEffect(() => {
         if (activeBadgeInfo) {
@@ -822,6 +824,43 @@ const WorldCupGrid = ({ currentUser }) => {
         }
     }, [adminQualified32, adminResults]);
 
+    // 📺 PROYECCIÓN EXCLUSIVA PARA EL VISOR EN VIVO (No afecta puntos)
+    const projectedAdminQualified32 = useMemo(() => {
+        let top2 = []; 
+        let thirds = []; 
+        
+        Object.keys(groupMatchesMap).forEach(g => {
+            const groupMatches = groupMatchesMap[g];
+            // Calculamos siempre, sin importar si el grupo terminó
+            const st = getStandings(groupMatches, mergedAdminPreds, g, adminResults?.manualTiebreakers);
+            
+            if (st[0]) top2.push({ ...st[0], qualReason: '1º', group: g });
+            if (st[1]) top2.push({ ...st[1], qualReason: '2º', group: g });
+            if (st[2]) thirds.push({ ...st[2], qualReason: '3º', group: g });
+        });
+        
+        if (thirds.length > 0) {
+            thirds.sort((a, b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+        }
+        
+        return [...top2, ...thirds.slice(0, 8)];
+    }, [groupMatchesMap, mergedAdminPreds, adminResults, getStandings]);
+
+    const projectedFullBracket = useMemo(() => {
+        let teams = projectedAdminQualified32 || [];
+        const tempTeams = [...teams];
+        for (let i = tempTeams.length; i < 32; i++) {
+            tempTeams.push({ name: `Por Definir ${i}`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
+        }
+        try { 
+            return generateFullBracket(tempTeams, adminResults?.knockoutPicks || {}); 
+        } 
+        catch (e) { 
+            console.error("Error armando bracket proyectado", e); 
+            return null; 
+        }
+    }, [projectedAdminQualified32, adminResults]);
+
     const getThirdPlaceTeams = (picksObj) => {
         if (!picksObj) return [];
         const teamsMap = new Map();
@@ -1367,6 +1406,31 @@ const WorldCupGrid = ({ currentUser }) => {
                 </div>
             )}
             <WorldCupCountdown />
+
+            <div className="mb-8 text-center animate-fade-in">
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tighter mb-2">
+                    {isAdmin ? '👑 Resultados Reales' : 'Mis Predicciones'}
+                </h2>
+                <p className="text-foreground-muted text-sm max-w-2xl mx-auto mb-4">
+                    {isAdmin ? 'Estás guardando los resultados oficiales del torneo fase por fase.' : 'El Torneo se juega por etapas. Completa tus predicciones en la pestaña que esté activa.'}
+                </p>
+                
+                
+                
+                {/* 🟢 NUEVO: BOTÓN DEL SIMULADOR DE LLAVES */}
+                <div className="mt-4 flex justify-center">
+                    <button 
+                        onClick={() => setShowLiveBracket(true)}
+                        className="bg-yellow-900 mb-4 border border-slate-700 text-white font-black px-6 py-2 rounded-full shadow-lg hover:border-amber-500 hover:text-amber-500 transition-colors uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2"
+                    >
+                        <span>🌳</span> Ver Clasificados en Vivo
+                    </button>
+                </div>
+
+                <div className="mt-4">
+                    <NewsTicker />
+                </div>
+            </div>
            
 
             {/* 🟢 BARRA DE NOTICIAS CLAVADA PERFECTAMENTE */}
@@ -1913,6 +1977,13 @@ const WorldCupGrid = ({ currentUser }) => {
                     rA={activePollaMatch.rA}
                     matchStatus={activePollaMatch.matchStatus}
                     onClose={() => setActivePollaMatch(null)}
+                />
+            )}
+            {/* 🟢 RENDER DEL VISOR DEL ÁRBOL EN PANTALLA COMPLETA */}
+            {showLiveBracket && (
+                <LiveBracketScreen 
+                    bracket={projectedFullBracket} 
+                    onClose={() => setShowLiveBracket(false)} 
                 />
             )}
         </div>

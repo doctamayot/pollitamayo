@@ -13,31 +13,25 @@ const KnockoutTab = ({
     toggleKnockoutPick,
     replaceKnockoutPick, 
     isCurrentMainTabLocked,
-    isGroupStageComplete
+    isGroupStageComplete,
+    // 🟢 MODO DIOS
+    predictions,
+    handleCustomTeamChange,
+    allTeams,
+    isAdmin
 }) => {
     const [isCleaning, setIsCleaning] = useState(false);
 
-    // 🟢 EL MOTOR PROGRESIVO BLINDADO
-    // Rellenamos con equipos falsos "bien formados" para que el bracketEngine.js 
-    // no haga crash al intentar leer sus grupos, y logre armar el cuadro mixto.
     const fullBracket = useMemo(() => {
         let teams = qualifiedRoundOf32?.all32 || [];
         
         if (!isGroupStageComplete && teams.length < 32) {
             const tempTeams = [...teams];
             for (let i = tempTeams.length; i < 32; i++) {
-                tempTeams.push({ 
-                    name: `Por Definir`, 
-                    isPlaceholder: true,
-                    group: 'Grupo TBD', // 🛠️ ESTO EVITA EL CRASH DE .replace()
-                    qualReason: '-'
-                });
+                tempTeams.push({ name: `Por Definir`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
             }
-            try {
-                return generateFullBracket(tempTeams, knockoutPicks);
-            } catch(e) {
-                console.error("Error armando llaves parciales:", e);
-            }
+            try { return generateFullBracket(tempTeams, knockoutPicks); } 
+            catch(e) { console.error(e); }
         }
         
         return generateFullBracket(teams, knockoutPicks);
@@ -46,27 +40,19 @@ const KnockoutTab = ({
     const getLimitForTab = (tabId) => roundTabs.find(r => r.id === tabId)?.limit || 1;
 
     const bracketMap = {
-        'dieciseisavos': 'dieciseisavos',
-        'octavos': 'octavos',
-        'cuartos': 'cuartos',
-        'semis': 'semis',
-        'campeon': 'final',
-        'subcampeon': 'final',   
-        'tercero': 'tercero',
-        'cuarto': 'tercero'      
+        'dieciseisavos': 'dieciseisavos', 'octavos': 'octavos', 'cuartos': 'cuartos',
+        'semis': 'semis', 'campeon': 'final', 'subcampeon': 'final', 'tercero': 'tercero', 'cuarto': 'tercero'      
     };
 
     const getTabInfo = (tabId) => {
         switch(tabId) {
-            case 'dieciseisavos': return { title: '16vos de Final', desc: 'Según tus marcadores en la fase de Grupos, estos son los enfrentamientos oficiales. Elige a los 16 equipos que avanzarán a Octavos.' };
-            case 'octavos': return { title: 'Octavos de Final', desc: 'Haz clic en el equipo ganador de cada llave para enviarlo a Cuartos de Final.' };
+            case 'dieciseisavos': return { title: '16vos de Final', desc: 'Estos son los enfrentamientos. Elige a los 16 equipos que avanzarán.' };
+            case 'octavos': return { title: 'Octavos de Final', desc: 'Haz clic en el equipo ganador de cada llave para enviarlo a Cuartos.' };
             case 'cuartos': return { title: 'Cuartos de Final', desc: 'Selecciona a los 4 equipos que llegarán a las Semifinales.' };
             case 'semis': return { title: 'Semifinales', desc: 'Elige a los 2 equipos que disputarán la Gran Final.' };
-            case 'campeon': return { title: 'La Gran Final', desc: 'Selecciona al Campeón. ¡El perdedor será asignado automáticamente como Subcampeón!' };
-            case 'tercero': return { title: 'Tercer Puesto', desc: 'Selecciona al ganador del bronce. ¡El perdedor será asignado automáticamente como Cuarto Lugar!' };
-            case 'subcampeon': return { title: 'Subcampeón', desc: 'Posición asignada automáticamente al elegir el ganador de la Final.' };
-            case 'cuarto': return { title: 'Cuarto Lugar', desc: 'Posición asignada automáticamente al elegir el ganador del 3er puesto.' };
-            default: return { title: 'Armado de Llaves', desc: 'Selecciona al ganador de la llave.' };
+            case 'campeon': return { title: 'La Gran Final', desc: 'Selecciona al Campeón. ¡El perdedor será asignado como Subcampeón!' };
+            case 'tercero': return { title: 'Tercer Puesto', desc: 'Selecciona al ganador del bronce.' };
+            default: return { title: 'Automático', desc: 'Posición asignada automáticamente.' };
         }
     };
 
@@ -78,58 +64,64 @@ const KnockoutTab = ({
         const validNames = new Set();
         
         Object.values(currentBracket).forEach(match => {
-            if (match.home && !match.home.isPlaceholder) validNames.add(match.home.name);
-            if (match.away && !match.away.isPlaceholder) validNames.add(match.away.name);
+            // Evaluamos si el admin forzó un equipo
+            const customHome = predictions?.[match.id]?.customHomeTeam;
+            const customAway = predictions?.[match.id]?.customAwayTeam;
+            
+            const hName = customHome || (match.home && !match.home.isPlaceholder ? match.home.name : null);
+            const aName = customAway || (match.away && !match.away.isPlaceholder ? match.away.name : null);
+            
+            if (hName) validNames.add(hName);
+            if (aName) validNames.add(aName);
         });
 
         return picks.filter(p => !validNames.has(p.name));
-    }, [fullBracket, knockoutPicks, activeRoundTab]);
+    }, [fullBracket, knockoutPicks, activeRoundTab, predictions]);
 
     const handleCleanInvalidPicks = () => {
         if (isCleaning) return;
         setIsCleaning(true);
         const limit = getLimitForTab(activeRoundTab);
-        
         invalidPicks.forEach((invalidTeam, index) => {
             setTimeout(() => {
                 toggleKnockoutPick(activeRoundTab, invalidTeam, limit);
-                if (index === invalidPicks.length - 1) {
-                    setTimeout(() => setIsCleaning(false), 200);
-                }
+                if (index === invalidPicks.length - 1) setTimeout(() => setIsCleaning(false), 200);
             }, index * 100);
         });
     };
 
     const renderMatchups = (matchesObj, currentTabId) => {
-        
-        // 🟢 PLAN B VISUAL: Si el motor devuelve vacío, armamos las 16 cajas para que nunca se vea en negro
         let safeMatchesObj = matchesObj;
-        
         if (!safeMatchesObj || Object.keys(safeMatchesObj).length === 0) {
             safeMatchesObj = {};
-            const limits = { 'dieciseisavos': 16, 'octavos': 8, 'cuartos': 4, 'semis': 2, 'campeon': 1, 'tercero': 1 };
-            const count = limits[currentTabId] || 1;
-            for(let i=1; i<=count; i++) {
-                safeMatchesObj[`M_TEMP_${i}`] = { home: { isPlaceholder: true }, away: { isPlaceholder: true }, label: `Llave ${i}` };
-            }
+            const count = { 'dieciseisavos': 16, 'octavos': 8, 'cuartos': 4, 'semis': 2, 'campeon': 1, 'tercero': 1 }[currentTabId] || 1;
+            for(let i=1; i<=count; i++) safeMatchesObj[`M_TEMP_${i}`] = { home: { isPlaceholder: true }, away: { isPlaceholder: true }, label: `Llave ${i}` };
         }
 
         const limit = getLimitForTab(currentTabId);
 
         return Object.entries(safeMatchesObj).map(([matchId, match]) => {
-            const homeValid = match.home && !match.home.isPlaceholder;
-            const awayValid = match.away && !match.away.isPlaceholder;
+            
+            // 🟢 LEY DE HIERRO: El Admin manda. Si forzó un equipo, pisa al bracketEngine.
+            const customHome = predictions?.[matchId]?.customHomeTeam;
+            const customAway = predictions?.[matchId]?.customAwayTeam;
 
-            const homeIsSelected = homeValid && knockoutPicks[currentTabId]?.some(t => t.name === match.home.name);
-            const awayIsSelected = awayValid && knockoutPicks[currentTabId]?.some(t => t.name === match.away.name);
+            const homeName = customHome || (match.home && !match.home.isPlaceholder ? match.home.name : null);
+            const awayName = customAway || (match.away && !match.away.isPlaceholder ? match.away.name : null);
+
+            const homeValid = !!homeName;
+            const awayValid = !!awayName;
+
+            // Reconstruimos los objetos de equipo en base a la decisión final
+            const finalHomeObj = homeValid ? (allTeams.find(t => t.name === homeName) || { name: homeName, crest: match.home?.crest, qualReason: match.home?.qualReason, group: match.home?.group }) : null;
+            const finalAwayObj = awayValid ? (allTeams.find(t => t.name === awayName) || { name: awayName, crest: match.away?.crest, qualReason: match.away?.qualReason, group: match.away?.group }) : null;
+
+            const homeIsSelected = homeValid && knockoutPicks[currentTabId]?.some(t => t.name === homeName);
+            const awayIsSelected = awayValid && knockoutPicks[currentTabId]?.some(t => t.name === awayName);
 
             const handlePick = (teamToSelect, isThisTeamSelected, isOpponentSelected, opponentTeam) => {
-                if (isThisTeamSelected) {
-                    toggleKnockoutPick(currentTabId, teamToSelect, limit);
-                    return;
-                }
-                if (currentTabId === 'campeon' || currentTabId === 'tercero') {
-                    toggleKnockoutPick(currentTabId, teamToSelect, limit);
+                if (isThisTeamSelected || currentTabId === 'campeon' || currentTabId === 'tercero') {
+                    toggleKnockoutPick(currentTabId, teamToSelect, limit, opponentTeam);
                 } else if (isOpponentSelected) {
                     replaceKnockoutPick(currentTabId, opponentTeam, teamToSelect);
                 } else {
@@ -144,48 +136,64 @@ const KnockoutTab = ({
                         {match.label || `Partido ${matchId.replace('M', '')}`}
                     </span>
                     
-                    <div className="flex items-center justify-between mt-5 w-full gap-2">
+                    <div className="flex items-center justify-between mt-5 w-full gap-2 relative z-10">
                         {/* EQUIPO LOCAL */}
-                        <button 
-                            onClick={() => homeValid && handlePick(match.home, homeIsSelected, awayIsSelected, match.away)}
-                            disabled={isCurrentMainTabLocked || !homeValid}
-                            className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 disabled:cursor-not-allowed ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
-                        >
-                            <div className="w-10 h-7 bg-background rounded shrink-0 overflow-hidden border border-border/50 mb-1.5 shadow-sm flex items-center justify-center">
-                                {homeValid && match.home?.crest ? <img src={match.home.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
-                            </div>
-                            <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${homeIsSelected ? 'text-primary' : 'text-foreground'}`}>
-                                {homeValid ? translateTeam(match.home.name) : match.placeholderHome || 'Por Definir'}
-                            </span>
-                            {homeValid && match.home?.qualReason && currentTabId === 'dieciseisavos' && (
-                                <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase mt-0.5">
-                                    {match.home.qualReason} {match.home.group?.replace('Grupo ', '')}
+                        <div className="flex flex-col items-center w-[42%]">
+                            <button 
+                                onClick={() => homeValid && handlePick(finalHomeObj, homeIsSelected, awayIsSelected, finalAwayObj)}
+                                disabled={isCurrentMainTabLocked || !homeValid}
+                                className={`flex flex-col items-center w-full text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 disabled:cursor-not-allowed ${homeIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
+                            >
+                                <div className="w-10 h-7 bg-background rounded shrink-0 overflow-hidden border border-border/50 mb-1.5 shadow-sm flex items-center justify-center">
+                                    {homeValid && finalHomeObj?.crest ? <img src={finalHomeObj.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
+                                </div>
+                                <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${homeIsSelected ? 'text-primary' : 'text-foreground'}`}>
+                                    {homeValid ? translateTeam(homeName) : match.placeholderHome || 'Por Definir'}
                                 </span>
+                            </button>
+                            {/* 🔮 SELECTOR MODO DIOS */}
+                            {isAdmin && (
+                                <select
+                                    className="mt-2 bg-background border border-purple-500/50 text-[9px] text-purple-400 font-bold p-1 rounded outline-none w-full shadow-sm text-center"
+                                    value={customHome || ''}
+                                    onChange={(e) => handleCustomTeamChange(matchId, 'home', e.target.value)}
+                                >
+                                    <option value="">⚙️ Lógica Auto</option>
+                                    {allTeams.map(t => <option key={t.name} value={t.name}>{translateTeam(t.name)}</option>)}
+                                </select>
                             )}
-                        </button>
+                        </div>
 
-                        <div className="w-[10%] flex justify-center">
+                        <div className="w-[10%] flex justify-center mb-6">
                             <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">VS</span>
                         </div>
 
                         {/* EQUIPO VISITANTE */}
-                        <button 
-                            onClick={() => awayValid && handlePick(match.away, awayIsSelected, homeIsSelected, match.home)}
-                            disabled={isCurrentMainTabLocked || !awayValid}
-                            className={`flex flex-col items-center w-[42%] text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 disabled:cursor-not-allowed ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
-                        >
-                            <div className="w-10 h-7 bg-background rounded shrink-0 overflow-hidden border border-border/50 mb-1.5 shadow-sm flex items-center justify-center">
-                                {awayValid && match.away?.crest ? <img src={match.away.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
-                            </div>
-                            <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${awayIsSelected ? 'text-primary' : 'text-foreground'}`}>
-                                {awayValid ? translateTeam(match.away.name) : match.placeholderAway || 'Por Definir'}
-                            </span>
-                            {awayValid && match.away?.qualReason && currentTabId === 'dieciseisavos' && (
-                                <span className="text-[8px] font-black text-foreground-muted bg-background px-1.5 py-0.5 rounded uppercase mt-0.5">
-                                    {match.away.qualReason} {match.away.group?.replace('Grupo ', '')}
+                        <div className="flex flex-col items-center w-[42%]">
+                            <button 
+                                onClick={() => awayValid && handlePick(finalAwayObj, awayIsSelected, homeIsSelected, finalHomeObj)}
+                                disabled={isCurrentMainTabLocked || !awayValid}
+                                className={`flex flex-col items-center w-full text-center p-2 rounded-xl transition-all border-2 disabled:opacity-50 disabled:cursor-not-allowed ${awayIsSelected ? 'bg-primary/10 border-primary scale-105' : 'bg-background-offset border-transparent hover:border-primary/50'}`}
+                            >
+                                <div className="w-10 h-7 bg-background rounded shrink-0 overflow-hidden border border-border/50 mb-1.5 shadow-sm flex items-center justify-center">
+                                    {awayValid && finalAwayObj?.crest ? <img src={finalAwayObj.crest} className="w-full h-full object-cover" alt=""/> : <span className="text-[10px] opacity-30">❓</span>}
+                                </div>
+                                <span className={`font-bold text-[10px] sm:text-xs leading-tight mb-1 ${awayIsSelected ? 'text-primary' : 'text-foreground'}`}>
+                                    {awayValid ? translateTeam(awayName) : match.placeholderAway || 'Por Definir'}
                                 </span>
+                            </button>
+                            {/* 🔮 SELECTOR MODO DIOS */}
+                            {isAdmin && (
+                                <select
+                                    className="mt-2 bg-background border border-purple-500/50 text-[9px] text-purple-400 font-bold p-1 rounded outline-none w-full shadow-sm text-center"
+                                    value={customAway || ''}
+                                    onChange={(e) => handleCustomTeamChange(matchId, 'away', e.target.value)}
+                                >
+                                    <option value="">⚙️ Lógica Auto</option>
+                                    {allTeams.map(t => <option key={t.name} value={t.name}>{translateTeam(t.name)}</option>)}
+                                </select>
                             )}
-                        </button>
+                        </div>
                     </div>
                 </div>
             );
@@ -246,34 +254,12 @@ const KnockoutTab = ({
                     </div>
                 </div>
 
-                {/* AVISO DE PROGRESIÓN */}
-                {activeRoundTab === 'dieciseisavos' && !isGroupStageComplete && (
-                    <div className="flex items-start gap-3 sm:gap-4 bg-amber-500/10 border border-amber-500/20 p-4 sm:p-5 rounded-2xl shadow-sm animate-fade-in">
-                        <div className="text-2xl shrink-0 drop-shadow-md">⏳</div>
-                        <div>
-                            <h4 className="text-xs sm:text-sm font-black text-amber-500 uppercase tracking-widest mb-1">
-                                Llaves Parciales
-                            </h4>
-                            <p className="text-[10px] sm:text-xs text-foreground-muted leading-relaxed">
-                                Estás viendo las llaves armadas de forma progresiva. Los espacios con <strong>❓ Por Definir</strong> se llenarán automáticamente cuando finalicen los demás grupos y se defina la tabla de Mejores Terceros.
-                            </p>
-                        </div>
-                    </div>
-                )}
-                
-                {activeRoundTab === 'dieciseisavos' && isGroupStageComplete && (
-                    <div className="flex items-start gap-3 sm:gap-4 bg-blue-500/10 border border-blue-500/20 p-4 sm:p-5 rounded-2xl shadow-sm animate-fade-in">
-                        <div className="text-2xl shrink-0 drop-shadow-md">⚖️</div>
-                        <div>
-                            <h4 className="text-xs sm:text-sm font-black text-blue-500 uppercase tracking-widest mb-1">
-                                Criterio de Desempate: Mejores Terceros
-                            </h4>
-                            <p className="text-[10px] sm:text-xs text-foreground-muted leading-relaxed">
-                                Según el reglamento de la FIFA, el desempate se define por: <strong className="text-foreground">1. Puntos, 2. Diferencia de Goles y 3. Goles a Favor</strong>. 
-                                <br className="hidden sm:block" />
-                                Si la igualdad persiste, el sistema ordenará a los equipos <strong>aleatoriamente</strong> como criterio final en lugar de usar tarjetas amarillas (Fair Play).
-                            </p>
-                        </div>
+                {isAdmin && (
+                    <div className="bg-purple-900/10 border border-purple-500/30 p-3 rounded-xl shadow-inner animate-fade-in flex items-center gap-2 mx-auto w-fit">
+                        <span className="text-lg drop-shadow-md">🔮</span>
+                        <p className="text-purple-400 font-bold text-[10px] sm:text-xs tracking-widest uppercase">
+                            MODO DIOS: Usa los selectores debajo de cada equipo para forzar las llaves si difieren de la realidad.
+                        </p>
                     </div>
                 )}
             </div>
@@ -287,8 +273,8 @@ const KnockoutTab = ({
                                 Equipos Fantasma Detectados
                             </h4>
                             <p className="text-[10px] sm:text-xs text-foreground-muted leading-tight">
-                                <strong>¿Por qué sale esto?</strong> Tienes <strong>{invalidPicks.length}</strong> selección(es) guardada(s) de versiones anteriores de tu Polla que <strong>ya no coinciden</strong> con las llaves reales.<br className="hidden sm:block" />
-                                Presiona limpiar para eliminar esos equipos antiguos y volver a sincronizar tu cuadro con la realidad.
+                                Tienes <strong>{invalidPicks.length}</strong> selección(es) que <strong>ya no coinciden</strong> con las llaves reales.<br className="hidden sm:block" />
+                                Presiona limpiar para volver a sincronizar tu cuadro con la realidad.
                             </p>
                         </div>
                     </div>
@@ -304,7 +290,6 @@ const KnockoutTab = ({
 
             <div className="bg-background-offset border border-border p-6 sm:p-10 rounded-3xl shadow-sm">
                 <div className={`grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`}>
-                    
                     {activeRoundTab === 'subcampeon' || activeRoundTab === 'cuarto' ? (
                         knockoutPicks[activeRoundTab] && knockoutPicks[activeRoundTab].length > 0 ? (
                             <div className="col-span-full flex flex-col items-center justify-center py-8 animate-fade-in">
@@ -315,24 +300,19 @@ const KnockoutTab = ({
                                     </div>
                                     <span className="font-black text-xl text-primary">{translateTeam(knockoutPicks[activeRoundTab][0].name)}</span>
                                     <span className="text-[10px] font-bold text-foreground-muted uppercase mt-3 bg-background px-3 py-1 rounded-full border border-border/50">
-                                        {activeRoundTab === 'subcampeon' ? 'Subcampeón Automático' : 'Cuarto Lugar Automático'}
+                                        Automático
                                     </span>
                                 </div>
-                                <p className="text-[10px] sm:text-xs text-foreground-muted mt-8 max-w-sm text-center">
-                                    (Este equipo fue asignado automáticamente al elegir al ganador en la pestaña anterior. Si deseas cambiarlo, modifica el resultado allá).
-                                </p>
                             </div>
                         ) : (
                             <div className="col-span-full text-center py-10 text-foreground-muted animate-fade-in">
                                 <span className="text-4xl mb-4 block">🤖</span>
                                 Esta posición se llena <strong>automáticamente</strong>.<br/>
-                                Vuelve a la pestaña de <strong>{activeRoundTab === 'subcampeon' ? 'Campeón' : 'Tercer Puesto'}</strong> y selecciona al equipo ganador; el perdedor aparecerá aquí mágicamente.
                             </div>
                         )
                     ) : (
                         renderMatchups(fullBracket?.[bracketMap[activeRoundTab]], activeRoundTab)
                     )}
-
                 </div>
             </div>
         </div>

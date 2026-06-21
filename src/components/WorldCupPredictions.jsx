@@ -770,7 +770,34 @@ const WorldCupPredictions = ({ currentUser }) => {
         }
     };
 
-    const handleCustomTeamChange = () => {};
+    const handleCustomTeamChange = (matchId, side, teamName) => {
+        if (!isAdmin) return;
+        
+        setPredictions(prev => ({
+            ...prev,
+            [matchId]: {
+                ...prev[matchId],
+                [side === 'home' ? 'customHomeTeam' : 'customAwayTeam']: teamName
+            }
+        }));
+    };
+
+    // 🟢 MODO DIOS 2: Forzar equipos en el Árbol de Clasificados
+    const handleForceKnockoutPick = (roundId, index, teamName) => {
+        if (!isAdmin) return;
+        
+        const teamObj = allTeams.find(t => t.name === teamName) || { name: teamName, crest: '' };
+        
+        setKnockoutPicks(prev => {
+            const currentRound = [...(prev[roundId] || [])];
+            if (!teamName) {
+                currentRound.splice(index, 1); // Borrar si elige vacío
+            } else {
+                currentRound[index] = teamObj; // Reemplazar/Insertar
+            }
+            return { ...prev, [roundId]: currentRound };
+        });
+    };
 
     const handleExtraChange = (extraId, value) => {
         if (isCurrentMainTabLocked) return;
@@ -1326,6 +1353,10 @@ const WorldCupPredictions = ({ currentUser }) => {
                     roundTabsRef={roundTabsRef} qualifiedRoundOf32={qualifiedRoundOf32} getAvailableTeamsForRound={getAvailableTeamsForRound}
                     knockoutPicks={knockoutPicks} toggleKnockoutPick={toggleKnockoutPick} replaceKnockoutPick={replaceKnockoutPick} isCurrentMainTabLocked={isCurrentMainTabLocked}
                     isGroupStageComplete={isGroupStageComplete}
+                    handleForceKnockoutPick={handleForceKnockoutPick}
+                    allTeams={allTeams}
+                    isAdmin={isAdmin}
+                    predictions={predictions}
                 />
             )}
 
