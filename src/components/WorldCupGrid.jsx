@@ -1421,7 +1421,7 @@ const WorldCupGrid = ({ currentUser }) => {
                 <div className="mt-4 flex justify-center">
                     <button 
                         onClick={() => setShowLiveBracket(true)}
-                        className="bg-yellow-900 mb-4 border border-slate-700 text-white font-black px-6 py-2 rounded-full shadow-lg hover:border-amber-500 hover:text-amber-500 transition-colors uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2"
+                        className="bg-yellow-900 border border-slate-700 text-white font-black px-6 py-2 rounded-full shadow-lg hover:border-amber-500 hover:text-amber-500 transition-colors uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2"
                     >
                         <span>🌳</span> Ver Clasificados en Vivo
                     </button>
