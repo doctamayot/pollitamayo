@@ -1341,9 +1341,14 @@ const WorldCupGrid = ({ currentUser }) => {
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
-             <div className="fixed left-0 top-15 md:top-0 z-[100] w-full bg-background/95 backdrop-blur-xl pt-2 pb-2 mb-6 shadow-2xl border-b border-border/50 rounded-b-2xl">
-                <NewsTicker />
-            </div>
+             <div 
+    className="fixed left-0 top-15 md:top-0 z-[100] w-full h-12 sm:h-14 bg-background/95 backdrop-blur-xl flex items-center shadow-2xl border-b border-border/50 rounded-b-2xl overflow-hidden"
+    style={{ WebkitTextSizeAdjust: '100%', textSizeAdjust: '100%' }}
+>
+    <div className="w-full flex-1">
+        <NewsTicker />
+    </div>
+</div>
             
             <div className="sm:mt-10 mt-12 bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-[2rem] p-3 sm:p-10 mb-6 sm:mb-8 text-center border border-border shadow-xl relative overflow-hidden flex flex-row items-center justify-center gap-3 sm:gap-6">
                
