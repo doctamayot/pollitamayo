@@ -271,7 +271,7 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
 
     return (
         <div className="fixed inset-0 z-[99999] bg-slate-950 overflow-y-auto animate-fade-in flex justify-center">
-            <div className="w-full max-w-6xl p-4 sm:p-8 min-h-screen flex flex-col">
+            <div className="w-full max-w-[1600px] w-[95%] p-4 sm:p-8 min-h-screen flex flex-col">
                 
                 {/* CABECERA Y MARCADOR GIGANTE */}
                 <div className="bg-gradient-to-r from-amber-600 to-orange-700 p-6 rounded-3xl mb-8 flex flex-col items-center gap-4 shadow-2xl shrink-0 border border-orange-400/50 relative overflow-hidden">
@@ -478,7 +478,7 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                                     🛡️ POLLEROS
                                 </h3>
                                 
-                                <div className="flex-1 space-y-3">
+                                <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 content-start pb-4">
                                     {sortedPlayers.map(p => {
                                         const isDead = p.status.category === 'DEAD';
                                         const isExact = p.status.category === 'EXACT';
