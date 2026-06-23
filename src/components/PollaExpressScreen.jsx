@@ -472,7 +472,7 @@ const PollaExpressScreen = ({ match, rH, rA, matchStatus, onClose }) => {
                     {pollaData.phase === 'PICKING' && (
                         <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
                             
-                            {/* TABLA DE JUGADORES (SUPERVIVENCIA ORDENADA E INTELIGENTE) */}
+                            {/* TABLA DE JUGADORES (SUPERVIVENCIA ORDENADA E INTELIGENTEee) */}
                             <div className="flex-1 space-y-3 overflow-y-auto pr-2 hide-scrollbar flex flex-col">
                                 <h3 className="text-2xl font-black text-amber-500 uppercase border-b border-slate-800 pb-4 mb-4 sticky top-0 bg-slate-900 z-10 shrink-0">
                                     🛡️ POLLEROS
