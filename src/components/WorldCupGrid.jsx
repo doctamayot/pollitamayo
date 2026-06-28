@@ -1191,10 +1191,20 @@ const WorldCupGrid = ({ currentUser }) => {
         effectiveMatches.forEach(m => {
             if (!m.utcDate) return;
             
-            // 🛡️ Extraemos la fecha exacta cortando el texto de la API
-            // Al no usar "new Date()", evitamos que Javascript le reste 5 horas 
-            // y nos divida los partidos en días equivocados.
-            const dateStr = m.utcDate.split('T')[0];
+            let dateStr = '';
+            
+            // 🛡️ REGLA INTELIGENTE:
+            // Si la API manda la medianoche exacta, significa "Hora Por Definir". 
+            // Usamos la fecha cruda para que no se atrase un día al restarle las 5 horas.
+            if (m.utcDate.includes('T00:00:00Z') || m.utcDate.includes('T00:00:00.000Z')) {
+                dateStr = m.utcDate.split('T')[0];
+            } 
+            // Si el partido sí tiene una hora real, usamos tu reloj local 
+            // para que los partidos nocturnos no se pasen a la pestaña de mañana.
+            else {
+                const d = new Date(m.utcDate);
+                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
             
             if (!grouped[dateStr]) grouped[dateStr] = [];
             grouped[dateStr].push(m);
