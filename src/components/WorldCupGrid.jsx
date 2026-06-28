@@ -1189,8 +1189,13 @@ const WorldCupGrid = ({ currentUser }) => {
     const matchesByDate = useMemo(() => {
         const grouped = {};
         effectiveMatches.forEach(m => {
-            const d = new Date(m.utcDate);
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (!m.utcDate) return;
+            
+            // 🛡️ Extraemos la fecha exacta cortando el texto de la API
+            // Al no usar "new Date()", evitamos que Javascript le reste 5 horas 
+            // y nos divida los partidos en días equivocados.
+            const dateStr = m.utcDate.split('T')[0];
+            
             if (!grouped[dateStr]) grouped[dateStr] = [];
             grouped[dateStr].push(m);
         });
