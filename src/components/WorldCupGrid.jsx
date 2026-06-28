@@ -1635,6 +1635,8 @@ const WorldCupGrid = ({ currentUser }) => {
                     
 
                     // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
+                 // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
+                    // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
                     const isKnockout = match.stage !== 'GROUP_STAGE';
                     const homeOriginal = match.homeTeam?.name || '';
                     const awayOriginal = match.awayTeam?.name || '';
@@ -1642,6 +1644,9 @@ const WorldCupGrid = ({ currentUser }) => {
                     const adminPred = adminResults?.predictions?.[match.id];
                     const customHome = adminPred?.customHomeTeam || '';
                     const customAway = adminPred?.customAwayTeam || '';
+
+                    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal === 'Por definir' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal === 'Por definir' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
                     let finalHomeName = '';
                     let finalAwayName = '';
@@ -1658,9 +1663,10 @@ const WorldCupGrid = ({ currentUser }) => {
 
                         let bracketHome = null;
                         let bracketAway = null;
+                        let currentStageArray = []; // 🟢 Lo sacamos aquí para poder filtrarlo luego
 
                         if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
-                            const currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
+                            currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
 
                             let bMatch;
                             if (roundKey === 'final' || roundKey === 'tercero') {
@@ -1684,14 +1690,23 @@ const WorldCupGrid = ({ currentUser }) => {
                             }
                         }
 
-                        finalHomeName = customHome || bracketHome || '';
-                        finalAwayName = customAway || bracketAway || '';
-                        if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
+                        // 🛡️ FILTRO ANTI-CLONES: Sacamos lista de los equipos que la API YA confirmó en esta ronda
+                        const confirmedTeamsInStage = currentStageArray.length > 0 ? currentStageArray
+                            .flatMap(m => [m.homeTeam?.name, m.awayTeam?.name])
+                            .filter(name => name && name !== 'TBD' && name !== 'Por definir' && !name.includes('Winner') && !name.includes('Loser')) : [];
+
+                        // 🛡️ Filtramos el Bracket: Si la API ya acomodó a este equipo en su lugar real, no lo usamos como relleno
+                        const safeBracketHome = bracketHome && !confirmedTeamsInStage.includes(bracketHome) ? bracketHome : '';
+                        const safeBracketAway = bracketAway && !confirmedTeamsInStage.includes(bracketAway) ? bracketAway : '';
+
+                        // 🟢 LA REGLA DE ORO FINAL
+                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : safeBracketHome) || '';
+                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : safeBracketAway) || '';
+                        
+                        if (safeBracketHome || safeBracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
 
                     } else {
-                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
-                        
+                        // Fase de Grupos
                         finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
                         finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
                     }
