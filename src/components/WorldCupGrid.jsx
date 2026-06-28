@@ -1186,7 +1186,7 @@ const WorldCupGrid = ({ currentUser }) => {
         syncLiveRankingToFirestore();
     }, [isAdmin, calculateProgressiveRanking]);
 
-    const matchesByDate = useMemo(() => {
+   const matchesByDate = useMemo(() => {
         const grouped = {};
         effectiveMatches.forEach(m => {
             if (!m.utcDate) return;
