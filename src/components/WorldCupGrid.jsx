@@ -1635,7 +1635,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     
 
                     // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
-                   // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
                     const isKnockout = match.stage !== 'GROUP_STAGE';
                     const homeOriginal = match.homeTeam?.name || '';
                     const awayOriginal = match.awayTeam?.name || '';
@@ -1643,10 +1642,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     const adminPred = adminResults?.predictions?.[match.id];
                     const customHome = adminPred?.customHomeTeam || '';
                     const customAway = adminPred?.customAwayTeam || '';
-
-                    // 1. SACAMOS ESTAS VARIABLES AFUERA para que la API sea leída en todas las fases
-                    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal === 'Por definir' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal === 'Por definir' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
                     let finalHomeName = '';
                     let finalAwayName = '';
@@ -1689,15 +1684,14 @@ const WorldCupGrid = ({ currentUser }) => {
                             }
                         }
 
-                        // 2. LA REGLA DE ORO QUE RESPETA A LA API (Solución visual, 0% impacto en puntos)
-                        // Prioriza el equipo que manda la API (homeOriginal) si la FIFA ya lo confirmó.
-                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : bracketHome) || '';
-                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : bracketAway) || '';
-                        
+                        finalHomeName = customHome || bracketHome || '';
+                        finalAwayName = customAway || bracketAway || '';
                         if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
 
                     } else {
-                        // Fase de Grupos
+                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+                        
                         finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
                         finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
                     }
