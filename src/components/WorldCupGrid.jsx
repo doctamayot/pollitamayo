@@ -396,6 +396,80 @@ const WorldCupGrid = ({ currentUser }) => {
             }
         };
 
+        // 🟢 SINCRONIZADOR INTELIGENTE POR NOMBRES (Ignora los IDs falsos de la API)
+    const handleManualSyncByTeamNames = async () => {
+        toast.loading("Buscando partidos por nombre de equipo...", { id: 'sync-teams' });
+        
+        try {
+            // 1. Llamamos a la API fresca
+            const data = await getWorldCupMatches(); 
+            if (!data || !data.matches) throw new Error("No hay datos de la API");
+
+            const adminDoc = await getDoc(doc(db, 'worldCupAdmin', 'results'));
+            let dbPreds = adminDoc.exists() ? (adminDoc.data().predictions || {}) : {};
+            let newApiStatuses = adminDoc.exists() ? (adminDoc.data().apiStatuses || {}) : {};
+            let hasChanges = false;
+
+            // 2. Iteramos lo que mandó la API
+            data.matches.forEach(apiMatch => {
+                const apiHome = apiMatch.homeTeam?.name;
+                const apiAway = apiMatch.awayTeam?.name;
+
+                // Ignoramos partidos vacíos de la API
+                if (!apiHome || !apiAway || apiHome === 'TBD' || apiAway === 'TBD') return;
+
+                // 3. LA MAGIA: Buscamos nuestro ID local basándonos en los NOMBRES
+                const localMatch = effectiveMatches.find(lm => {
+                    // Tomamos el nombre que el Admin forzó (si lo hay), o el original de nuestra base
+                    const lHome = adminResults?.predictions?.[lm.id]?.customHomeTeam || lm.homeTeam?.name;
+                    const lAway = adminResults?.predictions?.[lm.id]?.customAwayTeam || lm.awayTeam?.name;
+                    
+                    // ¿Es el mismo partido? (Revisamos también si los invirtieron de local/visitante)
+                    return (lHome === apiHome && lAway === apiAway) || (lHome === apiAway && lAway === apiHome);
+                });
+
+                // Si encontramos coincidencia, guardamos los goles en NUESTRO ID LOCAL
+                if (localMatch) {
+                    const localId = localMatch.id;
+                    const apiH = apiMatch.score?.fullTime?.home;
+                    const apiA = apiMatch.score?.fullTime?.away;
+
+                    // Actualizar Goles
+                    if (apiH !== null && apiH !== undefined && apiA !== null && apiA !== undefined) {
+                        if (dbPreds[localId]?.home !== apiH || dbPreds[localId]?.away !== apiA) {
+                            dbPreds[localId] = { ...dbPreds[localId], home: apiH, away: apiA };
+                            hasChanges = true;
+                        }
+                    }
+
+                    // Actualizar Estado (En juego, finalizado, etc)
+                    if (newApiStatuses[localId] !== apiMatch.status) {
+                        newApiStatuses[localId] = apiMatch.status;
+                        hasChanges = true;
+                    }
+                }
+            });
+
+            // 4. Guardamos los cambios seguros en Firebase
+            if (hasChanges) {
+                await setDoc(doc(db, 'worldCupAdmin', 'results'), {
+                    predictions: dbPreds,
+                    apiStatuses: newApiStatuses
+                }, { merge: true });
+                toast.success("¡Marcadores sincronizados con éxito!", { id: 'sync-teams' });
+                
+                // Despertamos a la IA para que recalcule
+                await setDoc(doc(db, 'worldCupAdmin', 'trigger'), { action: 'API_GOL_DETECTED', timestamp: new Date().toISOString() });
+            } else {
+                toast.success("Todo está al día, no hubo cambios.", { id: 'sync-teams' });
+            }
+
+        } catch (error) {
+            console.error(error);
+            toast.error("Error al sincronizar con la API", { id: 'sync-teams' });
+        }
+    };
+
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         // Limpiador: Cuando el Admin cambie a la pestaña de "Ranking" o cierre la app, soltamos la pantalla
@@ -1473,6 +1547,13 @@ const WorldCupGrid = ({ currentUser }) => {
                         >
                             <span>📸</span> <span className="hidden sm:inline">Recuperar Historial</span>
                         </button>
+                        <button 
+                            onClick={handleManualSyncByTeamNames} 
+                            className="bg-blue-500/20 text-blue-400 px-3 py-2 sm:py-2.5 rounded-xl font-black hover:bg-blue-500/40 transition-colors text-xs flex items-center gap-1.5 uppercase tracking-widest ml-2" 
+                            title="Extraer goles de la API usando nombres"
+                        >
+                            <span>📡</span> <span className="hidden sm:inline">Sync por Equipos</span>
+                        </button>
                     </div>
                 </div>
             )}
@@ -1581,7 +1662,9 @@ const WorldCupGrid = ({ currentUser }) => {
                     const rH = a?.home;
                     const rA = a?.away;
                     const matchStatus = match.status || '';
-                    const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                    // const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '') || matchStatus === 'FINISHED' || matchStatus.includes('PLAY');
+                    // Solo mostramos números en pantalla si de verdad existen goles guardados por el Admin
+                    const hasO = (rH !== undefined && rH !== '' && rA !== undefined && rA !== '');
                     const isPlaying = matchStatus === 'IN_PLAY';
                     const isPaused = matchStatus === 'PAUSED';
 
