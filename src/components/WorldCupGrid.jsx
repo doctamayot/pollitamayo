@@ -1193,12 +1193,12 @@ const WorldCupGrid = ({ currentUser }) => {
             
             let dateStr = '';
             
-            // 🛡️ REGLA HORARIA: Si la API no ha definido hora (00:00:00Z), 
-            // usamos la fecha cruda para que Javascript no atrase el partido a ayer.
+            // 🛡️ REGLA INTELIGENTE: Si la API manda hora "Por definir" (00:00:00), 
+            // cortamos el texto directo para que Javascript no lo atrase al día anterior.
             if (m.utcDate.includes('T00:00:00Z') || m.utcDate.includes('T00:00:00.000Z')) {
                 dateStr = m.utcDate.split('T')[0];
             } 
-            // Si el partido sí tiene hora confirmada, usamos tu zona local normal.
+            // Si el partido sí tiene una hora real, usamos tu reloj local de Colombia
             else {
                 const d = new Date(m.utcDate);
                 dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
