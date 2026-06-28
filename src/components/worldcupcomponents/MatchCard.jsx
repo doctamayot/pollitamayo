@@ -23,8 +23,9 @@ const MatchCard = ({
 
     const homeOriginal = match.homeTeam?.name;
     const awayOriginal = match.awayTeam?.name;
-    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+    // 🟢 1. Agregamos 'Por definir' a las validaciones
+    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal === 'Por definir' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal === 'Por definir' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
     
     const getAdminBracketTeam = (side) => {
         if (!adminFullBracket || !stageMatches) return null;
@@ -62,24 +63,37 @@ const MatchCard = ({
     const bracketHome = getAdminBracketTeam('home');
     const bracketAway = getAdminBracketTeam('away');
 
-    // 🟢 LEY DE HIERRO: Si el Admin forzó un equipo, ese manda sobre todos.
     const customHome = predictions?.[match.id]?.customHomeTeam || '';
     const customAway = predictions?.[match.id]?.customAwayTeam || '';
 
-    const displayHome = isKnockout ? (customHome || bracketHome || '') : (customHome || (!isUnknownHome ? homeOriginal : ''));
-    const displayAway = isKnockout ? (customAway || bracketAway || '') : (customAway || (!isUnknownAway ? awayOriginal : ''));
+    // 🟢 2. LA REGLA DE ORO CAMBIADA: Priorizamos la API (homeOriginal) sobre el bracket simulado.
+    const displayHome = customHome || (!isUnknownHome ? homeOriginal : bracketHome) || '';
+    const displayAway = customAway || (!isUnknownAway ? awayOriginal : bracketAway) || '';
 
     const homeCrest = allTeams.find(t => t.name === displayHome)?.crest || (!isKnockout && !isUnknownHome ? match.homeTeam?.crest : null);
     const awayCrest = allTeams.find(t => t.name === displayAway)?.crest || (!isKnockout && !isUnknownAway ? match.awayTeam?.crest : null);
-
     const formatMatchDate = (utcStr) => {
         if (!utcStr) return '';
         const d = new Date(utcStr);
-        const day = d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short' }).replace('.', '');
-        const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        
+        // 🟢 Agregamos timeZone: 'UTC' para que Javascript no le reste 5 horas
+        const optionsDate = { 
+            timeZone: 'UTC', 
+            weekday: 'short', 
+            day: '2-digit', 
+            month: 'short' 
+        };
+        const day = d.toLocaleDateString('es-ES', optionsDate).replace('.', '');
+        
+        const time = d.toLocaleTimeString('en-US', { 
+            timeZone: 'UTC', 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true 
+        });
+        
         return `${day} - ${time}`;
     };
-
     const mainReferee = match.referees && match.referees.length > 0 
         ? match.referees.find(r => r.type === 'REFEREE' || r.role === 'REFEREE') || match.referees[0] 
         : null;
