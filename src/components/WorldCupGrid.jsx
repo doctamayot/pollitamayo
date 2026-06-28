@@ -1189,8 +1189,21 @@ const WorldCupGrid = ({ currentUser }) => {
     const matchesByDate = useMemo(() => {
         const grouped = {};
         effectiveMatches.forEach(m => {
-            const d = new Date(m.utcDate);
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (!m.utcDate) return;
+            
+            let dateStr = '';
+            
+            // 🛡️ REGLA HORARIA: Si la API no ha definido hora (00:00:00Z), 
+            // usamos la fecha cruda para que Javascript no atrase el partido a ayer.
+            if (m.utcDate.includes('T00:00:00Z') || m.utcDate.includes('T00:00:00.000Z')) {
+                dateStr = m.utcDate.split('T')[0];
+            } 
+            // Si el partido sí tiene hora confirmada, usamos tu zona local normal.
+            else {
+                const d = new Date(m.utcDate);
+                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
+            
             if (!grouped[dateStr]) grouped[dateStr] = [];
             grouped[dateStr].push(m);
         });
@@ -1689,11 +1702,15 @@ const WorldCupGrid = ({ currentUser }) => {
                         if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
 
                     } else {
-                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
-                        
-                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
-                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
+                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal === 'Por definir' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal === 'Por definir' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+
+                        // 2. ORDEN DE MANDO: 
+                        // Primero: Lo que el Admin ponga manual (customHome).
+                        // Segundo: Si la API ya tiene el equipo oficial (homeOriginal), lo usamos.
+                        // Tercero: El simulador de llaves (bracketHome).
+                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : bracketHome) || '';
+                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : bracketAway) || '';
                     }
 
                     const homeCrest = allTeams.find(t => t.name === finalHomeName)?.crest || match.homeTeam?.crest;
