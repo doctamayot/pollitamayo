@@ -1643,10 +1643,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     const customHome = adminPred?.customHomeTeam || '';
                     const customAway = adminPred?.customAwayTeam || '';
 
-                    // 1. Detectamos si la API sabe quién juega realmente
-                    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal === 'Por definir' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal === 'Por definir' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
-
                     let finalHomeName = '';
                     let finalAwayName = '';
                     let isTeamDrawnFromBracket = false;
@@ -1688,14 +1684,14 @@ const WorldCupGrid = ({ currentUser }) => {
                             }
                         }
 
-                        // 2. LA NUEVA REGLA (¡Acá está la magia visual!)
-                        // Da prioridad a la API (homeOriginal) si ya tiene a los equipos oficiales.
-                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : bracketHome) || '';
-                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : bracketAway) || '';
-                        
+                        finalHomeName = customHome || bracketHome || '';
+                        finalAwayName = customAway || bracketAway || '';
                         if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
 
                     } else {
+                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+                        
                         finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
                         finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
                     }
