@@ -261,31 +261,47 @@ const WorldCupGrid = ({ currentUser }) => {
     const prevSimDateRef = useRef(''); 
     const apiFetchedRef = useRef(false); 
 
+    // const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
+    //     try {
+    //         if (!isBackgroundUpdate) setIsApiLoading(true);
+
+    //         if (isAdmin) {
+    //             const data = await getWorldCupMatches();
+    //             if (data && data.matches) {
+    //                 setMatches(data.matches);
+    //                 await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
+    //             }
+    //         } else {
+    //             const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+    //             if (cacheDoc.exists() && cacheDoc.data().matches) {
+    //                 setMatches(cacheDoc.data().matches);
+    //             } else {
+    //                 const data = await getWorldCupMatches();
+    //                 if (data && data.matches) setMatches(data.matches);
+    //             }
+    //         }
+    //     } catch (err) { 
+    //         console.error("Error obteniendo partidos:", err); 
+    //     } finally { 
+    //         if (!isBackgroundUpdate) setIsApiLoading(false); 
+    //     }
+    // }, [isAdmin]);
+
     const fetchApiMatches = useCallback(async (isBackgroundUpdate = false) => {
         try {
             if (!isBackgroundUpdate) setIsApiLoading(true);
 
-            if (isAdmin) {
-                const data = await getWorldCupMatches();
-                if (data && data.matches) {
-                    setMatches(data.matches);
-                    await setDoc(doc(db, 'worldCupAdmin', 'apiCache'), { matches: data.matches }, { merge: true });
-                }
-            } else {
-                const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
-                if (cacheDoc.exists() && cacheDoc.data().matches) {
-                    setMatches(cacheDoc.data().matches);
-                } else {
-                    const data = await getWorldCupMatches();
-                    if (data && data.matches) setMatches(data.matches);
-                }
+            // 🛑 APAGÓN TOTAL DE LA API: Leemos estrictamente del caché seguro en Firebase
+            const cacheDoc = await getDoc(doc(db, 'worldCupAdmin', 'apiCache'));
+            if (cacheDoc.exists() && cacheDoc.data().matches) {
+                setMatches(cacheDoc.data().matches);
             }
         } catch (err) { 
             console.error("Error obteniendo partidos:", err); 
         } finally { 
             if (!isBackgroundUpdate) setIsApiLoading(false); 
         }
-    }, [isAdmin]);
+    }, []);
 
     useEffect(() => {
         if (!apiFetchedRef.current) {
@@ -398,6 +414,8 @@ const WorldCupGrid = ({ currentUser }) => {
     const isMountedRef = useRef(true); 
 
     useEffect(() => {
+
+        return;
         if (!isAdmin) return;
         
         // Cada vez que se monte el componente, el escudo se activa
@@ -633,26 +651,31 @@ const WorldCupGrid = ({ currentUser }) => {
         return map;
     }, [effectiveMatches]);
 
-    const mergedAdminPreds = useMemo(() => {
-        const preds = { ...(adminResults?.predictions || {}) };
-        effectiveMatches.forEach(m => {
-            const status = m.status || '';
-            const hasO = (preds[m.id] && preds[m.id].home !== '' && preds[m.id].away !== '') || status === 'FINISHED' || status.includes('PLAY');
+    // const mergedAdminPreds = useMemo(() => {
+    //     const preds = { ...(adminResults?.predictions || {}) };
+    //     effectiveMatches.forEach(m => {
+    //         const status = m.status || '';
+    //         const hasO = (preds[m.id] && preds[m.id].home !== '' && preds[m.id].away !== '') || status === 'FINISHED' || status.includes('PLAY');
             
-            if (hasO) {
-                if (preds[m.id]?.home === undefined || preds[m.id]?.home === '') {
-                    if (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) {
-                        preds[m.id] = {
-                            ...preds[m.id],
-                            home: m.score.fullTime.home,
-                            away: m.score.fullTime.away
-                        };
-                    }
-                }
-            }
-        });
-        return preds;
-    }, [adminResults, effectiveMatches]);
+    //         if (hasO) {
+    //             if (preds[m.id]?.home === undefined || preds[m.id]?.home === '') {
+    //                 if (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) {
+    //                     preds[m.id] = {
+    //                         ...preds[m.id],
+    //                         home: m.score.fullTime.home,
+    //                         away: m.score.fullTime.away
+    //                     };
+    //                 }
+    //             }
+    //         }
+    //     });
+    //     return preds;
+    // }, [adminResults, effectiveMatches]);
+
+    const mergedAdminPreds = useMemo(() => {
+        // 🛑 IGNORAR GOLES DE LA API: Solo existirán los marcadores que el Admin guarde a mano
+        return { ...(adminResults?.predictions || {}) };
+    }, [adminResults]);
 
     const handleSimulateDate = async (newDate) => {
         const adminRef = doc(db, 'worldCupAdmin', 'results');
