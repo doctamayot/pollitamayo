@@ -594,8 +594,9 @@ const WorldCupGrid = ({ currentUser }) => {
 
     const effectiveMatches = useMemo(() => {
         return matches.map(m => {
-            const simStatus = adminResults?.simulation?.matchStatuses?.[m.id];
-            const apiStatus = adminResults?.apiStatuses?.[m.id]; 
+            const matchId = String(m.id);
+            const simStatus = adminResults?.simulation?.matchStatuses?.[matchId];
+            const apiStatus = adminResults?.apiStatuses?.[matchId]; 
             
             let finalStatus = m.status;
             if (simStatus && simStatus !== '') {
@@ -604,7 +605,23 @@ const WorldCupGrid = ({ currentUser }) => {
                 finalStatus = apiStatus; // 2. Manda el radar automático
             }
             
-            return { ...m, status: finalStatus };
+            // 📅 OVERRIDES MANUALES DE FECHA Y HORA DEL ADMIN
+            let finalUtcDate = m.utcDate;
+            const customDate = adminResults?.simulation?.customDates?.[matchId]; // Guarda YYYY-MM-DD
+            const customTime = adminResults?.simulation?.customTimes?.[matchId]; // Guarda HH:MM
+            
+            if (customDate || customTime) {
+                const datePart = customDate || (m.utcDate ? m.utcDate.split('T')[0] : '2026-06-29');
+                let timePart = customTime || (m.utcDate ? m.utcDate.split('T')[1] : '00:00:00');
+                
+                // Limpiamos la 'Z' para forzar lectura local estricta y evitar que Javascript reste horas
+                timePart = timePart.replace('Z', '');
+                if (timePart.split(':').length === 2) timePart += ':00';
+                
+                finalUtcDate = `${datePart}T${timePart}`;
+            }
+            
+            return { ...m, status: finalStatus, utcDate: finalUtcDate };
         });
     }, [matches, adminResults]);
 
@@ -651,6 +668,19 @@ const WorldCupGrid = ({ currentUser }) => {
         await setDoc(adminRef, { 
             simulation: { ...currentSim, matchStatuses: newStatuses } 
         }, { merge: true });
+    };
+
+    const handleCustomDateTime = async (matchId, field, value) => {
+        const adminRef = doc(db, 'worldCupAdmin', 'results');
+        const currentSim = adminResults?.simulation || {};
+        const subField = field === 'date' ? 'customDates' : 'customTimes';
+        const currentValues = currentSim[subField] || {};
+        const newValues = { ...currentValues, [matchId]: value };
+
+        await setDoc(adminRef, { 
+            simulation: { ...currentSim, [subField]: newValues } 
+        }, { merge: true });
+        toast.success(`¡${field === 'date' ? 'Fecha' : 'Hora'} modificada manualmente!`, { id: 'datetime-toast' });
     };
 
     const allTeams = useMemo(() => {
@@ -1776,9 +1806,10 @@ const WorldCupGrid = ({ currentUser }) => {
                             
                             {isAdmin && (
                                 <>
-                                <div className="absolute top-3 right-3 z-50 mt-[-10px]">
+                                <div className="absolute top-3 right-3 z-50 mt-[-10px] flex flex-col items-end gap-1 bg-slate-800/95 p-2 rounded-xl border border-purple-500/40 shadow-2xl backdrop-blur-sm animate-fade-in">
+                                    {/* Selector de Estado */}
                                     <select 
-                                        className="bg-purple-900 text-purple-100 text-[9px] font-bold p-1 rounded-lg outline-none border border-purple-500/50 shadow-md cursor-pointer hover:bg-purple-800 transition-colors"
+                                        className="bg-purple-900 text-purple-100 text-[9px] font-black p-1 rounded border border-purple-500/30 cursor-pointer hover:bg-purple-800 transition-colors w-24"
                                         value={adminResults?.simulation?.matchStatuses?.[match.id] || ''}
                                         onChange={(e) => handleSimulateStatus(match.id, e.target.value)}
                                         title="Simular Estado del Partido"
@@ -1789,17 +1820,39 @@ const WorldCupGrid = ({ currentUser }) => {
                                         <option value="PAUSED">⏸️ En Pausa</option>
                                         <option value="FINISHED">🏁 Finalizado</option>
                                     </select>
+                                    
+                                    {/* Entrada de Fecha Manual */}
+                                    <div className="flex items-center gap-1 w-full justify-between">
+                                        <span className="text-[8px] text-purple-300 font-bold" title="Fecha Manual">📅</span>
+                                        <input 
+                                            type="date"
+                                            className="bg-purple-950 text-white text-[9px] font-black p-0.5 rounded border border-purple-700/50 outline-none w-20 text-center cursor-pointer"
+                                            value={adminResults?.simulation?.customDates?.[match.id] || ''}
+                                            onChange={(e) => handleCustomDateTime(match.id, 'date', e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Entrada de Hora Manual */}
+                                    <div className="flex items-center gap-1 w-full justify-between">
+                                        <span className="text-[8px] text-purple-300 font-bold" title="Hora Manual">⏰</span>
+                                        <input 
+                                            type="time"
+                                            className="bg-purple-950 text-white text-[9px] font-black p-0.5 rounded border border-purple-700/50 outline-none w-20 text-center cursor-pointer"
+                                            value={adminResults?.simulation?.customTimes?.[match.id] || ''}
+                                            onChange={(e) => handleCustomDateTime(match.id, 'time', e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="absolute top-3 left-3 z-50 mt-[-10px]">
-                                        <button 
-                                            onClick={() => setActivePollaMatch({ match, rH, rA, matchStatus })}
-                                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[9px] sm:text-[10px] font-black px-2 py-1.5 rounded-lg shadow-lg border border-amber-300/50 hover:scale-110 transition-transform tracking-widest uppercase flex items-center gap-1"
-                                            title="Abrir Polla Express"
-                                        >
-                                            🎲 Polla Express
-                                        </button>
-                                    </div>
-                                    </>
+                                    <button 
+                                        onClick={() => setActivePollaMatch({ match, rH, rA, matchStatus })}
+                                        className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[9px] sm:text-[10px] font-black px-2 py-1.5 rounded-lg shadow-lg border border-amber-300/50 hover:scale-110 transition-transform tracking-widest uppercase flex items-center gap-1"
+                                        title="Abrir Polla Express"
+                                    >
+                                        🎲 Polla Express
+                                    </button>
+                                </div>
+                                </>
                             )}
 
                             <div className={`${isPlaying ? 'bg-green-500/5' : isPaused ? 'bg-amber-500/5' : 'bg-background-offset'} pb-4 sm:pb-6 border-b border-border relative z-20`}>
