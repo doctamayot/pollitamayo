@@ -1189,23 +1189,8 @@ const WorldCupGrid = ({ currentUser }) => {
     const matchesByDate = useMemo(() => {
         const grouped = {};
         effectiveMatches.forEach(m => {
-            if (!m.utcDate) return;
-            
-            let dateStr = '';
-            
-            // 🛡️ REGLA INTELIGENTE:
-            // Si la API manda la medianoche exacta, significa "Hora Por Definir". 
-            // Usamos la fecha cruda para que no se atrase un día al restarle las 5 horas.
-            if (m.utcDate.includes('T00:00:00Z') || m.utcDate.includes('T00:00:00.000Z')) {
-                dateStr = m.utcDate.split('T')[0];
-            } 
-            // Si el partido sí tiene una hora real, usamos tu reloj local 
-            // para que los partidos nocturnos no se pasen a la pestaña de mañana.
-            else {
-                const d = new Date(m.utcDate);
-                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            }
-            
+            const d = new Date(m.utcDate);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             if (!grouped[dateStr]) grouped[dateStr] = [];
             grouped[dateStr].push(m);
         });
@@ -1650,7 +1635,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     
 
                     // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
-                    // 🟢 LÓGICA INFALIBLE PARA LOS NOMBRES DE LOS EQUIPOS BASADA EN EL ADMIN
                     const isKnockout = match.stage !== 'GROUP_STAGE';
                     const homeOriginal = match.homeTeam?.name || '';
                     const awayOriginal = match.awayTeam?.name || '';
@@ -1658,9 +1642,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     const adminPred = adminResults?.predictions?.[match.id];
                     const customHome = adminPred?.customHomeTeam || '';
                     const customAway = adminPred?.customAwayTeam || '';
-
-                    const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal === 'Por definir' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
-                    const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal === 'Por definir' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
 
                     let finalHomeName = '';
                     let finalAwayName = '';
@@ -1677,10 +1658,9 @@ const WorldCupGrid = ({ currentUser }) => {
 
                         let bracketHome = null;
                         let bracketAway = null;
-                        let currentStageArray = []; 
 
                         if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
-                            currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
+                            const currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
 
                             let bMatch;
                             if (roundKey === 'final' || roundKey === 'tercero') {
@@ -1704,23 +1684,14 @@ const WorldCupGrid = ({ currentUser }) => {
                             }
                         }
 
-                        // 🛡️ FILTRO ANTI-CLONES: Buscamos qué equipos ya acomodó la API en la vida real
-                        const confirmedTeamsInStage = currentStageArray.length > 0 ? currentStageArray
-                            .flatMap(m => [m.homeTeam?.name, m.awayTeam?.name])
-                            .filter(name => name && name !== 'TBD' && name !== 'Por definir' && !name.includes('Winner') && !name.includes('Loser')) : [];
-
-                        // 🛡️ Filtramos el Bracket: Si la API ya usó al equipo en la realidad, el árbol virtual no puede repetirlo
-                        const safeBracketHome = bracketHome && !confirmedTeamsInStage.includes(bracketHome) ? bracketHome : '';
-                        const safeBracketAway = bracketAway && !confirmedTeamsInStage.includes(bracketAway) ? bracketAway : '';
-
-                        // 🟢 LA NUEVA REGLA DE ORO (Prioridad absoluta: 1. Manual Admin, 2. API Real, 3. Árbol Virtual)
-                        finalHomeName = customHome || (!isUnknownHome ? homeOriginal : safeBracketHome) || '';
-                        finalAwayName = customAway || (!isUnknownAway ? awayOriginal : safeBracketAway) || '';
-                        
-                        if (safeBracketHome || safeBracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
+                        finalHomeName = customHome || bracketHome || '';
+                        finalAwayName = customAway || bracketAway || '';
+                        if (bracketHome || bracketAway || customHome || customAway) isTeamDrawnFromBracket = true;
 
                     } else {
-                        // Fase de Grupos
+                        const isUnknownHome = !homeOriginal || homeOriginal === 'TBD' || homeOriginal.includes('Winner') || homeOriginal.includes('Loser');
+                        const isUnknownAway = !awayOriginal || awayOriginal === 'TBD' || awayOriginal.includes('Winner') || awayOriginal.includes('Loser');
+                        
                         finalHomeName = customHome || (!isUnknownHome ? homeOriginal : '');
                         finalAwayName = customAway || (!isUnknownAway ? awayOriginal : '');
                     }
