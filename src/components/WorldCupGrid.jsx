@@ -690,25 +690,22 @@ const WorldCupGrid = ({ currentUser }) => {
         return matches.map(m => {
             const matchId = String(m.id);
             const simStatus = adminResults?.simulation?.matchStatuses?.[matchId];
-            const apiStatus = adminResults?.apiStatuses?.[matchId]; 
             
+            // 🛑 APAGÓN DEFINITIVO: Ya no leemos apiStatuses. Solo manda tu menú manual.
             let finalStatus = m.status;
             if (simStatus && simStatus !== '') {
-                finalStatus = simStatus; // 1. Manda la Simulación
-            } else if (apiStatus && apiStatus !== '') {
-                finalStatus = apiStatus; // 2. Manda el radar automático
+                finalStatus = simStatus; 
             }
             
             // 📅 OVERRIDES MANUALES DE FECHA Y HORA DEL ADMIN
             let finalUtcDate = m.utcDate;
-            const customDate = adminResults?.simulation?.customDates?.[matchId]; // Guarda YYYY-MM-DD
-            const customTime = adminResults?.simulation?.customTimes?.[matchId]; // Guarda HH:MM
+            const customDate = adminResults?.simulation?.customDates?.[matchId]; 
+            const customTime = adminResults?.simulation?.customTimes?.[matchId]; 
             
             if (customDate || customTime) {
                 const datePart = customDate || (m.utcDate ? m.utcDate.split('T')[0] : '2026-06-29');
                 let timePart = customTime || (m.utcDate ? m.utcDate.split('T')[1] : '00:00:00');
                 
-                // Limpiamos la 'Z' para forzar lectura local estricta y evitar que Javascript reste horas
                 timePart = timePart.replace('Z', '');
                 if (timePart.split(':').length === 2) timePart += ':00';
                 
@@ -1280,13 +1277,25 @@ const WorldCupGrid = ({ currentUser }) => {
     }, [calculateProgressiveRanking]);
 
     // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Garantiza que Firestore sea un espejo fiel de tu pantalla)
+    // 🌟 NUEVO: SINCRONIZADOR MAESTRO (Garantiza que Firebase sea un espejo fiel de tu pantalla)
+    // 🌟 NUEVO: SINCRONIZADOR MAESTRO BLINDADO
+   // 🌟 NUEVO: SINCRONIZADOR MAESTRO BLINDADO (En tiempo presente)
+   // 🌟 NUEVO: SINCRONIZADOR MAESTRO BLINDADO
     useEffect(() => {
-        if (!isAdmin) return;
+        // 🛡️ BARRERA DE CONTENCIÓN: Si la app está cargando, NO guardamos nada en Firestore.
+        if (!isAdmin || isApiLoading || isDbLoading || Object.keys(allPredictions).length === 0 || effectiveMatches.length === 0) return;
 
         const syncLiveRankingToFirestore = async () => {
             try {
-                const nowISO = new Date().toISOString();
-                const currentRanking = calculateProgressiveRanking(nowISO, true);
+                // 🛑 EL ANCLA DE LA REALIDAD: Buscamos el último partido que tú hayas tocado
+                const latestActiveMatch = effectiveMatches
+                    .filter(m => m.status === 'FINISHED' || m.status === 'IN_PLAY' || m.status === 'PAUSED')
+                    .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))[0];
+
+                // Si hay un partido activo, usamos su hora exacta. Si no, usamos el presente.
+                const syncDate = latestActiveMatch ? latestActiveMatch.utcDate : new Date().toISOString();
+                
+                const currentRanking = calculateProgressiveRanking(syncDate, true);
 
                 if (currentRanking.length > 0) {
                     const pointsMap = {};
@@ -1296,15 +1305,15 @@ const WorldCupGrid = ({ currentUser }) => {
 
                     const newPointsString = JSON.stringify(pointsMap);
 
-                    // 🛡️ ESCUDO ANTI-CUOTA 2: Solo gastamos una escritura en Firebase si el ranking matemático realmente se movió
+                    // 🛡️ ESCUDO ANTI-CUOTA
                     if (window.lastSavedRanking !== newPointsString) {
                         await setDoc(doc(db, 'worldCupAdmin', 'liveRanking'), {
                             points: pointsMap,
-                            lastCalculated: nowISO
+                            lastCalculated: new Date().toISOString()
                         }, { merge: true });
                         
                         window.lastSavedRanking = newPointsString; 
-                        console.log("🧮 [Sincronizador Maestro] liveRanking actualizado en Firestore con éxito.");
+                        console.log("🧮 [Sincronizador Maestro] liveRanking actualizado. Fecha ancla:", syncDate);
                     }
                 }
             } catch (error) {
@@ -1312,8 +1321,13 @@ const WorldCupGrid = ({ currentUser }) => {
             }
         };
 
-        syncLiveRankingToFirestore();
-    }, [isAdmin, calculateProgressiveRanking]);
+        // ⏱️ RETRASO TÁCTICO: Esperamos 1.5 segundos para que los cálculos matemáticos se estabilicen
+        const timeoutId = setTimeout(() => {
+            syncLiveRankingToFirestore();
+        }, 1500);
+
+        return () => clearTimeout(timeoutId);
+    }, [isAdmin, calculateProgressiveRanking, isApiLoading, isDbLoading, allPredictions, effectiveMatches]);
 
    const matchesByDate = useMemo(() => {
         const grouped = {};

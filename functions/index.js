@@ -29,21 +29,56 @@ async function runAiNewsGeneration() {
         const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
         const apiMatchesTemplate = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
 
-        // 4. CONSTRUIR LOS PARTIDOS BASADOS ESTRICTAMENTE EN EL ADMIN
+       // 4. FUSIONAR: EL ADMIN MANDA SOBRE LA API OFICIAL
+       // 4. FUSIONAR: EL ADMIN MANDA SOBRE LA API OFICIAL
+        // 4. FUSIONAR: EL ADMIN MANDA SOBRE LA API OFICIAL
+        const adminBracket = adminResultsData.bracket || {}; // 🟢 Leemos el árbol
+        
         const matches = apiMatchesTemplate.map(m => {
             let newMatch = { ...m };
+            const adm = adminPreds[m.id] || {};
             
+            // 🌳 TRADUCTOR DEL ÁRBOL DE CLASIFICADOS (Para las fases finales)
+            const isKnockout = m.stage !== 'GROUP_STAGE';
+            if (isKnockout) {
+                let roundKey = '';
+                if (m.stage === 'LAST_32' || m.stage === 'ROUND_OF_32') roundKey = 'dieciseisavos';
+                else if (m.stage === 'LAST_16') roundKey = 'octavos';
+                else if (m.stage === 'QUARTER_FINALS') roundKey = 'cuartos';
+                else if (m.stage === 'SEMI_FINALS') roundKey = 'semis';
+                else if (m.stage === 'FINAL') roundKey = 'final';
+                else if (m.stage === 'THIRD_PLACE') roundKey = 'tercero';
+
+                if (roundKey && adminBracket[roundKey]) {
+                    const currentStageArray = apiMatchesTemplate.filter(match => match.stage === m.stage).sort((a,b) => Number(a.id) - Number(b.id));
+                    const absoluteIndex = currentStageArray.findIndex(match => match.id === m.id);
+                    
+                    const bracketMatchValues = Object.keys(adminBracket[roundKey])
+                        .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                        .map(k => adminBracket[roundKey][k]);
+                    
+                    const bMatch = bracketMatchValues[absoluteIndex >= 0 ? absoluteIndex : 0];
+                    if (bMatch) {
+                        if (bMatch.home && !bMatch.home.isPlaceholder) newMatch.homeTeam = { ...newMatch.homeTeam, name: bMatch.home.name };
+                        if (bMatch.away && !bMatch.away.isPlaceholder) newMatch.awayTeam = { ...newMatch.awayTeam, name: bMatch.away.name };
+                    }
+                }
+            }
+            
+            // 🛑 MODO DIOS: Si el Admin forzó nombres manuales en la app, prevalecen sobre el árbol
+            if (adm.customHomeTeam) {
+                newMatch.homeTeam = { ...newMatch.homeTeam, name: adm.customHomeTeam };
+            }
+            if (adm.customAwayTeam) {
+                newMatch.awayTeam = { ...newMatch.awayTeam, name: adm.customAwayTeam };
+            }
+
             // Sobrescribimos el status con lo que diga el simulador del Admin
             if (simStatuses[m.id] && simStatuses[m.id] !== '') {
                 newMatch.status = simStatuses[m.id];
-            } else {
-                // Si no hay status manual, asumimos 'SCHEDULED' por defecto para evitar errores
-                newMatch.status = 'SCHEDULED';
             }
 
-            // 🛑 LEY DE HIERRO: Solo existen goles si el Admin los tecleó (!isNaN)
-            const adm = adminPreds[m.id];
-            const hasAdminScore = adm && adm.home !== undefined && adm.home !== '' && adm.away !== undefined && adm.away !== '';
+            const hasAdminScore = adm.home !== undefined && adm.home !== '' && adm.away !== undefined && adm.away !== '';
             
             if (hasAdminScore) {
                 const hScore = parseInt(adm.home, 10);
@@ -53,16 +88,14 @@ async function runAiNewsGeneration() {
                     if (!newMatch.score) newMatch.score = {};
                     newMatch.score.fullTime = { home: hScore, away: aScore };
                     
-                    // Si el Admin le puso marcador y no tiene status manual, lo damos por finalizado
-                    if (!simStatuses[m.id] || simStatuses[m.id] === '') {
+                    if (newMatch.status === 'SCHEDULED' || newMatch.status === 'TIMED') {
                         newMatch.status = 'FINISHED';
                     }
                 }
             } else {
-                // Si el Admin no le ha puesto goles, ELIMINAMOS cualquier basura que venga de la API
-                if (newMatch.score) {
-                    newMatch.score.fullTime = { home: null, away: null };
-                }
+                // 🛡️ Si tú no has puesto goles, vaciamos cualquier residuo de la API
+                if (!newMatch.score) newMatch.score = {};
+                newMatch.score.fullTime = { home: '', away: '' };
             }
             return newMatch;
         });
@@ -293,7 +326,8 @@ async function runAiNewsGeneration() {
             4. NUNCA uses nombres de países en inglés. Todo debe estar en español impecable (Ej: Netherlands es Países Bajos, England es Inglaterra).
             5. Usa prefijos en mayúsculas como "EN VIVO:", "LA CIMA:", "EL PELOTÓN:", "ZONA DE DESCENSO:", "EL BOTÍN:","EL ORÁCULO:", "DATOS CLAVE:", "AL ACECHO:".
             6. Devuelve ÚNICAMENTE un array JSON válido de strings. No agregues nada más.
-            7. El mundial es del 2026 de la FIFA`;
+            7. El mundial es del 2026 de la FIFA.
+            8.🛑 FORMATO DE TEXTO: ESTÁ ESTRICTAMENTE PROHIBIDO usar Markdown. NO uses asteriscos (**), NO uses numerales (# o ###), NO uses negritas. Escribe TEXTO 100% PLANO. Si usas Markdown, dañarás el diseño de la aplicación móvil.`;
         }
 
         const result = await model.generateContent(prompt);

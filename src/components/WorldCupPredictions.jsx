@@ -1057,6 +1057,7 @@ const WorldCupPredictions = ({ currentUser }) => {
         
         if (isAdmin) {
             predictionData.timestamps = finalTimestamps;
+            predictionData.bracket = adminFullBracket;
         } else {
             predictionData.displayName = currentUser.displayName;
             predictionData.email = currentUser.email;

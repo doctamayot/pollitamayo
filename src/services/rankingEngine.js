@@ -106,22 +106,6 @@ export const recalculateAndSaveRanking = async () => {
         });
 
         const mergedAdminPreds = { ...(adminResults?.predictions || {}) };
-        effectiveMatches.forEach(m => {
-            const status = m.status || '';
-            const hasO = (mergedAdminPreds[m.id] && mergedAdminPreds[m.id].home !== '' && mergedAdminPreds[m.id].away !== '') || status === 'FINISHED' || status.includes('PLAY');
-            
-            if (hasO) {
-                if (mergedAdminPreds[m.id]?.home === undefined || mergedAdminPreds[m.id]?.home === '') {
-                    if (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) {
-                        mergedAdminPreds[m.id] = {
-                            ...mergedAdminPreds[m.id],
-                            home: m.score.fullTime.home,
-                            away: m.score.fullTime.away
-                        };
-                    }
-                }
-            }
-        });
 
         const officialMatches = effectiveMatches.filter(m => {
             const rH = mergedAdminPreds[m.id]?.home;
