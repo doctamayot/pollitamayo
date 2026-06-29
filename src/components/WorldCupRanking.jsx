@@ -182,25 +182,10 @@ const WorldCupRanking = ({ currentUser }) => {
     }, [matches, adminResults]);
 
     const mergedAdminPreds = useMemo(() => {
-        const preds = { ...(adminResults?.predictions || {}) };
-        effectiveMatches.forEach(m => {
-            const status = m.status || '';
-            const hasO = (preds[m.id] && preds[m.id].home !== '' && preds[m.id].away !== '') || status === 'FINISHED' || status.includes('PLAY');
-            
-            if (hasO) {
-                if (preds[m.id]?.home === undefined || preds[m.id]?.home === '') {
-                    if (m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined) {
-                        preds[m.id] = {
-                            ...preds[m.id],
-                            home: m.score.fullTime.home,
-                            away: m.score.fullTime.away
-                        };
-                    }
-                }
-            }
-        });
-        return preds;
-    }, [adminResults, effectiveMatches]);
+            // 🛑 IGNORAR GOLES DE LA API: Solo existirán los marcadores que el Admin guarde a mano
+            return { ...(adminResults?.predictions || {}) };
+        }, [adminResults]);
+    
 
     const officialMatches = useMemo(() => {
         return effectiveMatches.filter(m => {
