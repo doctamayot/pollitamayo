@@ -19,36 +19,49 @@ async function runAiNewsGeneration() {
         const settingsSnap = await db.collection("worldCupAdmin").doc("settings").get();
         const isTournamentStarted = settingsSnap.exists ? settingsSnap.data().predictionsClosed === true : false;
 
-        // 2. LEER LA API REAL
-        const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
-        const apiMatches = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
-
-        // 3. LEER LA VERDAD DEL ADMIN (LA PRIORIDAD)
+        // 2. LEER LA VERDAD ABSOLUTA DEL ADMIN (SIN API)
         const adminResultsSnap = await db.collection("worldCupAdmin").doc("results").get();
         const adminResultsData = adminResultsSnap.exists ? adminResultsSnap.data() : {};
         const adminPreds = adminResultsData.predictions || {};
         const simStatuses = adminResultsData.simulation?.matchStatuses || {};
 
-        // 4. FUSIONAR: EL ADMIN MANDA SOBRE LA API OFICIAL
-        const matches = apiMatches.map(m => {
+        // 3. OBTENER EL DICCIONARIO DE EQUIPOS Y ESTRUCTURA DE LA API (SOLO COMO PLANTILLA BÁSICA)
+        const apiCacheSnap = await db.collection("worldCupAdmin").doc("apiCache").get();
+        const apiMatchesTemplate = apiCacheSnap.exists ? (apiCacheSnap.data().matches || []) : [];
+
+        // 4. CONSTRUIR LOS PARTIDOS BASADOS ESTRICTAMENTE EN EL ADMIN
+        const matches = apiMatchesTemplate.map(m => {
             let newMatch = { ...m };
             
+            // Sobrescribimos el status con lo que diga el simulador del Admin
             if (simStatuses[m.id] && simStatuses[m.id] !== '') {
                 newMatch.status = simStatuses[m.id];
+            } else {
+                // Si no hay status manual, asumimos 'SCHEDULED' por defecto para evitar errores
+                newMatch.status = 'SCHEDULED';
             }
 
+            // 🛑 LEY DE HIERRO: Solo existen goles si el Admin los tecleó (!isNaN)
             const adm = adminPreds[m.id];
             const hasAdminScore = adm && adm.home !== undefined && adm.home !== '' && adm.away !== undefined && adm.away !== '';
             
             if (hasAdminScore) {
-                if (!newMatch.score) newMatch.score = {};
-                newMatch.score.fullTime = {
-                    home: parseInt(adm.home, 10),
-                    away: parseInt(adm.away, 10)
-                };
+                const hScore = parseInt(adm.home, 10);
+                const aScore = parseInt(adm.away, 10);
                 
-                if (newMatch.status === 'SCHEDULED' || newMatch.status === 'TIMED') {
-                    newMatch.status = 'FINISHED';
+                if (!isNaN(hScore) && !isNaN(aScore)) {
+                    if (!newMatch.score) newMatch.score = {};
+                    newMatch.score.fullTime = { home: hScore, away: aScore };
+                    
+                    // Si el Admin le puso marcador y no tiene status manual, lo damos por finalizado
+                    if (!simStatuses[m.id] || simStatuses[m.id] === '') {
+                        newMatch.status = 'FINISHED';
+                    }
+                }
+            } else {
+                // Si el Admin no le ha puesto goles, ELIMINAMOS cualquier basura que venga de la API
+                if (newMatch.score) {
+                    newMatch.score.fullTime = { home: null, away: null };
                 }
             }
             return newMatch;

@@ -1222,9 +1222,9 @@ const WorldCupGrid = ({ currentUser }) => {
                 const answer = userData.extraPicks?.[q.id];
                 const officialAnswer = adminResults?.extraPicks?.[q.id];
                 const timestampStr = adminResults?.timestamps?.[q.id]; 
-                const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+                //const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                if (officialAnswer && answer && eventDate <= targetDate) {
+                if (officialAnswer && answer ) {
                     // Dividimos la respuesta del admin por comas o barras verticales (ej. "Messi, Kane" o "Argentina|Francia")
                     const officialList = officialAnswer.split(/[,|]/).map(item => item.trim().toLowerCase());
                     const cleanAnswer = answer.trim().toLowerCase();
@@ -1244,9 +1244,9 @@ const WorldCupGrid = ({ currentUser }) => {
                 let answer = userData.eventPicks?.[e.id];
                 let officialAnswer = adminResults?.eventPicks?.[e.id];
                 const timestampStr = adminResults?.timestamps?.[e.id]; 
-                const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+               //const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                if (answer && officialAnswer && eventDate <= targetDate) {
+                if (answer && officialAnswer) {
                     answer = String(answer).toUpperCase().trim();
                     officialAnswer = String(officialAnswer).toUpperCase().trim();
                     if (officialAnswer === answer) {
