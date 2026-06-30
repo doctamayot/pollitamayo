@@ -260,6 +260,8 @@ const WorldCupGrid = ({ currentUser }) => {
     const scrollContainerRef = useRef(null);
     const prevSimDateRef = useRef(''); 
     const apiFetchedRef = useRef(false); 
+    const prevMatchStatusesRef = useRef({});
+    const isInitialMountRef = useRef(true);
 
     const handleManualSyncByTeamNames = async () => {
         toast.loading("Buscando partidos por nombre de equipo...", { id: 'sync-teams' });
@@ -987,6 +989,116 @@ const WorldCupGrid = ({ currentUser }) => {
         }
     }, [projectedAdminQualified32, adminResults]);
 
+    // 📸 FOTÓGRAFO SELECTIVO: Solo dispara la foto al pasar un partido a "Finalizado" en la Grilla
+    useEffect(() => {
+        if (!isAdmin || isDbLoading || Object.keys(allPredictions).length === 0 || effectiveMatches.length === 0) return;
+
+        const currentStatuses = adminResults?.simulation?.matchStatuses || {};
+
+        // 🛡️ BARRERA DE ENTRADA: Si la página se está cargando/refrescando, guardamos los estados y abortamos
+        if (isInitialMountRef.current) {
+            prevMatchStatusesRef.current = currentStatuses;
+            isInitialMountRef.current = false;
+            return;
+        }
+
+        // Analizamos si algún partido acaba de cambiar su estado a "FINISHED" en este instante
+        let shiftedToFinished = false;
+        Object.keys(currentStatuses).forEach(matchId => {
+            const prev = prevMatchStatusesRef.current[matchId];
+            const curr = currentStatuses[matchId];
+            if (curr === 'FINISHED' && prev !== 'FINISHED') {
+                shiftedToFinished = true;
+            }
+        });
+
+        // Actualizamos nuestra memoria para el siguiente cambio
+        prevMatchStatusesRef.current = currentStatuses;
+
+        // 🛑 Si el Admin solo guardó goles o cambió a "En juego/Pausa", nos cruzamos de brazos
+        if (!shiftedToFinished) return;
+
+        // ⚡ ¡ALERTA! Un partido se cerró. Tomamos la foto de la historia inmediatamente:
+        const autoTakePhotos = async () => {
+            try {
+                const now = Date.now();
+                const finishedMatches = effectiveMatches.filter(m => {
+                    const isFinished = m.status === 'FINISHED';
+                    const aPred = mergedAdminPreds[m.id];
+                    const hasScore = aPred && aPred.home !== undefined && aPred.home !== '' && aPred.away !== undefined && aPred.away !== '';
+                    const matchTime = new Date(m.utcDate).getTime();
+                    
+                    return isFinished && hasScore && matchTime <= now;
+                });
+
+                if (finishedMatches.length === 0) return;
+
+                const snapshotsToSave = {};
+
+                for (const match of finishedMatches) {
+                    const snapshotRanking = calculateProgressiveRankingRef.current(match.utcDate, false);
+                    const scoresOnly = {};
+                    snapshotRanking.forEach(user => { scoresOnly[user.uid] = user.totalPoints; });
+
+                    let bracketHome = null;
+                    let bracketAway = null;
+                    const isKnockout = match.stage !== 'GROUP_STAGE';
+                    
+                    if (isKnockout) {
+                        let roundKey = '';
+                        if (match.stage === 'LAST_32' || match.stage === 'ROUND_OF_32') roundKey = 'dieciseisavos';
+                        else if (match.stage === 'LAST_16') roundKey = 'octavos';
+                        else if (match.stage === 'QUARTER_FINALS') roundKey = 'cuartos';
+                        else if (match.stage === 'SEMI_FINALS') roundKey = 'semis';
+                        else if (match.stage === 'FINAL') roundKey = 'final';
+                        else if (match.stage === 'THIRD_PLACE') roundKey = 'tercero';
+
+                        if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
+                            const currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
+                            const absoluteIndex = currentStageArray.findIndex(m => m.id === match.id);
+                            
+                            const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
+                                .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                                .map(k => adminFullBracket[roundKey][k]);
+                            
+                            const bMatch = bracketMatchValues[absoluteIndex >= 0 ? absoluteIndex : 0];
+                            if (bMatch) {
+                                bracketHome = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                                bracketAway = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                            }
+                        }
+                    }
+
+                    const aPred = mergedAdminPreds[match.id] || {};
+                    const homeName = aPred.customHomeTeam || bracketHome || match.homeTeam?.name || 'TBD';
+                    const awayName = aPred.customAwayTeam || bracketAway || match.awayTeam?.name || 'TBD';
+
+                    snapshotsToSave[`match_${match.id}`] = {
+                        matchId: match.id,
+                        matchName: `${homeName} vs ${awayName}`, 
+                        dateRecorded: new Date().toISOString(),
+                        matchDate: match.utcDate,
+                        scores: scoresOnly
+                    };
+                }
+
+                // Guardamos el historial limpio sobreescribiendo el nodo viejo
+                await setDoc(doc(db, 'worldCupAdmin', 'rankingHistory'), { snapshots: snapshotsToSave });
+                console.log("📸 [Fotógrafo] Pitazo final detectado en Grilla. Historial congelado con éxito.");
+
+            } catch (error) {
+                console.error("❌ Error en el fotógrafo por transición:", error);
+            }
+        };
+
+        // Damos 1 segundo de cortesía para que la base de datos procese el cambio antes de calcular la foto
+        const timeoutId = setTimeout(() => {
+            autoTakePhotos();
+        }, 1000);
+
+        return () => clearTimeout(timeoutId);
+    }, [isAdmin, isDbLoading, allPredictions, effectiveMatches, mergedAdminPreds, adminFullBracket, adminResults]);
+
     const getThirdPlaceTeams = (picksObj) => {
         if (!picksObj) return [];
         const teamsMap = new Map();
@@ -1219,19 +1331,19 @@ const WorldCupGrid = ({ currentUser }) => {
                 const answer = userData.extraPicks?.[q.id];
                 const officialAnswer = adminResults?.extraPicks?.[q.id];
                 const timestampStr = adminResults?.timestamps?.[q.id]; 
-                //const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+                
+                // ⏱️ Resucitamos la fecha SOLO para el fotógrafo
+                const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                if (officialAnswer && answer ) {
-                    // Dividimos la respuesta del admin por comas o barras verticales (ej. "Messi, Kane" o "Argentina|Francia")
+                // 🛡️ REGLA: Si la fecha del partido de la foto (targetDate) no ha alcanzado la fecha del Extra, no lo sumes.
+                if (officialAnswer && answer && eventDate <= targetDate) {
                     const officialList = officialAnswer.split(/[,|]/).map(item => item.trim().toLowerCase());
                     const cleanAnswer = answer.trim().toLowerCase();
 
                     if (q.manual) {
-                        // isSmartMatch evalúa cada opción oficial contra la respuesta del usuario
                         const isMatch = officialList.some(officialItem => isSmartMatch(cleanAnswer, officialItem));
                         if (isMatch) total += 6;
                     } else {
-                        // Búsqueda directa en la lista de opciones válidas
                         if (officialList.includes(cleanAnswer)) total += 6;
                     }
                 }
@@ -1241,9 +1353,11 @@ const WorldCupGrid = ({ currentUser }) => {
                 let answer = userData.eventPicks?.[e.id];
                 let officialAnswer = adminResults?.eventPicks?.[e.id];
                 const timestampStr = adminResults?.timestamps?.[e.id]; 
-               //const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+                
+                // ⏱️ Resucitamos la fecha SOLO para el fotógrafo
+                const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                if (answer && officialAnswer) {
+                if (answer && officialAnswer && eventDate <= targetDate) {
                     answer = String(answer).toUpperCase().trim();
                     officialAnswer = String(officialAnswer).toUpperCase().trim();
                     if (officialAnswer === answer) {
@@ -1251,7 +1365,6 @@ const WorldCupGrid = ({ currentUser }) => {
                     }
                 }
             });
-
             ranks.push({
                 uid,
                 name: usersInfo[uid]?.displayName || userData.displayName || 'Invitado',
@@ -1441,13 +1554,25 @@ const WorldCupGrid = ({ currentUser }) => {
     };
 
     // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos y las guarda en worldCupAdmin
+    // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos y las guarda en worldCupAdmin
+    // 📸 BOTÓN DE RESCATE BLINDADO: Genera las fotos y las guarda en worldCupAdmin
     const handleTakeRetroactivePhotos = async () => {
         try {
+            const now = Date.now();
+
             const finishedMatches = effectiveMatches.filter(m => {
                 const isFinished = m.status === 'FINISHED';
-                const hasHomeTeam = m.homeTeam && m.homeTeam.name && m.homeTeam.name !== 'TBD' && !m.homeTeam.name.includes('Winner') && !m.homeTeam.name.includes('Loser');
-                const hasAwayTeam = m.awayTeam && m.awayTeam.name && m.awayTeam.name !== 'TBD' && !m.awayTeam.name.includes('Winner') && !m.awayTeam.name.includes('Loser');
-                return isFinished && hasHomeTeam && hasAwayTeam;
+                
+                // 🛑 EL FIX: Miramos SIEMPRE el marcador del Admin (Los goles obligatorios)
+                const aPred = mergedAdminPreds[m.id];
+                const hasScore = aPred && aPred.home !== undefined && aPred.home !== '' && aPred.away !== undefined && aPred.away !== '';
+
+                // 🛑 REGLA DEL TIEMPO: El partido tuvo que haberse jugado ya en la vida real
+                const matchTime = new Date(m.utcDate).getTime();
+                const isPast = matchTime <= now;
+
+                // Solo toma foto si está finalizado, tiene goles manuales y ya pasó la hora
+                return isFinished && hasScore && isPast;
             });
 
             if (finishedMatches.length === 0) {
@@ -1464,8 +1589,39 @@ const WorldCupGrid = ({ currentUser }) => {
                 const scoresOnly = {};
                 snapshotRanking.forEach(user => { scoresOnly[user.uid] = user.totalPoints; });
 
-                const homeName = match.homeTeam?.name || 'TBD';
-                const awayName = match.awayTeam?.name || 'TBD';
+                // 🌳 TRADUCTOR DEL ÁRBOL PARA EL FOTÓGRAFO (Para que no lea nombres falsos)
+                let bracketHome = null;
+                let bracketAway = null;
+                const isKnockout = match.stage !== 'GROUP_STAGE';
+                
+                if (isKnockout) {
+                    let roundKey = '';
+                    if (match.stage === 'LAST_32' || match.stage === 'ROUND_OF_32') roundKey = 'dieciseisavos';
+                    else if (match.stage === 'LAST_16') roundKey = 'octavos';
+                    else if (match.stage === 'QUARTER_FINALS') roundKey = 'cuartos';
+                    else if (match.stage === 'SEMI_FINALS') roundKey = 'semis';
+                    else if (match.stage === 'FINAL') roundKey = 'final';
+                    else if (match.stage === 'THIRD_PLACE') roundKey = 'tercero';
+
+                    if (roundKey && adminFullBracket && adminFullBracket[roundKey]) {
+                        const currentStageArray = effectiveMatches.filter(m => m.stage === match.stage).sort((a,b) => Number(a.id) - Number(b.id));
+                        const absoluteIndex = currentStageArray.findIndex(m => m.id === match.id);
+                        
+                        const bracketMatchValues = Object.keys(adminFullBracket[roundKey])
+                            .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                            .map(k => adminFullBracket[roundKey][k]);
+                        
+                        const bMatch = bracketMatchValues[absoluteIndex >= 0 ? absoluteIndex : 0];
+                        if (bMatch) {
+                            bracketHome = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                            bracketAway = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                        }
+                    }
+                }
+
+                const aPred = mergedAdminPreds[match.id] || {};
+                const homeName = aPred.customHomeTeam || bracketHome || match.homeTeam?.name || 'TBD';
+                const awayName = aPred.customAwayTeam || bracketAway || match.awayTeam?.name || 'TBD';
 
                 snapshotsToSave[`match_${match.id}`] = {
                     matchId: match.id,
@@ -1476,17 +1632,17 @@ const WorldCupGrid = ({ currentUser }) => {
                 };
             }
 
+            // 🛑 DESTRUIMOS LOS FANTASMAS: Guardamos SIN el "merge: true" para limpiar las fotos viejas
             await setDoc(doc(db, 'worldCupAdmin', 'rankingHistory'), { 
                 snapshots: snapshotsToSave 
-            }, { merge: true });
+            });
             
-            toast.success(`¡Misión cumplida! Historial guardado en worldCupAdmin/rankingHistory.`, { id: 'retro-photos' });
+            toast.success(`¡Historial limpio y recuperado con éxito!`, { id: 'retro-photos' });
         } catch (error) {
             console.error("❌ Error en el viaje temporal:", error);
             toast.error('Error generando el historial retroactivo.', { id: 'retro-photos' });
         }
     };
-
     if (isApiLoading || isDbLoading) return (
         <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
             <img src={logocopa} className="w-20 h-20 mb-6 animate-pulse opacity-50" alt="Cargando" />
@@ -1494,6 +1650,8 @@ const WorldCupGrid = ({ currentUser }) => {
             <p className="text-foreground-muted font-bold tracking-widest uppercase text-xs text-center">Sincronizando Puntos Globales...</p>
         </div>
     );
+
+    
 
     return (
         <div className="max-w-5xl mx-auto pb-24 animate-fade-in px-2 sm:px-0">
