@@ -1036,7 +1036,7 @@ const WorldCupGrid = ({ currentUser }) => {
                 const snapshotsToSave = {};
 
                 for (const match of finishedMatches) {
-                    const snapshotRanking = calculateProgressiveRankingRef.current(match.utcDate, false);
+                    const snapshotRanking = calculateProgressiveRankingRef.current(match.utcDate, false, true);
                     const scoresOnly = {};
                     snapshotRanking.forEach(user => { scoresOnly[user.uid] = user.totalPoints; });
 
@@ -1115,7 +1115,7 @@ const WorldCupGrid = ({ currentUser }) => {
         return Array.from(teamsMap.values());
     };
 
-    const calculateProgressiveRanking = useCallback((targetMatchDateStr, isGlobalLive = false) => {
+    const calculateProgressiveRanking = useCallback((targetMatchDateStr, isGlobalLive = false, isForHistorySnapshot = false) => {
         const ranks = [];
         const targetDate = new Date(targetMatchDateStr);
         
@@ -1332,11 +1332,14 @@ const WorldCupGrid = ({ currentUser }) => {
                 const officialAnswer = adminResults?.extraPicks?.[q.id];
                 const timestampStr = adminResults?.timestamps?.[q.id]; 
                 
-                // ⏱️ Resucitamos la fecha SOLO para el fotógrafo
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                // 🛡️ REGLA: Si la fecha del partido de la foto (targetDate) no ha alcanzado la fecha del Extra, no lo sumes.
-                if (officialAnswer && answer && eventDate <= targetDate) {
+                // 🛡️ REGLA INTELIGENTE: 
+                // - Si es para la Grilla visible, lo sumamos INMEDIATAMENTE (!isForHistorySnapshot)
+                // - Si es para el Historial fotográfico, respetamos el tiempo (con 24h de gabela) para no dañar las rachas
+                const isTimeValid = !isForHistorySnapshot || (eventDate.getTime() <= targetDate.getTime() + (24 * 60 * 60 * 1000));
+
+                if (officialAnswer && answer && isTimeValid) {
                     const officialList = officialAnswer.split(/[,|]/).map(item => item.trim().toLowerCase());
                     const cleanAnswer = answer.trim().toLowerCase();
 
@@ -1354,10 +1357,10 @@ const WorldCupGrid = ({ currentUser }) => {
                 let officialAnswer = adminResults?.eventPicks?.[e.id];
                 const timestampStr = adminResults?.timestamps?.[e.id]; 
                 
-                // ⏱️ Resucitamos la fecha SOLO para el fotógrafo
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
+                const isTimeValid = !isForHistorySnapshot || (eventDate.getTime() <= targetDate.getTime() + (24 * 60 * 60 * 1000));
 
-                if (answer && officialAnswer && eventDate <= targetDate) {
+                if (answer && officialAnswer && isTimeValid) {
                     answer = String(answer).toUpperCase().trim();
                     officialAnswer = String(officialAnswer).toUpperCase().trim();
                     if (officialAnswer === answer) {
@@ -1585,7 +1588,7 @@ const WorldCupGrid = ({ currentUser }) => {
             const snapshotsToSave = {};
 
             for (const match of finishedMatches) {
-                const snapshotRanking = calculateProgressiveRankingRef.current(match.utcDate, false);
+                const snapshotRanking = calculateProgressiveRankingRef.current(match.utcDate, false, true);
                 const scoresOnly = {};
                 snapshotRanking.forEach(user => { scoresOnly[user.uid] = user.totalPoints; });
 
