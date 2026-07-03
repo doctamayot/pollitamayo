@@ -1334,10 +1334,19 @@ const WorldCupGrid = ({ currentUser }) => {
                 
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                // 🛡️ REGLA INTELIGENTE: 
-                // - Si es para la Grilla visible, lo sumamos INMEDIATAMENTE (!isForHistorySnapshot)
-                // - Si es para el Historial fotográfico, respetamos el tiempo (con 24h de gabela) para no dañar las rachas
-                const isTimeValid = !isForHistorySnapshot || (eventDate.getTime() <= targetDate.getTime() + (24 * 60 * 60 * 1000));
+                // ⚓ REGLA DEL PARTIDO ANCLA:
+                // Buscamos cronológicamente cuál fue el último partido que ya había empezado 
+                // en el milisegundo exacto en que tú (el Admin) guardaste la respuesta.
+                const matchesBeforeEvent = [...effectiveMatches]
+                    .filter(m => new Date(m.utcDate) <= eventDate)
+                    .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+                
+                const anchorDate = matchesBeforeEvent.length > 0 
+                    ? new Date(matchesBeforeEvent[matchesBeforeEvent.length - 1].utcDate).getTime() 
+                    : 0;
+
+                // 🛡️ Si la grilla que estamos mirando es de ese partido ancla (o uno más nuevo), sumamos los puntos de una.
+                const isTimeValid = targetDate.getTime() >= anchorDate;
 
                 if (officialAnswer && answer && isTimeValid) {
                     const officialList = officialAnswer.split(/[,|]/).map(item => item.trim().toLowerCase());
@@ -1358,7 +1367,17 @@ const WorldCupGrid = ({ currentUser }) => {
                 const timestampStr = adminResults?.timestamps?.[e.id]; 
                 
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
-                const isTimeValid = !isForHistorySnapshot || (eventDate.getTime() <= targetDate.getTime() + (24 * 60 * 60 * 1000));
+                
+                // ⚓ REGLA DEL PARTIDO ANCLA
+                const matchesBeforeEvent = [...effectiveMatches]
+                    .filter(m => new Date(m.utcDate) <= eventDate)
+                    .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+                
+                const anchorDate = matchesBeforeEvent.length > 0 
+                    ? new Date(matchesBeforeEvent[matchesBeforeEvent.length - 1].utcDate).getTime() 
+                    : 0;
+
+                const isTimeValid = targetDate.getTime() >= anchorDate;
 
                 if (answer && officialAnswer && isTimeValid) {
                     answer = String(answer).toUpperCase().trim();
