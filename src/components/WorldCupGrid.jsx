@@ -1334,18 +1334,19 @@ const WorldCupGrid = ({ currentUser }) => {
                 
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
 
-                // ⚓ REGLA DEL PARTIDO ANCLA:
-                // Buscamos cronológicamente cuál fue el último partido que ya había empezado 
-                // en el milisegundo exacto en que tú (el Admin) guardaste la respuesta.
-                const matchesBeforeEvent = [...effectiveMatches]
-                    .filter(m => new Date(m.utcDate) <= eventDate)
+                // ⚓ REGLA DEL PARTIDO ANCLA (CORREGIDA):
+                // Buscamos el último partido que SÍ HAYA EMPEZADO antes de guardar el extra.
+                const validAnchorMatches = [...effectiveMatches]
+                    .filter(m => {
+                        const hasStarted = m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED';
+                        return hasStarted && new Date(m.utcDate) <= eventDate;
+                    })
                     .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
                 
-                const anchorDate = matchesBeforeEvent.length > 0 
-                    ? new Date(matchesBeforeEvent[matchesBeforeEvent.length - 1].utcDate).getTime() 
+                const anchorDate = validAnchorMatches.length > 0 
+                    ? new Date(validAnchorMatches[validAnchorMatches.length - 1].utcDate).getTime() 
                     : 0;
 
-                // 🛡️ Si la grilla que estamos mirando es de ese partido ancla (o uno más nuevo), sumamos los puntos de una.
                 const isTimeValid = targetDate.getTime() >= anchorDate;
 
                 if (officialAnswer && answer && isTimeValid) {
@@ -1368,13 +1369,16 @@ const WorldCupGrid = ({ currentUser }) => {
                 
                 const eventDate = timestampStr ? new Date(timestampStr) : new Date(0);
                 
-                // ⚓ REGLA DEL PARTIDO ANCLA
-                const matchesBeforeEvent = [...effectiveMatches]
-                    .filter(m => new Date(m.utcDate) <= eventDate)
+                // ⚓ REGLA DEL PARTIDO ANCLA (CORREGIDA)
+                const validAnchorMatches = [...effectiveMatches]
+                    .filter(m => {
+                        const hasStarted = m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'FINISHED';
+                        return hasStarted && new Date(m.utcDate) <= eventDate;
+                    })
                     .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
                 
-                const anchorDate = matchesBeforeEvent.length > 0 
-                    ? new Date(matchesBeforeEvent[matchesBeforeEvent.length - 1].utcDate).getTime() 
+                const anchorDate = validAnchorMatches.length > 0 
+                    ? new Date(validAnchorMatches[validAnchorMatches.length - 1].utcDate).getTime() 
                     : 0;
 
                 const isTimeValid = targetDate.getTime() >= anchorDate;
