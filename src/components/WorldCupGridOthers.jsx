@@ -24,7 +24,7 @@ const specialEvents = [
     { id: 'gol_olimpico', label: '¿Habrá un Gol Olímpico?' },
     { id: 'remontada_epica', label: '¿Remontada tras ir perdiendo por 2 goles?' },
     { id: 'el_festival', label: '¿Algún partido tendrá 8 o más goles?' },
-    { id: 'muralla_final', label: '¿Se atajará un penal en los 90 mins?' },
+    { id: 'muralla_final', label: '¿Se atajará un penal en los 90 min?' },
     { id: 'hat_trick_hero', label: '¿Algún jugador anotará un Hat-Trick?' },
     { id: 'roja_banquillo', label: '¿Un Director Técnico será expulsado con roja?' },
     { id: 'portero_goleador', label: '¿Anotará un gol algún portero (sin contar penales)?' },
