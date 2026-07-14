@@ -4,6 +4,7 @@ import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { getWorldCupMatches } from '../services/apiFootball';
 import logocopa from '../assets/logocopa.png';
 import { getAuth } from 'firebase/auth';
+import { generateFullBracket } from '../services/bracketEngine';
 
 // --- CONFIGURACIÓN FINANCIERA ---
 const ENTRY_FEE = 170000;
@@ -366,7 +367,10 @@ const WorldCupRanking = ({ currentUser }) => {
 
             if (isGroupFinished) {
                 const st = computeStandings(g, mergedAdminPreds, adminResults?.manualTiebreakers);
-                if (st[0]) top2.push(st[0]); if (st[1]) top2.push(st[1]); if (st[2]) thirds.push(st[2]);
+                // 🚀 EL FIX: Agregamos el "qualReason" y el "group" para que el Árbol no se pierda
+                if (st[0]) top2.push({ ...st[0], qualReason: '1º', group: g }); 
+                if (st[1]) top2.push({ ...st[1], qualReason: '2º', group: g }); 
+                if (st[2]) thirds.push({ ...st[2], qualReason: '3º', group: g });
             }
         });
         
@@ -376,6 +380,22 @@ const WorldCupRanking = ({ currentUser }) => {
         }
         return top2;
     }, [byGroup, mergedAdminPreds, adminResults, groupStatus, computeStandings]);
+
+    // 🟢 EL CEREBRO DE CRUCES
+    const adminFullBracket = useMemo(() => {
+        let teams = adminQualified32 || [];
+        const tempTeams = [...teams];
+        for (let i = tempTeams.length; i < 32; i++) {
+            tempTeams.push({ name: `Por Definir ${i}`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
+        }
+        try { 
+            return generateFullBracket(tempTeams, adminResults?.knockoutPicks || {}); 
+        } 
+        catch (e) { 
+            console.error("Error armando bracket en Ranking", e); 
+            return null; 
+        }
+    }, [adminQualified32, adminResults]);
 
 
     // 🟢 EL CEREBRO DE RANKING (AHORA USA EVENT SOURCING)
@@ -488,11 +508,49 @@ const WorldCupRanking = ({ currentUser }) => {
                 }
             });
 
+            // 🛡️ LÓGICA ESTRICTA POR PARTIDO PARA EL 3ER PUESTO
             const uThirdsList = getThirdPlaceTeams(userData.knockoutPicks);
-            const aThirdsList = getThirdPlaceTeams(adminResults?.knockoutPicks);
-            if (aThirdsList.length > 0) {
+            
+            let officialThirdPlaceContenders = [];
+            if (adminFullBracket && adminFullBracket['semis']) {
+                const adminFinalists = adminResults?.knockoutPicks?.semis || [];
+                const bracketMatchValues = Object.keys(adminFullBracket['semis'])
+                    .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                    .map(k => adminFullBracket['semis'][k]);
+
+                bracketMatchValues.forEach((bMatch) => {
+                    const hName = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                    const aName = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                    
+                    if (hName && aName) {
+                        const homeAdvanced = adminFinalists.some(f => f.name === hName);
+                        const awayAdvanced = adminFinalists.some(f => f.name === aName);
+                        
+                        // Solo si uno avanzó y el otro no (Significa que el partido YA se jugó de verdad)
+                        if (homeAdvanced && !awayAdvanced) {
+                            officialThirdPlaceContenders.push(aName);
+                        }
+                        if (awayAdvanced && !homeAdvanced) {
+                            officialThirdPlaceContenders.push(hName);
+                        }
+                    }
+                });
+            }
+
+            // Agregamos también los que tú (el Admin) fuerces manualmente
+            const explicitT3 = adminResults?.knockoutPicks?.tercero || [];
+            const explicitT4 = adminResults?.knockoutPicks?.cuarto || [];
+            [...explicitT3, ...explicitT4].forEach(t => {
+                if (t && t.name && !officialThirdPlaceContenders.includes(t.name)) {
+                    officialThirdPlaceContenders.push(t.name);
+                }
+            });
+
+            if (officialThirdPlaceContenders.length > 0) {
                 uThirdsList.forEach(ut => {
-                    if (ut && aThirdsList.some(at => at && at.name === ut.name)) stats.ptsRondas += 4;
+                    if (ut && officialThirdPlaceContenders.includes(ut.name)) {
+                        stats.ptsRondas += 4;
+                    }
                 });
             }
 
@@ -649,7 +707,7 @@ let maxPlenosGlobal = 0;
         });
         
         return ranks;
-    }, [allPredictions, effectiveMatches, officialMatches, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus, rankingHistoryData]);
+    }, [allPredictions, effectiveMatches, officialMatches, byGroup, adminResults, usersInfo, isGroupStageFinished, adminQualified32, computeStandings, mergedAdminPreds, groupStatus, rankingHistoryData, adminFullBracket]);
 
     // 🟢 LÓGICA DE PREMIOS ESTRICTA
     const premiosRepartidos = useMemo(() => {
