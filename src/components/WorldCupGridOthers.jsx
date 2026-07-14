@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import logocopa from '../assets/logocopa.png';
+import { generateFullBracket } from '../services/bracketEngine'; // 🟢 NUEVO IMPORT
 
 // --- CONSTANTES Y DICCIONARIOS ---
 const EXCLUDED_EMAILS = ['doctamayot@gmail.com', 'admin@polli-tamayo.com'];
@@ -227,9 +228,10 @@ const WorldCupGridOthers = ({ currentUser }) => {
 
             if (isGroupFinished) {
                 const st = getStandings(groupMatches, adminResults?.predictions, g, adminResults?.manualTiebreakers);
-                if (st[0]) top2.push(st[0]); 
-                if (st[1]) top2.push(st[1]); 
-                if (st[2]) thirds.push(st[2]);
+                // 🚀 EL FIX ESTÁ AQUÍ: Ahora sí le mandamos el grupo y la posición al Árbol
+                if (st[0]) top2.push({ ...st[0], qualReason: '1º', group: g }); 
+                if (st[1]) top2.push({ ...st[1], qualReason: '2º', group: g }); 
+                if (st[2]) thirds.push({ ...st[2], qualReason: '3º', group: g });
             }
         });
 
@@ -240,6 +242,21 @@ const WorldCupGridOthers = ({ currentUser }) => {
         
         return top2;
     }, [groupStageMatches, adminResults, getStandings]);
+
+    const adminFullBracket = useMemo(() => {
+        let teams = adminQualified32 || [];
+        const tempTeams = [...teams];
+        for (let i = tempTeams.length; i < 32; i++) {
+            tempTeams.push({ name: `Por Definir ${i}`, isPlaceholder: true, group: 'Grupo TBD', qualReason: '-' });
+        }
+        try { 
+            return generateFullBracket(tempTeams, adminResults?.knockoutPicks || {}); 
+        } 
+        catch (e) { 
+            console.error("Error armando bracket en GridOthers", e); 
+            return null; 
+        }
+    }, [adminQualified32, adminResults]);
 
     const validUsers = useMemo(() => {
         return Object.keys(allPredictions)
@@ -398,11 +415,41 @@ const WorldCupGridOthers = ({ currentUser }) => {
                             if (selectedRound === 'clasificados32') {
                                 aTeamsCurrentRound = adminQualified32;
                             } else if (selectedRound === 'tercer_puesto_match') {
-                                const semisTeams = adminResults?.knockoutPicks?.['cuartos'] || [];
-                                const finalists = adminResults?.knockoutPicks?.['semis'] || [];
-                                if (semisTeams.length === 4 && finalists.length === 2) {
-                                    aTeamsCurrentRound = semisTeams.filter(t => !finalists.some(f => f.name === t.name));
+                                let officialThirdPlaceContenders = [];
+                                
+                                if (adminFullBracket && adminFullBracket['semis']) {
+                                    const adminFinalists = adminResults?.knockoutPicks?.semis || [];
+                                    const bracketMatchValues = Object.keys(adminFullBracket['semis'])
+                                        .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0))
+                                        .map(k => adminFullBracket['semis'][k]);
+
+                                    bracketMatchValues.forEach((bMatch) => {
+                                        const hName = bMatch.home && !bMatch.home.isPlaceholder ? bMatch.home.name : null;
+                                        const aName = bMatch.away && !bMatch.away.isPlaceholder ? bMatch.away.name : null;
+                                        
+                                        if (hName && aName) {
+                                            const homeAdvanced = adminFinalists.some(f => f.name === hName);
+                                            const awayAdvanced = adminFinalists.some(f => f.name === aName);
+                                            
+                                            if (homeAdvanced && !awayAdvanced) {
+                                                officialThirdPlaceContenders.push({ name: aName });
+                                            }
+                                            if (awayAdvanced && !homeAdvanced) {
+                                                officialThirdPlaceContenders.push({ name: hName });
+                                            }
+                                        }
+                                    });
                                 }
+
+                                const explicitT3 = adminResults?.knockoutPicks?.tercero || [];
+                                const explicitT4 = adminResults?.knockoutPicks?.cuarto || [];
+                                [...explicitT3, ...explicitT4].forEach(t => {
+                                    if (t && t.name && !officialThirdPlaceContenders.some(o => o.name === t.name)) {
+                                        officialThirdPlaceContenders.push({ name: t.name });
+                                    }
+                                });
+
+                                aTeamsCurrentRound = officialThirdPlaceContenders;
                             } else {
                                 aTeamsCurrentRound = adminResults?.knockoutPicks?.[roundObj.dbKey] || [];
                             }
